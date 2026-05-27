@@ -1,0 +1,7 @@
+nimcache/
+nimblecache/
+tests/tparser
+tests/tdriver_browser
+tests/tdriver_vscode
+tests/tgui_assert
+*.dSYM
