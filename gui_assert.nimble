@@ -11,3 +11,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tdriver_browser.nim"
   exec "nim c -r --hints:off tests/tdriver_vscode.nim"
   exec "nim c -r --hints:off tests/tgui_assert.nim"
+  exec "nim c -r --hints:off tests/tmedia.nim"
