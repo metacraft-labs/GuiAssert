@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M5 — create the GuiAssert-Synthesia sibling plugin repo.
+  :next_steps: Begin M6 — create the GuiAssert-Tavus sibling plugin repo.
   :last_updated: 2026-05-29
-  :current_milestone: M5
+  :current_milestone: M6
   :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
   :END:
 
@@ -403,34 +403,111 @@
 
 ** M5: GuiAssert-Synthesia plugin (commercial)
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M4
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Synthesia/=.
-    - [ ] Nim provider speaking Synthesia API
+    - [X] Create =/Users/zahary/metacraft/GuiAssert-Synthesia/=.
+    - [X] Nim provider speaking Synthesia API
       (=POST https://api.synthesia.io/v2/videos=). Authentication
-      via =Authorization: SYNTHESIA_API_KEY= header. Async creation
-      + polling.
-    - [ ] Honour =SYNTHESIA_API_KEY= env var.
-    - [ ] README: enterprise focus, plan tiers.
+      via =Authorization: SYNTHESIA_API_KEY= header (raw key, no
+      =Bearer= / =Basic= prefix — Synthesia's quirky scheme). Async
+      creation + polling on =GET /v2/videos/{id}= until
+      =status == "complete"=.
+    - [X] Honour =SYNTHESIA_API_KEY= env var (override via
+      =opts.providerSettings.api_key=); raises =TalkingHeadError=
+      at generate time when missing.
+    - [X] Uses GuiAssert's cache (=cacheKeyFor= + =applyCache=); the
+      mock-server test verifies that a second invocation issues zero
+      HTTP requests, and that changing =script_text= forces a fresh
+      render.
+    - [X] README: enterprise focus, plan tiers (Starter $29/mo,
+      Creator $89/mo, Enterprise custom; API typically gated to
+      Creator+), =nix develop= + =export SYNTHESIA_API_KEY= setup,
+      prominent note on the =script_text=-required deviation from
+      the generic contract, and the raw-key =Authorization= quirk.
 
 *** Verification
     - test_name: tests_synthesia_pure
       file: GuiAssert-Synthesia/tests/tsynthesia.nim
-      description: Pure request shape tests.
-      status: pending
+      description: Pure tests — auth-header table shape (=Authorization= carrying the raw key with no =Bearer= / =Basic= prefix, no =X-Api-Key=), JSON body shape (camelCase =scriptText= inside =input[]=, top-level =title= + =test=), providerSettings ↔ env precedence, missing-key / missing-script_text / missing-WAV error paths, cache-key determinism + per-input sensitivity (different =script_text= / =avatar= / =background= / =test= flag all force a fresh key).
+      status: implemented
 
     - test_name: verify_synthesia_mock_server
       file: GuiAssert-Synthesia/tests/tsynthesia.nim
-      description: Mock-server integration.
-      status: pending
+      description: =std/asynchttpserver= mocks Synthesia =POST /v2/videos= / =GET /v2/videos/{id}= / =GET /result.mp4=; the provider's request shape (=Authorization= header on every API call but never on the CDN download, camelCase JSON body shape, polling cadence) is asserted exactly. Mock returns a small ffmpeg testsrc MP4 which the provider downloads byte-identically and caches; cache-hit second call issues zero HTTP requests; a third call with a different =script_text= forces a fresh render.
+      status: implemented
 
     - test_name: verify_synthesia_live_render
       file: GuiAssert-Synthesia/tests/tsynthesia.nim
-      description: Compile-time gated =-d:synthesiaLive=.
+      description: Compile-time gated =-d:synthesiaLive=; requires =SYNTHESIA_API_KEY= env. Runs live render against =api.synthesia.io=; ffprobe asserts MP4 validity (has video + audio streams, duration > 1 s, size > 50 KB). Not exercised in this milestone because no API key is configured on the workstation — the gated test compiles cleanly and fails loudly with the documented "Export SYNTHESIA_API_KEY=<your key>" message when run without credentials.
       status: pending
+
+*** Key Source Files
+    - GuiAssert-Synthesia/src/gui_assert_synthesia.nim
+    - GuiAssert-Synthesia/tests/tsynthesia.nim
+    - GuiAssert-Synthesia/tests/fixtures/narration.wav
+
+*** Implementation Notes
+    - The =TalkingHeadProvider.generate(narrationWav, outputMp4, opts)=
+      contract expects audio to arrive as a pre-rendered WAV. Synthesia's
+      =POST /v2/videos= does NOT accept uploaded audio: it takes a
+      =scriptText= string and synthesises the voiceover server-side
+      (Synthesia ships its own avatar-aware TTS). The plugin therefore
+      ignores =narrationWav= for the API call and requires
+      =opts.providerSettings["script_text"]= to be set — raising
+      =TalkingHeadError= when missing. The WAV is still hashed into
+      the cache key so per-session uniqueness in the WAV is preserved.
+      This deviation is documented prominently in
+      =GuiAssert-Synthesia/README.md=. Same shape as the M4 HeyGen
+      deviation.
+    - Synthesia's =Authorization= header is quirky: it carries the
+      RAW API key with no =Bearer= or =Basic= prefix. This is unusual
+      (HeyGen uses =X-Api-Key=; D-ID uses HTTP Basic; most REST APIs
+      follow RFC 6750 =Bearer <token>=). The pure tests include
+      explicit regression guards against accidental "fixes" that would
+      wrap the key in a prefix.
+    - Synthesia's JSON request shape uses camelCase =scriptText=
+      inside the =input[]= array — NOT snake_case like the rest of
+      the ecosystem (and the rest of Synthesia's own request body,
+      which uses lowercase singletons =avatar= / =background= /
+      =title= / =test=). The pure tests pin this with an explicit
+      assertion that =script_text= is absent from the emitted JSON.
+    - Synthesia's JSON response is a FLAT object — no =({"data": ...,
+      "code": 100})= envelope like HeyGen. The plugin reads =id= /
+      =status= / =download= directly off the top-level object.
+    - =cacheKeyFor='s signature (avatar + narration + provider +
+      device) is fixed by the GuiAssert contract. For Synthesia the
+      "avatar" is purely server-side (an avatar string) and the
+      narration text is also server-side (a =script_text= string), so
+      the plugin folds the Synthesia-specific knobs (=script_text=,
+      =avatar=, =background=, =title=, =test=) into the device slot
+      via =synthesiaCacheSalt= (a SHA-1 prefix of the combined string).
+      Two different =script_text= values for the same WAV therefore
+      produce different cache entries — exercised by the mock-server
+      test.
+    - The =/result.mp4= download URL is served from Synthesia's CDN
+      and does not require authentication. The mock-server test pins
+      this behaviour: =Authorization= must be present on every =/v2/=
+      request but ABSENT on the CDN download. This guards against
+      accidental credential leakage to the CDN if a future refactor
+      pulls the download into the main =HttpClient= path.
+    - Polling cadence defaults to 10 s with a 15-minute timeout —
+      more generous than the M3 D-ID (3 s / 5 min) and M4 HeyGen
+      (5 s / 10 min) defaults because Synthesia renders are reliably
+      the slowest of the commercial pack.
+    - The =test: true= flag (the default) opts into Synthesia's
+      watermarked sandbox render, which does NOT count against the
+      account's monthly minute quota. The mock-server test exercises
+      this path; production callers can flip =test= to false to spend
+      real quota.
+    - Same =std/asynchttpserver= keep-alive workaround documented in
+      M3 / M4 applies: a dedicated polling thread drives
+      =asyncdispatch.poll()= while the main thread blocks in
+      synchronous =httpclient= calls; =--threads:on= is therefore
+      required for the test build, and every API call opens a fresh
+      =HttpClient= via the =withFreshClient= template.
 
 ** M6: GuiAssert-Tavus plugin (commercial)
    :PROPERTIES:
