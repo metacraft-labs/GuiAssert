@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M4 — create the GuiAssert-HeyGen sibling plugin repo.
+  :next_steps: Begin M5 — create the GuiAssert-Synthesia sibling plugin repo.
   :last_updated: 2026-05-29
-  :current_milestone: M4
+  :current_milestone: M5
   :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
   :END:
 
@@ -315,38 +315,91 @@
 
 ** M4: GuiAssert-HeyGen plugin (commercial)
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M3
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-HeyGen/=.
-    - [ ] Nim provider speaking HeyGen v2 API:
+    - [X] Create =/Users/zahary/metacraft/GuiAssert-HeyGen/=.
+    - [X] Nim provider speaking HeyGen v2 API:
       =POST https://api.heygen.com/v2/video/generate= with auth
       header =X-Api-Key=. Selects avatar_id + voice_id from opts.
       Polls =GET /v1/video_status.get=.
-    - [ ] Honour =HEYGEN_API_KEY= env var.
-    - [ ] Uses GuiAssert's cache.
-    - [ ] README: cost ($1-4/min), pay-as-you-go since Feb 2026.
+    - [X] Honour =HEYGEN_API_KEY= env var (override via
+      =opts.providerSettings.api_key=); raises =TalkingHeadError=
+      at generate time when missing.
+    - [X] Uses GuiAssert's cache (=cacheKeyFor= + =applyCache=); the
+      mock-server test verifies that a second invocation issues zero
+      HTTP requests, and that changing =input_text= forces a fresh
+      render.
+    - [X] README: cost ($1–$4/min of generated video), pay-as-you-go
+      since Feb 2026 (no free API tier), =nix develop= + =export
+      HEYGEN_API_KEY= setup, prominent note on the
+      =input_text=-required deviation from the generic contract.
 
 *** Verification
     - test_name: tests_heygen_pure
       file: GuiAssert-HeyGen/tests/theygen.nim
-      description: Pure tests — request shape, auth, missing-key path.
-      status: pending
+      description: Pure tests — auth-header table shape (=X-Api-Key=, no =Authorization=), JSON body shape, providerSettings ↔ env precedence, missing-key / missing-input_text / missing-WAV error paths, cache-key determinism + per-input sensitivity (different =input_text= / =avatar_id= / =voice_id= / dimensions all force a fresh key).
+      status: implemented
 
     - test_name: verify_heygen_mock_server
       file: GuiAssert-HeyGen/tests/theygen.nim
-      description: Mock-server end-to-end test asserting exact request body + polling behaviour.
-      status: pending
+      description: =std/asynchttpserver= mocks HeyGen =POST /v2/video/generate= / =GET /v1/video_status.get= / =GET /result.mp4=; the provider's request shape (=X-Api-Key= header on every API call but never on the CDN download, JSON body shape, polling cadence) is asserted exactly. Mock returns a small ffmpeg testsrc MP4 which the provider downloads byte-identically and caches; cache-hit second call issues zero HTTP requests; a third call with a different =input_text= forces a fresh render.
+      status: implemented
 
     - test_name: verify_heygen_live_render
       file: GuiAssert-HeyGen/tests/theygen.nim
-      description: Compile-time gated =-d:heygenLive=; requires =HEYGEN_API_KEY=.
+      description: Compile-time gated =-d:heygenLive=; requires =HEYGEN_API_KEY= env. Runs live render against =api.heygen.com=; ffprobe asserts MP4 validity (has video + audio streams, duration > 1 s, size > 50 KB). Not exercised in this milestone because no API key is configured on the workstation — the gated test compiles cleanly and fails loudly with the documented "Export HEYGEN_API_KEY=<your key>" message when run without credentials.
       status: pending
 
 *** Key Source Files
     - GuiAssert-HeyGen/src/gui_assert_heygen.nim
+    - GuiAssert-HeyGen/tests/theygen.nim
+    - GuiAssert-HeyGen/tests/fixtures/narration.wav
+
+*** Implementation Notes
+    - The =TalkingHeadProvider.generate(narrationWav, outputMp4, opts)=
+      contract expects audio to arrive as a pre-rendered WAV. HeyGen
+      v2's =video/generate= endpoint does NOT accept uploaded audio:
+      it takes an =input_text= string plus a =voice_id= and synthesises
+      the voiceover server-side. The plugin therefore ignores
+      =narrationWav= for the API call and requires
+      =opts.providerSettings["input_text"]= to be set — raising
+      =TalkingHeadError= when missing. The WAV is still hashed into
+      the cache key so per-session uniqueness in the WAV is preserved.
+      This deviation is documented prominently in
+      =GuiAssert-HeyGen/README.md=. A follow-up could speak HeyGen's
+      =audio_url= mode (upload via =/v1/upload.url= first, then
+      reference) to honour the WAV verbatim.
+    - =cacheKeyFor='s signature (avatar + narration + provider +
+      device) is fixed by the GuiAssert contract. For HeyGen the
+      "avatar" is purely server-side (an =avatar_id= string) and the
+      narration text is also server-side (an =input_text= string),
+      so the plugin folds the HeyGen-specific knobs (=input_text=,
+      =avatar_id=, =voice_id=, =width=, =height=) into the device
+      slot via =heygenCacheSalt= (a SHA-1 prefix of the combined
+      string). Two different =input_text= values for the same WAV
+      therefore produce different cache entries — exercised by the
+      mock-server test.
+    - HeyGen wraps every JSON response in =({"data": ..., "code":
+      100, "message": "Success"})=. The plugin's =unwrapData= helper
+      strips the envelope and surfaces the inner =data= object to
+      callers, so the rest of the code reads =video_id= / =status= /
+      =video_url= directly without re-implementing the unwrap at each
+      call site.
+    - The =/result.mp4= download URL is served from HeyGen's CDN and
+      does not require authentication. The mock-server test pins this
+      behaviour: =X-Api-Key= must be present on every =/v2/= and
+      =/v1/= request but ABSENT on the CDN download. This guards
+      against accidental credential leakage to the CDN if a future
+      refactor pulls the download into the main =HttpClient= path.
+    - Same =std/asynchttpserver= keep-alive workaround documented in
+      M3 applies: a dedicated polling thread drives
+      =asyncdispatch.poll()= while the main thread blocks in
+      synchronous =httpclient= calls; =--threads:on= is therefore
+      required for the test build, and every API call opens a fresh
+      =HttpClient= via the =withFreshClient= template.
 
 ** M5: GuiAssert-Synthesia plugin (commercial)
    :PROPERTIES:
