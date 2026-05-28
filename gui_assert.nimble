@@ -13,3 +13,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tgui_assert.nim"
   exec "nim c -r --hints:off tests/tmedia.nim"
   exec "nim c -r --hints:off tests/teditor.nim"
+  exec "nim c -r --hints:off tests/tcapture.nim"

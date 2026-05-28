@@ -25,6 +25,7 @@ import ./gui_assert/speech_synth
 import ./gui_assert/ocr
 import ./gui_assert/image_math
 import ./gui_assert/storyboard
+import ./gui_assert/capture
 
 export parser
 export driver
@@ -33,6 +34,7 @@ export speech_synth
 export ocr
 export image_math
 export storyboard
+export capture
 
 type
   GuiAssertHarness* = ref object
