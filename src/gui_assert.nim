@@ -22,6 +22,7 @@ import ./gui_assert/parser
 import ./gui_assert/driver
 import ./gui_assert/media
 import ./gui_assert/speech_synth
+import ./gui_assert/speech_synthesis
 import ./gui_assert/ocr
 import ./gui_assert/image_math
 import ./gui_assert/storyboard
@@ -32,6 +33,7 @@ export parser
 export driver
 export media
 export speech_synth
+export speech_synthesis
 export ocr
 export image_math
 export storyboard
