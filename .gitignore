@@ -5,6 +5,7 @@ tests/tdriver_browser
 tests/tdriver_vscode
 tests/tgui_assert
 tests/tmedia
+tests/teditor
 src/gui_assert/media
 src/gui_assert/speech_synth
 *.dSYM

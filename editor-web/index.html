@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GuiAssert Timeline Editor</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">GuiAssert <span class="brand-sub">Timeline</span></div>
+      <div class="status">
+        <span id="status-text">idle</span>
+        <span id="status-elapsed"></span>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="pane preview-pane">
+        <header class="pane-header">Preview</header>
+        <video
+          id="video-player"
+          class="video"
+          data-current-time="0"
+          controls
+          preload="metadata"
+        ></video>
+        <div class="time-readout">
+          <span>t = </span>
+          <span id="current-time">0.00</span>
+          <span>s</span>
+          <span class="sep">·</span>
+          <span>frame </span>
+          <span id="current-frame">0</span>
+        </div>
+      </section>
+
+      <section class="pane timeline-pane">
+        <header class="pane-header">
+          Timeline
+          <span class="hint">drag keyframes · click captions</span>
+        </header>
+        <div class="ruler" id="ruler"></div>
+        <div class="track track-action">
+          <div class="track-label">action</div>
+          <div class="track-body" id="track-action"></div>
+        </div>
+        <div class="track track-audio">
+          <div class="track-label">audio</div>
+          <canvas id="waveform" class="waveform"></canvas>
+        </div>
+        <div class="track track-caption">
+          <div class="track-label">caption</div>
+          <div class="track-body" id="track-caption"></div>
+        </div>
+      </section>
+
+      <section class="pane script-pane">
+        <header class="pane-header">Narration</header>
+        <ul class="script-list" id="script-list"></ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>port <span id="footer-port">7180</span></span>
+      <span class="sep">·</span>
+      <span><span id="footer-px-per-sec">100</span> px/s</span>
+      <span class="sep">·</span>
+      <span><span id="footer-fps">30</span> fps</span>
+    </footer>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
