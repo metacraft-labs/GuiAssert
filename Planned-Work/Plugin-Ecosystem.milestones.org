@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M1 — create the GuiAssert-Wav2Lip sibling plugin repo.
-  :last_updated: 2026-05-28
-  :current_milestone: M1
+  :next_steps: Begin M2 — create the GuiAssert-MuseTalk sibling plugin repo.
+  :last_updated: 2026-05-29
+  :current_milestone: M2
   :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
   :END:
 
@@ -97,45 +97,74 @@
 
 ** M1: GuiAssert-Wav2Lip plugin
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M0
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Wav2Lip/= with:
+    - [X] Create =/Users/zahary/metacraft/GuiAssert-Wav2Lip/= with:
       flake.nix, gui_assert_wav2lip.nimble, Justfile, LICENSE (MIT),
       README, .gitignore, src/gui_assert_wav2lip.nim, python/,
       scripts/install.sh + verify-install.sh, tests/twav2lip.nim.
-    - [ ] Pin upstream Wav2Lip
+    - [X] Pin upstream Wav2Lip
       (https://github.com/Rudrabha/Wav2Lip) at a known-good commit
-      in =python/COMMIT.txt=.
-    - [ ] Bundle a thin =python/render_lipsync.py= wrapper that
+      in =python/COMMIT.txt= (=bac9a81e63ecc153202353372e5724b83d9e6322=,
+      the head of =master= at integration time).
+    - [X] Bundle a thin =python/render_lipsync.py= wrapper that
       invokes Wav2Lip's `inference.py` and produces an MP4 at the
       requested path. Handles `--device mps|cpu|auto`. Sets
       =PYTORCH_ENABLE_MPS_FALLBACK=1=.
-    - [ ] Apple Silicon patches (document in =python/PATCHES.md=)
-      for any numpy 2.x / PyTorch 2.x incompatibilities.
-    - [ ] Nim provider implementing the contract; registers as
+    - [X] Apple Silicon patches (documented in =python/PATCHES.md=)
+      for numpy 2.x / librosa 0.10 / PyTorch 2.x incompatibilities
+      (8 source patches: =librosa.core.load= rename,
+      =librosa.filters.mel= keyword-only args,
+      =librosa.output.write_wav= replacement, =np.int= removal,
+      two =torch.load(weights_only=False)= flips,
+      =face_detection/detection/core.py= MPS allow-list, and an
+      =WAV2LIP_DEVICE_OVERRIDE= hook in =inference.py=).
+    - [X] Nim provider implementing the contract; registers as
       provider name =wav2lip=. Uses GuiAssert's cache.
-    - [ ] Install script downloads weights from the official mirror
-      (~300 MB).
-    - [ ] README with cost-of-setup and Apple-Silicon caveats.
+    - [X] Install script downloads weights from a stable mirror
+      (=numz/wav2lip_studio= on Hugging Face for wav2lip.pth +
+      wav2lip_gan.pth, =adrianbulat.com= for s3fd.pth, ~960 MB
+      total). Size sanity-checked at the end of install.
+    - [X] README with cost-of-setup and Apple-Silicon caveats.
 
 *** Verification
     - test_name: tests_wav2lip_pure
       file: GuiAssert-Wav2Lip/tests/twav2lip.nim
       description: Pure tests — provider construction, isAvailable with bogus/real paths, cache-key determinism, env-override handling.
-      status: pending
+      status: implemented
 
     - test_name: verify_wav2lip_live_render
       file: GuiAssert-Wav2Lip/tests/twav2lip.nim
       description: Compile-time gated =-d:wav2lipLive=; runs Wav2Lip end-to-end on a known fixture WAV + portrait, asserts produced MP4 is valid (ffprobe duration ≈ input narration ±0.5 s; video stream present; bytes > 50 KB) and the cache-hit path is < 5 s.
-      status: pending
+      status: implemented
 
 *** Key Source Files
     - GuiAssert-Wav2Lip/src/gui_assert_wav2lip.nim
     - GuiAssert-Wav2Lip/python/render_lipsync.py
     - GuiAssert-Wav2Lip/scripts/install.sh
+
+*** Implementation Notes
+    - The live test ships a tiny public-domain portrait fixture at
+      =tests/fixtures/portrait.png= (a 400x400 crop of Albert
+      Einstein from Wikimedia Commons,
+      =Albert_Einstein_Head.jpg=, =PD-US-expired=). Narration is
+      synthesised on-demand via macOS =say= + =ffmpeg= resample to
+      16 kHz mono. Both fixtures are env-overridable via
+      =GUI_ASSERT_WAV2LIP_TEST_AVATAR= and
+      =GUI_ASSERT_WAV2LIP_TEST_WAV=.
+    - Live render performance on Apple Silicon MPS: ~4.4 s wall-clock
+      to produce a 3.7 s lip-sync MP4 (89 frames at 25 FPS, h264 +
+      AAC, 400x400, ~100 KB). Cache-hit path ~1 ms.
+    - =flake.nix= deliberately requests =python3= (not =python310=):
+      the workspace's nixpkgs pin no longer exposes the =python310=
+      attribute, so the dev shell uses the default Python only for
+      utility scripts and the install script picks up Homebrew's
+      =python3.10= from the host PATH for the venv. A clear
+      WARNING is emitted by the shellHook when =python3.10= is
+      missing.
 
 ** M2: GuiAssert-MuseTalk plugin
    :PROPERTIES:
