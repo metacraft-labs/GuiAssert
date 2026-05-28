@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M7 — create the GuiAssert-ElevenLabs sibling plugin repo (TTS, optional pair).
+  :next_steps: M7 done — no further milestones planned in this initiative. Future work would extend GuiAssert with additional plugin contracts (e.g. live conversational video, ASR) as separate initiatives.
   :last_updated: 2026-05-29
-  :current_milestone: M7
-  :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
+  :current_milestone: (complete)
+  :executive_summary: Plan to develop talking-head + speech-synthesis provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing one of the GuiAssert plugin contracts: `TalkingHeadProvider` (M0-M6, defined in `GuiAssert/src/gui_assert/talking_head/core.nim`) or `SpeechSynthesisProvider` (M7, defined in `GuiAssert/src/gui_assert/speech_synthesis/core.nim`).
   :END:
 
 * Introduction
@@ -628,27 +628,142 @@
 
 ** M7: GuiAssert-ElevenLabs plugin (TTS, optional pair)
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M6
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-ElevenLabs/=.
-    - [ ] Nim provider for ElevenLabs TTS — but this isn't a
+    - [x] Create =/Users/zahary/metacraft/GuiAssert-ElevenLabs/=.
+    - [x] Nim provider for ElevenLabs TTS — but this isn't a
       talking-head provider per se; it's an *alternative TTS*.
       Define and expose a *second contract*
       =SpeechSynthesisProvider= in GuiAssert for swappable TTS,
       so the consumer can swap =say= for ElevenLabs without
       affecting the talking-head pipeline.
-    - [ ] =POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}=
+    - [x] =POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}=
       with header =xi-api-key=. Returns audio bytes.
-    - [ ] Honour =ELEVENLABS_API_KEY= env var.
+    - [x] Honour =ELEVENLABS_API_KEY= env var.
 
 *** Verification
-    - test_name: tests_elevenlabs_pure / mock / live
+    - test_name: tests_elevenlabs_pure
       file: GuiAssert-ElevenLabs/tests/televenlabs.nim
-      description: Same pattern; live test gated =-d:elevenlabsLive=.
+      description: Pure unit tests for auth header / body shape /
+        opts resolution / provider value / cache-key determinism +
+        per-input sensitivity. 31 cases, all passing.
+      status: implemented
+    - test_name: verify_elevenlabs_mock_server
+      file: GuiAssert-ElevenLabs/tests/televenlabs.nim
+      description: =std/asynchttpserver= mock on a random localhost
+        port that records every request and returns a 1-second
+        silent MP3 (synthesised via ffmpeg's =anullsrc=). Asserts
+        =xi-api-key= header equals =DUMMY_KEY=, JSON body shape
+        (=text=, =model_id=, nested =voice_settings.stability= +
+        =voice_settings.similarity_boost=), ffprobe verifies the
+        produced WAV is RIFF / 16-bit PCM mono at 22050 Hz with
+        duration ~1s. Second call hits the on-disk cache (zero new
+        HTTP traffic); third call with different text forces a
+        fresh render. Status: implemented.
+      status: implemented
+    - test_name: verify_elevenlabs_live_render
+      file: GuiAssert-ElevenLabs/tests/televenlabs.nim
+      description: Compile-time-gated via =-d:elevenlabsLive=.
+        Posts =text = "Hello GuiAssert ElevenLabs"= to the real
+        =POST /v1/text-to-speech/21m00Tcm4TlvDq8ikWAM= endpoint,
+        ffprobe-verifies the WAV is valid + has an audio stream +
+        duration > 0.5 s, then asserts the second invocation hits
+        the cache in under 5 s. Without =ELEVENLABS_API_KEY= set
+        the test compiles but the suite fails loudly with a
+        documented error pointing at the env-var name and the
+        ElevenLabs pricing tiers — no graceful skips, per project
+        policy. Status: pending (no key in this environment).
       status: pending
+
+*** Key Source Files
+    - GuiAssert/src/gui_assert/speech_synthesis/core.nim
+    - GuiAssert/src/gui_assert/speech_synthesis/say_provider.nim
+    - GuiAssert/src/gui_assert/speech_synthesis.nim
+    - GuiAssert/src/gui_assert/speech_synth.nim (refactored to
+      route through the new registry; legacy public API
+      preserved)
+    - GuiAssert/src/gui_assert.nim (re-exports
+      =speech_synthesis=)
+    - GuiAssert/tests/tspeech_synthesis.nim (new pure +
+      =-d:speechLive=-gated live test for the built-in =say=
+      provider)
+    - GuiAssert-ElevenLabs/src/gui_assert_elevenlabs.nim
+    - GuiAssert-ElevenLabs/tests/televenlabs.nim
+    - GuiAssert-ElevenLabs/tests/fixtures/narration.wav
+
+*** Implementation Notes
+    - M7 introduces the SECOND plugin contract to GuiAssert:
+      =SpeechSynthesisProvider=, defined in
+      =GuiAssert/src/gui_assert/speech_synthesis/core.nim=. Its
+      shape mirrors =TalkingHeadProvider= (=name= + =isAvailable=
+      + provider proc, registry ref, =applySpeechCache= +
+      =speechCacheKeyFor= helpers) so plugin authors who have
+      already written one provider have almost no new surface
+      area to learn.
+    - The existing non-pluggable
+      =gui_assert/speech_synth.synthesize(text, path)= dispatcher
+      used by downstream consumers (e.g. =editor_backend.nim=) is
+      preserved. Its public API is unchanged: same signature,
+      same =TtsError= exception type, same post-conditions.
+      Internally it now builds a =SpeechSynthesisRegistry= via
+      =newDefaultSpeechRegistry()= and dispatches to the host-OS
+      built-in (=say= on macOS, =sapi= on Windows, =espeak= on
+      Linux), translating =SpeechSynthesisError= back to
+      =TtsError= so existing =except TtsError= blocks keep
+      catching every failure. This means every legacy call site
+      exercises the new contract end to end, and the existing
+      downstream integration test for the record-demo runner
+      passes unchanged after the refactor.
+    - The legacy argv helpers
+      (=buildMacSayArgv=, =buildEspeakNgArgv=,
+      =buildWindowsSapiArgv=) and =TtsError= type stay exported
+      from =gui_assert/speech_synth= for any caller that wired
+      against them. The live subprocess invocations now live in
+      the per-provider modules under =gui_assert/speech_synthesis/=.
+    - GuiAssert ships the =say= provider in
+      =gui_assert/speech_synthesis/say_provider= and the
+      =sapi=/=espeak= providers inline in the umbrella
+      =gui_assert/speech_synthesis= module. The =say= provider's
+      argv builder (=buildSayArgv=) additionally supports
+      optional =-v <voice>= / =-r <rate>= flags and a
+      configurable sample-rate suffix on =--data-format= —
+      surfaces the new contract exposes via
+      =SpeechSynthesisOpts.voiceId= / =rate= / =sampleRateHz=.
+    - ElevenLabs's =POST /v1/text-to-speech/{voice_id}= returns
+      raw audio bytes synchronously — there is NO polling step
+      like the M3-M6 commercial talking-head plugins. The plugin
+      therefore implements a simpler two-step pipeline: POST to
+      ElevenLabs, then ffmpeg-convert the returned MP3 (the
+      default ElevenLabs response format) into a 16-bit PCM mono
+      RIFF WAV at the sample rate requested by
+      =opts.sampleRateHz=.
+    - The plugin's cache-salt folds in =model_id=, sample rate,
+      stability, and similarity_boost via a SHA-1 prefix, so two
+      calls that differ only in voice-tuning knobs produce
+      different on-disk cache entries. Identical inputs
+      short-circuit the API call entirely on the second
+      invocation — exercised by the mock-server test.
+    - The mock-server suite uses a 1-second silent MP3
+      synthesised by ffmpeg (=anullsrc= lavfi source +
+      =libmp3lame=). The MP3 is regenerated lazily under =/tmp/=
+      so the repo stays clean and identical fixture data lands on
+      every run.
+    - ElevenLabs's =xi-api-key= header is the documented
+      lowercase form (raw key, NO =Bearer = / =Basic = prefix).
+      The pure tests include explicit regression guards against
+      accidental "fixes" that would wrap the key or move it onto
+      an =Authorization= header.
+    - There is no polling step, so the
+      =std/asynchttpserver= keep-alive workaround the M3-M6
+      plugins rely on is not strictly required — the single POST
+      opens and closes one socket. The test still runs the mock
+      server on its own thread (driving =asyncdispatch.poll()=)
+      and pins =Connection: close= on the HTTP client, matching
+      the sibling-plugin conventions so future refactors that add
+      polling do not regress into the same trap.
 
 * Common deliverables per plugin
 
