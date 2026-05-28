@@ -369,3 +369,90 @@ timeline:
     """
     expect ScriptValidationError:
       discard parseScriptJson(badJson)
+
+  # --- metadata.talking_head schema -----------------------------------
+  test "metadata.talking_head is absent by default":
+    # Plain script without a talking_head block → empty provider, empty
+    # avatar, empty device, empty extras.  Backwards compatible.
+    let s = parseScriptYaml(fourKeyframeYaml)
+    check s.metadata.talkingHead.provider == ""
+    check s.metadata.talkingHead.avatarImage == ""
+    check s.metadata.talkingHead.device == ""
+    check s.metadata.talkingHead.extras.len == 0
+
+  test "metadata.talking_head parses from YAML":
+    const y = """
+metadata:
+  title: "with avatar"
+  fps: 30
+  talking_head:
+    provider: sadtalker
+    avatar_image: assets/founder.png
+    device: auto
+    preprocess: full
+    enhancer: gfpgan
+    still: true
+timeline:
+  - time: 0.0
+    action: click
+"""
+    let s = parseScriptYaml(y)
+    check s.metadata.talkingHead.provider == "sadtalker"
+    check s.metadata.talkingHead.avatarImage == "assets/founder.png"
+    check s.metadata.talkingHead.device == "auto"
+    check s.metadata.talkingHead.extras["preprocess"] == "full"
+    check s.metadata.talkingHead.extras["enhancer"] == "gfpgan"
+    check s.metadata.talkingHead.extras["still"] == "true"
+
+  test "metadata.talking_head parses from JSON":
+    const j = """
+    {
+      "metadata": {
+        "title": "with avatar",
+        "talking_head": {
+          "provider": "sadtalker",
+          "avatar_image": "/abs/portrait.png",
+          "device": "mps",
+          "preprocess": "crop",
+          "size": 512
+        }
+      },
+      "timeline": [
+        {"time": 0.0, "action": "click"}
+      ]
+    }
+    """
+    let s = parseScriptJson(j)
+    check s.metadata.talkingHead.provider == "sadtalker"
+    check s.metadata.talkingHead.avatarImage == "/abs/portrait.png"
+    check s.metadata.talkingHead.device == "mps"
+    check s.metadata.talkingHead.extras["preprocess"] == "crop"
+    check s.metadata.talkingHead.extras["size"] == "512"
+
+  test "metadata.talking_head=stock_avatar is a no-op default":
+    const y = """
+metadata:
+  talking_head:
+    provider: stock_avatar
+timeline:
+  - time: 0.0
+    action: click
+"""
+    let s = parseScriptYaml(y)
+    check s.metadata.talkingHead.provider == "stock_avatar"
+    check s.metadata.talkingHead.avatarImage == ""
+
+  test "metadata.talking_head rejects non-scalar extras":
+    const badJson = """
+    {
+      "metadata": {
+        "talking_head": {
+          "provider": "sadtalker",
+          "weird": {"nested": "object"}
+        }
+      },
+      "timeline": [{"time": 0.0, "action": "click"}]
+    }
+    """
+    expect ScriptParseError:
+      discard parseScriptJson(badJson)

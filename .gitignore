@@ -9,6 +9,7 @@ tests/teditor
 tests/tcapture
 tests/tappium
 tests/twindow_layout
+tests/ttalking_head
 src/gui_assert/media
 src/gui_assert/speech_synth
 *.dSYM

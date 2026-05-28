@@ -32,6 +32,30 @@ type
     width*: int
     height*: int
 
+  TalkingHeadMeta* = object
+    ## Optional `metadata.talking_head` block describing how the
+    ## animated talking-head overlay should be produced.  Used by the
+    ## runner to pick between the stock testsrc2 placeholder and a
+    ## generative AI provider (SadTalker today; D-ID / HeyGen / Hedra
+    ## are reserved for future revisions).
+    provider*: string
+      ## Provider identifier as it appears in the YAML — e.g.
+      ## "stock_avatar" (default), "sadtalker", "did", "heygen",
+      ## "hedra".  When the block is absent provider is "".
+    avatarImage*: string
+      ## Filesystem path (absolute or relative to the script) of the
+      ## portrait image fed to the talking-head provider.  Required
+      ## for non-stock providers; ignored by the stock provider.
+    device*: string
+      ## Optional acceleration hint — one of "auto" (default), "mps",
+      ## or "cpu".  Forwarded verbatim to the provider implementation;
+      ## unknown values are passed through so future providers can use
+      ## them without a parser change.
+    extras*: Table[string, string]
+      ## Additional `key: value` scalars under `metadata.talking_head`.
+      ## Captures forward-looking knobs (e.g. `pose_style`,
+      ## `enhancer`) without forcing schema bumps for each one.
+
   ScriptMetadata* = object
     title*: string
     resolution*: string
@@ -43,6 +67,11 @@ type
     windowLayout*: Table[string, WindowLayout]
       ## Optional per-target pixel layout map.  Keys must be subsets
       ## of `targets`; validation enforces this.
+    talkingHead*: TalkingHeadMeta
+      ## Optional talking-head provider configuration.  When the
+      ## `metadata.talking_head` block is absent the `provider` field
+      ## is the empty string and callers should default to the stock
+      ## testsrc2 placeholder.
 
   Keyframe* = object
     time*: float
@@ -119,16 +148,59 @@ proc extractWindowLayout(node: JsonNode, name: string): WindowLayout =
     height: extractIntField(node, "height", path),
   )
 
+proc extractTalkingHead(node: JsonNode): TalkingHeadMeta =
+  ## Parse the optional `metadata.talking_head` block. Unknown scalar
+  ## keys are captured under `result.extras` verbatim so future provider
+  ## knobs do not require parser changes.
+  result = TalkingHeadMeta(provider: "", avatarImage: "", device: "",
+    extras: initTable[string, string]())
+  if node.kind != JObject:
+    raise newException(ScriptParseError,
+      "metadata.talking_head must be an object, got " & $node.kind)
+  for key, val in node.pairs:
+    case key
+    of "provider":
+      if val.kind != JString:
+        raise newException(ScriptParseError,
+          "metadata.talking_head.provider must be a string")
+      result.provider = val.getStr.strip()
+    of "avatar_image":
+      if val.kind != JString:
+        raise newException(ScriptParseError,
+          "metadata.talking_head.avatar_image must be a string")
+      result.avatarImage = val.getStr
+    of "device":
+      if val.kind != JString:
+        raise newException(ScriptParseError,
+          "metadata.talking_head.device must be a string")
+      result.device = val.getStr.strip()
+    else:
+      # Forward-compat: store any extra scalar verbatim.  Sub-objects
+      # are rejected because we don't have a use for nested provider
+      # parameters yet.
+      case val.kind
+      of JString: result.extras[key] = val.getStr
+      of JInt:    result.extras[key] = $val.getInt
+      of JFloat:  result.extras[key] = $val.getFloat
+      of JBool:   result.extras[key] = $val.getBool
+      of JNull:   result.extras[key] = ""
+      else:
+        raise newException(ScriptParseError,
+          "metadata.talking_head." & key &
+          " must be a scalar (string/number/bool/null), got " & $val.kind)
+
 proc extractMetadata(node: JsonNode): ScriptMetadata =
   if node.isNil or node.kind == JNull:
     # Default values when metadata is omitted entirely.
     return ScriptMetadata(title: "", resolution: "", fps: 0,
-      targets: @[], windowLayout: initTable[string, WindowLayout]())
+      targets: @[], windowLayout: initTable[string, WindowLayout](),
+      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
   if node.kind != JObject:
     raise newException(ScriptParseError,
       "expected `metadata` to be an object, got " & $node.kind)
   result = ScriptMetadata(title: "", resolution: "", fps: 0,
-    targets: @[], windowLayout: initTable[string, WindowLayout]())
+    targets: @[], windowLayout: initTable[string, WindowLayout](),
+    talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
   if node.hasKey("title"):
     let t = node["title"]
     if t.kind != JString:
@@ -162,6 +234,8 @@ proc extractMetadata(node: JsonNode): ScriptMetadata =
         "metadata.window_layout must be an object")
     for key, val in wl.pairs:
       result.windowLayout[key] = extractWindowLayout(val, key)
+  if node.hasKey("talking_head"):
+    result.talkingHead = extractTalkingHead(node["talking_head"])
 
 proc keyframeFromJson(node: JsonNode, index: int): Keyframe =
   if node.kind != JObject:
@@ -277,7 +351,8 @@ proc scriptFromJsonNode(root: JsonNode): Script =
     result.metadata = extractMetadata(root["metadata"])
   else:
     result.metadata = ScriptMetadata(title: "", resolution: "", fps: 0,
-      targets: @[], windowLayout: initTable[string, WindowLayout]())
+      targets: @[], windowLayout: initTable[string, WindowLayout](),
+      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
   result.timeline = @[]
   if root.hasKey("timeline"):
     let tl = root["timeline"]
@@ -560,7 +635,8 @@ proc parseScriptYaml*(input: string): Script =
     # Treat empty input as an empty script.
     result = Script(
       metadata: ScriptMetadata(title: "", resolution: "", fps: 0,
-        targets: @[], windowLayout: initTable[string, WindowLayout]()),
+        targets: @[], windowLayout: initTable[string, WindowLayout](),
+        talkingHead: TalkingHeadMeta(extras: initTable[string, string]())),
       timeline: @[],
     )
     return
