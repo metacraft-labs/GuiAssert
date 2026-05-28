@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M2 — create the GuiAssert-MuseTalk sibling plugin repo.
+  :next_steps: Begin M3 — create the GuiAssert-Did sibling plugin repo.
   :last_updated: 2026-05-29
-  :current_milestone: M2
+  :current_milestone: M3
   :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
   :END:
 
@@ -168,38 +168,74 @@
 
 ** M2: GuiAssert-MuseTalk plugin
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M1
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-MuseTalk/= with
+    - [x] Create =/Users/zahary/metacraft/GuiAssert-MuseTalk/= with
       the same layout as Wav2Lip.
-    - [ ] Pin MuseTalk (https://github.com/TMElyralab/MuseTalk) at
+    - [x] Pin MuseTalk (https://github.com/TMElyralab/MuseTalk) at
       a stable commit. Document the Python 3.10 + mmcv + mmpose +
       whisper-small download flow in =python/PATCHES.md=.
-    - [ ] Bundle =python/render_musetalk.py= wrapper, MPS-aware,
+    - [x] Bundle =python/render_musetalk.py= wrapper, MPS-aware,
       with a known-good fallback chain for Apple Silicon
       compatibility issues. Document workarounds.
-    - [ ] Nim provider; registers as =musetalk=.
-    - [ ] Install script downloads weights from Hugging Face
+    - [x] Nim provider; registers as =musetalk=.
+    - [x] Install script downloads weights from Hugging Face
       (~5 GB).
-    - [ ] README acknowledging the heavier Apple-Silicon adaptation.
+    - [x] README acknowledging the heavier Apple-Silicon adaptation.
 
 *** Verification
     - test_name: tests_musetalk_pure
       file: GuiAssert-MuseTalk/tests/tmusetalk.nim
       description: Pure tests mirroring the Wav2Lip pattern.
-      status: pending
+      status: implemented
 
     - test_name: verify_musetalk_live_render
       file: GuiAssert-MuseTalk/tests/tmusetalk.nim
       description: Compile-time gated =-d:musetalkLive=; live render + ffprobe validation.
-      status: pending
+      status: implemented
 
 *** Key Source Files
     - GuiAssert-MuseTalk/src/gui_assert_musetalk.nim
     - GuiAssert-MuseTalk/python/render_musetalk.py
+    - GuiAssert-MuseTalk/scripts/install.sh
+    - GuiAssert-MuseTalk/python/PATCHES.md
+
+*** Implementation Notes
+    - Apple Silicon required compiling full =mmcv==2.1.0= from source:
+      there are no pre-built arm64 wheels for the =mmcv._ext=
+      extension, and =mmcv-lite= is not sufficient because mmpose's
+      =EDPoseHead= imports =MultiScaleDeformableAttention= from
+      =mmcv.ops= at module-import time. The install script builds
+      mmcv with =MMCV_WITH_OPS=1 FORCE_CUDA=0 MAX_JOBS=2= against the
+      older =MacOSX15.sdk= libc++ (the macOS 26 SDK's
+      =_LIBCPP_NO_SPECIALIZATIONS= annotations break PyTorch 2.2's
+      =c10::util::strong_type= specialisations). Build time ~3-6 min.
+    - Total install time on a clean machine is ~30-40 minutes,
+      dominated by 4.3 GB of model-weight downloads from Hugging Face
+      (musetalkV15 UNet, musetalk v1.0 UNet, sd-vae, whisper-tiny,
+      DWPose, face-parse-bisent). The install script idempotently
+      skips already-downloaded files on re-run.
+    - Live render time on an M-series Mac with MPS: ~19 s wall-clock
+      for a 3.5 s narration (87 frames at 25 FPS, H.264 + AAC,
+      400x400, ~87 KB output). The =PYTORCH_ENABLE_MPS_FALLBACK=1=
+      env var (set by the wrapper) covers MPS-unsupported aten ops in
+      the diffusers VAE + mmpose RTMPose backbones.
+    - The install script's =apply_patch= helper uses a
+      whitespace-tolerant regex match (trailing spaces on any needle
+      line are ignored). The upstream
+      =musetalk/utils/face_parsing/__init__.py= ships with a stray
+      trailing space after =net.load_state_dict(torch.load(model_pth))=
+      — an earlier strict =grep -qF= match silently no-oped on that
+      patch and the unpatched branch later =FileNotFoundError='d on
+      =./models/face-parse-bisent/79999_iter.pth=.
+    - The face-parse-bisent weight (=79999_iter.pth=) is mirrored from
+      the =camenduru/MuseTalk= Hugging Face repo (auth-free). Upstream's
+      original Google Drive ID + =gdown= path is kept as a last-resort
+      fallback; the =ByteDance/LatentSync= auxiliary tree used by
+      earlier revisions has been deleted upstream and now 404s.
 
 ** M3: GuiAssert-Did plugin (commercial)
    :PROPERTIES:
