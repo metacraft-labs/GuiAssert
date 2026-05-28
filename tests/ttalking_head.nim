@@ -1,67 +1,37 @@
 ## Unit + integration tests for `gui_assert/talking_head`.
 ##
-## ## Pure tests (always run)
+## After the SadTalker extraction (sibling repo `GuiAssert-SadTalker`),
+## this file covers only the **registry + built-in stock_avatar**
+## path.  SadTalker-specific tests live in
+## `GuiAssert-SadTalker/tests/tsadtalker.nim`.
 ##
-## These exercise the small algorithmic surface of the module:
-##   * provider-name parsing accepts the documented aliases,
-##   * cache keys are deterministic and depend on (avatar, narration,
-##     provider, device),
-##   * `isAvailable` returns true for `thpStockAvatar` always and is
-##     gated by Python+script presence for `thpSadTalker`,
+## What we assert here:
+##   * provider-name normalisation collapses the documented aliases,
+##   * cache keys are deterministic and depend on every ingredient,
+##   * the registry rejects nil/empty plugins, looks up by canonical
+##     name, and reports membership / listings correctly,
 ##   * `optsFromMetadata` translates the YAML metadata into runtime
-##     options including resolving relative avatar paths and forwarding
-##     extras as CLI arguments,
-##   * the stock-avatar provider produces a valid MP4 (copies the
-##     marketing repo's placeholder when reachable, otherwise
-##     synthesises one via ffmpeg).
-##
-## ## Live test (compile-time-gated)
-##
-## When compiled with `-d:sadtalkerLive` an additional suite runs:
-##   * spawns the SadTalker python wrapper against a real avatar +
-##     WAV fixture from the codetracer-marketing checkout,
-##   * asserts that the produced MP4 has a video stream whose duration
-##     is within ±0.5 s of the input WAV duration.
-##
-## The gate is on by community agreement (see Video-Session-Capture.md
-## §3 Visual Overlay Options): we never silently skip the heavy live
-## path, but we also don't make the default test suite block on it.
+##     options (avatar path resolution + extras → CLI args + structured
+##     providerSettings),
+##   * the built-in `stock_avatar` provider produces a non-empty MP4
+##     either by copying a pre-baked placeholder or by synthesising
+##     one via ffmpeg's `testsrc2` source,
+##   * `applyCache` actually caches: a second render with the same key
+##     skips the generator closure.
 
-import std/[json, options, os, osproc, streams, strformat, strutils,
-            tables, times, unittest]
+import std/[json, options, os, tables, unittest]
 
 import ../src/gui_assert/parser
 import ../src/gui_assert/talking_head
-
-# ---------------------------------------------------------------------------
-# Repo paths
-# ---------------------------------------------------------------------------
-
-proc guiAssertRoot(): string =
-  ## `currentSourcePath` is .../GuiAssert/tests/ttalking_head.nim
-  currentSourcePath().parentDir().parentDir()
-
-proc workspaceRoot(): string =
-  ## metacraft/ — the parent of GuiAssert.
-  guiAssertRoot().parentDir()
-
-proc marketingRoot(): string =
-  workspaceRoot() / "codetracer-marketing"
-
-proc marketingAsset(p: string): string =
-  marketingRoot() / "assets" / p
-
-proc marketingTool(p: string): string =
-  marketingRoot() / "tools" / "sadtalker" / p
 
 # ---------------------------------------------------------------------------
 # Tiny WAV / PNG fixtures
 # ---------------------------------------------------------------------------
 
 proc writeTinyWav(path: string, payloadByte: byte = 0x00'u8) =
-  ## Write a minimal 44-byte WAV header + a few sample bytes.  The exact
-  ## bytes don't matter for the cache-key tests — they just need to be
-  ## deterministic.
+  ## Write a minimal 44-byte WAV header + a few sample bytes.  The
+  ## exact bytes don't matter for cache-key tests — they just need
+  ## to be deterministic.
   let buf = "RIFF\x24\x00\x00\x00WAVEfmt " &
             "\x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00" &
             "\x40\x1f\x00\x00\x01\x00\x08\x00data\x00\x00\x00\x00" &
@@ -69,72 +39,38 @@ proc writeTinyWav(path: string, payloadByte: byte = 0x00'u8) =
   writeFile(path, buf)
 
 proc writeTinyPng(path: string, payloadByte: byte = 0x01'u8) =
-  ## Write a 1x1 PNG. Hand-rolled bytes — sufficient for cache-key
-  ## tests where we only need the file to exist and have stable bytes.
+  ## Write a 1x1 PNG.  Sufficient for cache-key tests — we only need
+  ## the file to exist and have stable bytes.
   let header = "\x89PNG\r\n\x1a\n"
   let chunk = "\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
   let trailer = "\x00\x00\x00\x00IEND\xaeB`\x82"
   writeFile(path, header & chunk & $cast[char](payloadByte) & trailer)
 
 # ---------------------------------------------------------------------------
-# Pure tests
+# Provider name normalisation
 # ---------------------------------------------------------------------------
 
-suite "talking_head provider name parsing":
+suite "talking_head provider name normalisation":
 
-  test "stock_avatar is the default for missing/empty input":
-    check parseTalkingHeadProvider("") == thpStockAvatar
-    check parseTalkingHeadProvider("stock") == thpStockAvatar
-    check parseTalkingHeadProvider("stock_avatar") == thpStockAvatar
-    check parseTalkingHeadProvider("placeholder") == thpStockAvatar
+  test "stock_avatar aliases collapse to the canonical form":
+    check normalizeProviderName("") == "stock_avatar"
+    check normalizeProviderName("stock") == "stock_avatar"
+    check normalizeProviderName("stock_avatar") == "stock_avatar"
+    check normalizeProviderName("placeholder") == "stock_avatar"
+    check normalizeProviderName(" STOCK_AVATAR ") == "stock_avatar"
 
-  test "sadtalker is recognised case-insensitively":
-    check parseTalkingHeadProvider("sadtalker") == thpSadTalker
-    check parseTalkingHeadProvider("SadTalker") == thpSadTalker
-    check parseTalkingHeadProvider("  SADTALKER  ") == thpSadTalker
+  test "d-id and did both normalise to did":
+    check normalizeProviderName("did") == "did"
+    check normalizeProviderName("d-id") == "did"
+    check normalizeProviderName("D-ID") == "did"
 
-  test "future providers parse to their reserved enum values":
-    check parseTalkingHeadProvider("did") == thpDid
-    check parseTalkingHeadProvider("d-id") == thpDid
-    check parseTalkingHeadProvider("heygen") == thpHeyGen
-    check parseTalkingHeadProvider("hedra") == thpHedra
+  test "unknown names round-trip lowercased":
+    check normalizeProviderName("SadTalker") == "sadtalker"
+    check normalizeProviderName("  MuseTalk  ") == "musetalk"
 
-  test "unknown provider raises TalkingHeadError":
-    expect TalkingHeadError:
-      discard parseTalkingHeadProvider("nope")
-
-suite "talking_head isAvailable":
-
-  test "thpStockAvatar is always available":
-    check isAvailable(thpStockAvatar)
-    check isAvailable(thpStockAvatar, TalkingHeadOpts())
-
-  test "thpSadTalker requires python binary + render script":
-    # With empty opts and no marketing repo on disk we cannot guarantee
-    # availability — but we *can* assert that bogus paths return false.
-    var opts = TalkingHeadOpts()
-    opts.pythonBinary = some("/nonexistent/python")
-    opts.renderScriptPath = some("/nonexistent/render.py")
-    check not isAvailable(thpSadTalker, opts)
-
-  test "thpSadTalker becomes available when both paths exist":
-    # Create dummy executables under tmp.
-    let tmp = getTempDir() / "ttalking_head_avail"
-    if dirExists(tmp): removeDir(tmp)
-    createDir(tmp)
-    let py = tmp / "python"
-    let scr = tmp / "render.py"
-    writeFile(py, "#!/bin/sh\nexit 0\n")
-    writeFile(scr, "print('hello')\n")
-    var opts = TalkingHeadOpts()
-    opts.pythonBinary = some(py)
-    opts.renderScriptPath = some(scr)
-    check isAvailable(thpSadTalker, opts)
-
-  test "future providers report unavailable":
-    check not isAvailable(thpDid)
-    check not isAvailable(thpHeyGen)
-    check not isAvailable(thpHedra)
+# ---------------------------------------------------------------------------
+# Cache key
+# ---------------------------------------------------------------------------
 
 suite "talking_head cache key":
 
@@ -151,18 +87,20 @@ suite "talking_head cache key":
     writeTinyWav(nar, 0x10'u8)
     writeTinyWav(nar2, 0x20'u8)
 
-    let k = computeCacheKey(av, nar, thpSadTalker, "mps")
+    let k = cacheKeyFor(av, nar, "sadtalker", "mps")
     check k.len == 16
     # Deterministic.
-    check k == computeCacheKey(av, nar, thpSadTalker, "mps")
+    check k == cacheKeyFor(av, nar, "sadtalker", "mps")
+    # Aliased provider name normalises to the same key.
+    check k == cacheKeyFor(av, nar, "SadTalker", "mps")
     # Different avatar -> different key.
-    check k != computeCacheKey(av2, nar, thpSadTalker, "mps")
+    check k != cacheKeyFor(av2, nar, "sadtalker", "mps")
     # Different narration -> different key.
-    check k != computeCacheKey(av, nar2, thpSadTalker, "mps")
+    check k != cacheKeyFor(av, nar2, "sadtalker", "mps")
     # Different provider -> different key.
-    check k != computeCacheKey(av, nar, thpStockAvatar, "mps")
+    check k != cacheKeyFor(av, nar, "stock_avatar", "mps")
     # Different device -> different key.
-    check k != computeCacheKey(av, nar, thpSadTalker, "cpu")
+    check k != cacheKeyFor(av, nar, "sadtalker", "cpu")
 
   test "missing avatar raises":
     let tmp = getTempDir() / "ttalking_head_cache_missing"
@@ -171,7 +109,7 @@ suite "talking_head cache key":
     let nar = tmp / "n.wav"
     writeTinyWav(nar)
     expect TalkingHeadError:
-      discard computeCacheKey(tmp / "nope.png", nar, thpSadTalker, "auto")
+      discard cacheKeyFor(tmp / "nope.png", nar, "sadtalker", "auto")
 
   test "missing narration raises":
     let tmp = getTempDir() / "ttalking_head_cache_missing2"
@@ -180,25 +118,143 @@ suite "talking_head cache key":
     let av = tmp / "a.png"
     writeTinyPng(av)
     expect TalkingHeadError:
-      discard computeCacheKey(av, tmp / "nope.wav", thpSadTalker, "auto")
+      discard cacheKeyFor(av, tmp / "nope.wav", "sadtalker", "auto")
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+suite "talking_head registry":
+
+  test "newRegistry pre-registers stock_avatar":
+    let r = newRegistry()
+    check hasProvider(r, "stock_avatar")
+    check hasProvider(r, "")             # empty alias
+    check hasProvider(r, "placeholder")  # alias
+    let names = listProviders(r)
+    check "stock_avatar" in names
+
+  test "registerProvider rejects nil registry":
+    var p = newStockAvatarProvider()
+    p.name = "demo"
+    expect TalkingHeadError:
+      registerProvider(nil, p)
+
+  test "registerProvider rejects empty name":
+    let r = newRegistry()
+    var p = newStockAvatarProvider()
+    p.name = ""
+    expect TalkingHeadError:
+      registerProvider(r, p)
+
+  test "registerProvider rejects missing callbacks":
+    let r = newRegistry()
+    let p = TalkingHeadProvider(name: "broken")
+    expect TalkingHeadError:
+      registerProvider(r, p)
+
+  test "unknown providers raise on lookup and dispatch":
+    let r = newRegistry()
+    expect TalkingHeadError:
+      discard getProvider(r, "no-such-provider")
+    let tmp = getTempDir() / "ttalking_head_unknown"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let nar = tmp / "n.wav"
+    writeTinyWav(nar)
+    expect TalkingHeadError:
+      generateTalkingHead(r, "musetalk", nar, tmp / "out.mp4",
+                          TalkingHeadOpts())
+
+  test "registerProvider overwrites by canonical name":
+    let r = newRegistry()
+    var fakeCalled = 0
+    let p = TalkingHeadProvider(
+      name: "stock_avatar",
+      isAvailable: proc(): bool {.gcsafe.} = true,
+      generate: proc(narrationWav, outputMp4: string,
+                     opts: TalkingHeadOpts) {.gcsafe.} =
+        inc fakeCalled
+        writeFile(outputMp4, "fake")
+    )
+    registerProvider(r, p)
+    let tmp = getTempDir() / "ttalking_head_overwrite"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let nar = tmp / "n.wav"
+    writeTinyWav(nar)
+    let outMp4 = tmp / "out.mp4"
+    generateTalkingHead(r, "stock_avatar", nar, outMp4, TalkingHeadOpts())
+    check fakeCalled == 1
+    check fileExists(outMp4)
+    check readFile(outMp4) == "fake"
+
+# ---------------------------------------------------------------------------
+# applyCache
+# ---------------------------------------------------------------------------
+
+suite "talking_head applyCache":
+
+  test "applyCache skips the generator on a cache hit":
+    let tmp = getTempDir() / "ttalking_head_apply_cache"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let cacheDir = tmp / "cache"
+    let outMp4 = tmp / "out.mp4"
+    let key = "abcdef0123456789"
+
+    var calls = 0
+    let gen = proc() =
+      inc calls
+      writeFile(outMp4, "v1")
+
+    let r1 = applyCache(cacheDir, key, outMp4, gen)
+    check r1.hit == false
+    check calls == 1
+    check fileExists(cacheDir / (key & ".mp4"))
+
+    # Second call must hit the cache without running the generator.
+    let outMp4_2 = tmp / "out2.mp4"
+    let gen2 = proc() =
+      inc calls
+      writeFile(outMp4_2, "v2")
+    let r2 = applyCache(cacheDir, key, outMp4_2, gen2)
+    check r2.hit == true
+    check calls == 1  # generator NOT called the second time
+    check fileExists(outMp4_2)
+    check readFile(outMp4_2) == "v1"  # cached content reused
+
+  test "applyCache raises when generator produces nothing":
+    let tmp = getTempDir() / "ttalking_head_apply_cache_empty"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let cacheDir = tmp / "cache"
+    let outMp4 = tmp / "out.mp4"
+    let gen = proc() = discard
+    expect TalkingHeadError:
+      discard applyCache(cacheDir, "deadbeef", outMp4, gen)
+
+# ---------------------------------------------------------------------------
+# optsFromMetadata
+# ---------------------------------------------------------------------------
 
 suite "talking_head optsFromMetadata":
 
-  test "defaults to stock_avatar when metadata is empty":
+  test "defaults are sensible when metadata is empty":
     var meta = TalkingHeadMeta(extras: initTable[string, string]())
     let opts = optsFromMetadata(meta)
-    check opts.provider == thpStockAvatar
     check opts.avatarImagePath.isNone
     check opts.device.len == 0
     check opts.extraArgs.len == 0
+    check opts.providerSettings.kind == JObject
+    check opts.providerSettings.len == 0
 
-  test "explicit provider + relative avatar path resolves against scriptDir":
+  test "relative avatar path resolves against scriptDir":
     var meta = TalkingHeadMeta(provider: "sadtalker",
       avatarImage: "assets/founder.png",
       device: "auto",
       extras: initTable[string, string]())
     let opts = optsFromMetadata(meta, scriptDir = "/repo/scripts")
-    check opts.provider == thpSadTalker
     check opts.avatarImagePath == some("/repo/scripts/assets/founder.png")
     check opts.device == "auto"
 
@@ -209,7 +265,7 @@ suite "talking_head optsFromMetadata":
     let opts = optsFromMetadata(meta, scriptDir = "/repo")
     check opts.avatarImagePath == some("/abs/path.png")
 
-  test "extras translate into CLI args":
+  test "extras translate into both CLI args and providerSettings":
     var extras = initTable[string, string]()
     extras["preprocess"] = "full"
     extras["enhancer"] = "gfpgan"
@@ -227,122 +283,67 @@ suite "talking_head optsFromMetadata":
     # Unknown keys are forwarded as kebab-case flags.
     check "--pose-style" in opts.extraArgs
     check "5" in opts.extraArgs
+    # Structured mirror.
+    check opts.providerSettings["preprocess"].getStr == "full"
+    check opts.providerSettings["enhancer"].getStr == "gfpgan"
+    check opts.providerSettings["pose_style"].getStr == "5"
 
 # ---------------------------------------------------------------------------
-# Stock-avatar provider produces a real MP4
+# Built-in stock_avatar provider
 # ---------------------------------------------------------------------------
 
 suite "talking_head stock_avatar provider":
 
-  test "generateTalkingHead with thpStockAvatar produces a non-empty MP4":
+  test "isAvailable is always true":
+    let p = newStockAvatarProvider()
+    check p.name == "stock_avatar"
+    check p.isAvailable()
+
+  test "generateTalkingHead via registry produces a non-empty MP4":
+    let r = newRegistry()
     let tmp = getTempDir() / "ttalking_head_stock"
     if dirExists(tmp): removeDir(tmp)
     createDir(tmp)
     let nar = tmp / "n.wav"
     writeTinyWav(nar)
     let outMp4 = tmp / "out.mp4"
-    var opts = TalkingHeadOpts(provider: thpStockAvatar,
-      cacheDir: some(tmp / "cache"))
-    # If the marketing repo's placeholder exists, we'll copy it;
-    # otherwise we synthesise via ffmpeg. Either path must produce a
-    # non-empty file.
-    generateTalkingHead(nar, outMp4, opts)
+    let opts = TalkingHeadOpts(cacheDir: some(tmp / "cache"))
+    # Synthesises via ffmpeg's testsrc2 because no avatarImagePath is
+    # supplied.
+    generateTalkingHead(r, "stock_avatar", nar, outMp4, opts)
     check fileExists(outMp4)
     check getFileSize(outMp4) > 0
 
-# ---------------------------------------------------------------------------
-# Live SadTalker test — compile-time-gated.
-# ---------------------------------------------------------------------------
-#
-#   nim c -d:sadtalkerLive --hints:off --path:../src tests/ttalking_head.nim
-#
-# Requires:
-#   * codetracer-marketing/tools/sadtalker/.venv (Python 3.10 + deps)
-#   * the wrapper script at .../tools/sadtalker/render_talking_head.py
-#   * the SadTalker model weights under tools/sadtalker/upstream/checkpoints
-#   * the avatar fixture at codetracer-marketing/assets/avatar-default.png
-#   * a real narration WAV at codetracer-marketing/build/narration.wav
-when defined(sadtalkerLive):
+  test "stock provider copies a pre-baked MP4 verbatim when supplied":
+    let r = newRegistry()
+    let tmp = getTempDir() / "ttalking_head_stock_copy"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let nar = tmp / "n.wav"
+    writeTinyWav(nar)
+    # Build a "pre-baked" mp4 surrogate (the stock provider only checks
+    # existence + non-empty; it does not validate the container format).
+    let prebaked = tmp / "prebaked.mp4"
+    writeFile(prebaked, "fake-mp4-bytes-12345678")
+    let outMp4 = tmp / "out.mp4"
+    let opts = TalkingHeadOpts(avatarImagePath: some(prebaked))
+    generateTalkingHead(r, "stock_avatar", nar, outMp4, opts)
+    check fileExists(outMp4)
+    check readFile(outMp4) == "fake-mp4-bytes-12345678"
 
-  proc ffprobeJson(path: string): JsonNode =
-    let ffprobe =
-      block:
-        let env = getEnv("FFPROBE_BIN")
-        if env.len > 0 and fileExists(env): env
-        else: findExe("ffprobe")
-    doAssert ffprobe.len > 0 and fileExists(ffprobe),
-      "ffprobe not on PATH; install ffmpeg to run the live SadTalker test."
-    let p = startProcess(
-      command = ffprobe,
-      args = @["-hide_banner", "-v", "error", "-print_format", "json",
-               "-show_streams", "-show_format", path],
-      options = {poStdErrToStdOut}
-    )
-    let raw = p.outputStream.readAll()
-    let code = p.waitForExit()
-    p.close()
-    doAssert code == 0, "ffprobe failed (" & $code & "): " & raw
-    parseJson(raw)
-
-  suite "talking_head SadTalker live run":
-
-    test "renders a real talking head against the marketing fixture":
-      let avatar = marketingAsset("avatar-default.png")
-      doAssert fileExists(avatar),
-        "missing avatar fixture: " & avatar &
-        " (create one under codetracer-marketing/assets/)"
-      # Prefer the existing build/narration.wav fixture if present.
-      var narration = marketingRoot() / "build" / "narration.wav"
-      if not fileExists(narration):
-        narration = marketingTool("upstream/examples/driven_audio/RD_Radio31_000.wav")
-      doAssert fileExists(narration),
-        "no narration WAV fixture found at build/narration.wav or in " &
-        "tools/sadtalker/upstream/examples/driven_audio/"
-
-      let tmp = getTempDir() / "ttalking_head_live"
-      if dirExists(tmp): removeDir(tmp)
-      createDir(tmp)
-      let outMp4 = tmp / "live.mp4"
-      var opts = TalkingHeadOpts(
-        provider: thpSadTalker,
-        avatarImagePath: some(avatar),
-        device: "mps",
-        cacheDir: some(tmp / "cache"),
-        extraArgs: @["--still-mode", "--preprocess", "crop"],
-      )
-      doAssert isAvailable(thpSadTalker, opts),
-        "thpSadTalker not available — see Part A install instructions."
-
-      let started = epochTime()
-      generateTalkingHead(narration, outMp4, opts)
-      let dt = epochTime() - started
-      echo &"  live SadTalker render took {dt:.1f}s"
-
-      doAssert fileExists(outMp4), "no MP4 at " & outMp4
-      let sz = getFileSize(outMp4)
-      check sz > 1024
-      echo &"  output: {sz} bytes"
-
-      # Validate via ffprobe: must have a video stream and a duration.
-      let probe = ffprobeJson(outMp4)
-      var hasVideo = false
-      for s in probe{"streams"}.items:
-        if s{"codec_type"}.getStr() == "video": hasVideo = true
-      check hasVideo
-
-      # Duration should roughly match the narration WAV.
-      let videoDur = parseFloat(probe{"format", "duration"}.getStr())
-      let narProbe = ffprobeJson(narration)
-      let narDur = parseFloat(narProbe{"format", "duration"}.getStr())
-      echo &"  narration dur: {narDur:.3f}s; talking-head dur: {videoDur:.3f}s"
-      check abs(videoDur - narDur) <= 0.5
-
-      # Cache hit: second call must return instantly (no SadTalker run).
-      let secondStart = epochTime()
-      let outMp4_2 = tmp / "live2.mp4"
-      generateTalkingHead(narration, outMp4_2, opts)
-      let secondDt = epochTime() - secondStart
-      echo &"  second call (cache hit) took {secondDt:.3f}s"
-      check secondDt < 5.0  # generous; a real hit is well under 1s
-      check fileExists(outMp4_2)
-      check getFileSize(outMp4_2) == getFileSize(outMp4)
+  test "empty / placeholder provider names route to the built-in":
+    let r = newRegistry()
+    let tmp = getTempDir() / "ttalking_head_stock_alias"
+    if dirExists(tmp): removeDir(tmp)
+    createDir(tmp)
+    let nar = tmp / "n.wav"
+    writeTinyWav(nar)
+    let opts = TalkingHeadOpts()
+    let outA = tmp / "a.mp4"
+    let outB = tmp / "b.mp4"
+    generateTalkingHead(r, "", nar, outA, opts)
+    generateTalkingHead(r, "placeholder", nar, outB, opts)
+    check fileExists(outA)
+    check fileExists(outB)
+    check getFileSize(outA) > 0
+    check getFileSize(outB) > 0
