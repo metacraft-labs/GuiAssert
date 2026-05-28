@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Begin M6 — create the GuiAssert-Tavus sibling plugin repo.
+  :next_steps: Begin M7 — create the GuiAssert-ElevenLabs sibling plugin repo (TTS, optional pair).
   :last_updated: 2026-05-29
-  :current_milestone: M6
+  :current_milestone: M7
   :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
   :END:
 
@@ -511,23 +511,120 @@
 
 ** M6: GuiAssert-Tavus plugin (commercial)
    :PROPERTIES:
-   :status: planned
+   :status: implemented
    :depends_on: M5
    :END:
 
 *** Deliverables
-    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Tavus/=.
-    - [ ] Nim provider speaking Tavus video API
+    - [X] Create =/Users/zahary/metacraft/GuiAssert-Tavus/=.
+    - [X] Nim provider speaking Tavus video API
       (=POST https://tavusapi.com/v2/videos=). Authentication via
-      =x-api-key=. Polling for video generation.
-    - [ ] Honour =TAVUS_API_KEY= env var.
-    - [ ] README: $59/mo starter, conversational vs pre-rendered.
+      =x-api-key= header (lowercase, per Tavus docs). Async creation
+      + polling on =GET /v2/videos/{video_id}= until
+      =status == "ready"=.
+    - [X] Honour =TAVUS_API_KEY= env var (override via
+      =opts.providerSettings.api_key=); raises =TalkingHeadError=
+      at generate time when missing.
+    - [X] Uses GuiAssert's cache (=cacheKeyFor= + =applyCache=); the
+      mock-server test verifies that a second invocation issues zero
+      HTTP requests, and that changing =script_text= forces a fresh
+      render.
+    - [X] README: Starter $59/mo (~100 min conversational + ~10 min
+      pre-rendered), Growth $300-600/mo, Enterprise custom; targets
+      the pre-rendered =v2/videos= endpoint (Tavus also has a
+      real-time conversational-video API that does not fit
+      GuiAssert's narration-to-MP4 contract and is out of scope for
+      this plugin); =nix develop= + =export TAVUS_API_KEY= setup,
+      prominent note on the =script_text=-required deviation from
+      the generic contract.
 
 *** Verification
-    - test_name: tests_tavus_pure / mock / live
+    - test_name: tests_tavus_pure
       file: GuiAssert-Tavus/tests/ttavus.nim
-      description: Same pattern as M3/M4/M5.
+      description: Pure tests — auth-header table shape (lowercase =x-api-key= carrying the raw key with no =Bearer= / =Basic= prefix, no =Authorization= header), JSON body shape (flat snake_case =replica_id= / =script= / =video_name=, no nested =input[]= envelope), providerSettings ↔ env precedence, missing-key / missing-script_text / missing-WAV error paths, cache-key determinism + per-input sensitivity (different =script_text= / =replica_id= / =video_name= all force a fresh key).
+      status: implemented
+
+    - test_name: verify_tavus_mock_server
+      file: GuiAssert-Tavus/tests/ttavus.nim
+      description: =std/asynchttpserver= mocks Tavus =POST /v2/videos= / =GET /v2/videos/{video_id}= / =GET /result.mp4=; the provider's request shape (=x-api-key= header on every API call but never on the CDN download, flat JSON body shape, polling cadence through =queued= → =generating= → =ready=) is asserted exactly. Mock returns a small ffmpeg testsrc MP4 which the provider downloads byte-identically and caches; cache-hit second call issues zero HTTP requests; a third call with a different =script_text= forces a fresh render.
+      status: implemented
+
+    - test_name: verify_tavus_live_render
+      file: GuiAssert-Tavus/tests/ttavus.nim
+      description: Compile-time gated =-d:tavusLive=; requires =TAVUS_API_KEY= env. Runs live render against =tavusapi.com=; ffprobe asserts MP4 validity (has video + audio streams, duration > 1 s, size > 50 KB). Not exercised in this milestone because no API key is configured on the workstation — the gated test compiles cleanly and fails loudly with the documented "Export TAVUS_API_KEY=<your key>" message when run without credentials.
       status: pending
+
+*** Key Source Files
+    - GuiAssert-Tavus/src/gui_assert_tavus.nim
+    - GuiAssert-Tavus/tests/ttavus.nim
+    - GuiAssert-Tavus/tests/fixtures/narration.wav
+
+*** Implementation Notes
+    - The =TalkingHeadProvider.generate(narrationWav, outputMp4, opts)=
+      contract expects audio to arrive as a pre-rendered WAV. Tavus's
+      =POST /v2/videos= does NOT accept uploaded audio: it takes a
+      =script= string and the selected replica synthesises the
+      voiceover server-side. The plugin therefore ignores
+      =narrationWav= for the API call and requires
+      =opts.providerSettings["script_text"]= to be set — raising
+      =TalkingHeadError= when missing. The WAV is still hashed into
+      the cache key so per-session uniqueness in the WAV is preserved.
+      Same shape as the M4 HeyGen and M5 Synthesia deviations.
+    - Tavus authenticates with a custom lowercase =x-api-key= header
+      (HeyGen-style, not =Authorization=). HTTP header names are
+      case-insensitive on the wire, but Tavus's docs spec the
+      lowercase form and the plugin emits it verbatim. The pure
+      tests include explicit regression guards against accidental
+      "fixes" that would wrap the key in a =Bearer= prefix or move
+      it onto an =Authorization= header (which would be a
+      copy-paste from the M5 Synthesia plugin).
+    - Tavus's JSON request shape is a FLAT object with snake_case
+      keys (=replica_id=, =script=, =video_name=) — no nested
+      =input[]= array envelope like Synthesia, and no camelCase
+      like Synthesia's quirky =scriptText= field. The pure tests
+      pin this with explicit assertions that =input= and
+      =scriptText= are absent from the emitted JSON.
+    - Tavus's JSON response is a FLAT object — no =({"data": ...,
+      "code": 100})= envelope like HeyGen. The plugin reads
+      =video_id= / =status= / =download_url= directly off the
+      top-level object.
+    - Tavus's terminal statuses are =ready= (success), =error=
+      (failure), and =deleted= (treated as failure). Intermediate
+      states include =queued= and =generating=. The mock-server
+      test drives the status machine through queued → generating
+      → ready to exercise the polling cadence.
+    - =cacheKeyFor='s signature (avatar + narration + provider +
+      device) is fixed by the GuiAssert contract. For Tavus the
+      "avatar" is purely server-side (a replica string) and the
+      narration text is also server-side (a =script_text= string),
+      so the plugin folds the Tavus-specific knobs (=script_text=,
+      =replica_id=, =video_name=) into the device slot via
+      =tavusCacheSalt= (a SHA-1 prefix of the combined string).
+      Two different =script_text= values for the same WAV
+      therefore produce different cache entries — exercised by the
+      mock-server test.
+    - The =/result.mp4= download URL is served from Tavus's CDN
+      and does not require authentication. The mock-server test
+      pins this behaviour: =x-api-key= must be present on every
+      =/v2/= request but ABSENT on the CDN download. This guards
+      against accidental credential leakage to the CDN if a future
+      refactor pulls the download into the main =HttpClient= path.
+    - Polling cadence defaults to 10 s with a 15-minute timeout —
+      same generous timeout as the M5 Synthesia plugin, because
+      Tavus pre-rendered videos take several minutes too.
+    - This plugin targets only the pre-rendered =v2/videos=
+      endpoint. Tavus also exposes a real-time
+      conversational-video API on =/v2/conversations= — that is a
+      fundamentally different surface (no one-shot
+      create-poll-download cycle) that does not fit GuiAssert's
+      narration-to-MP4 contract. A future GuiAssert contract
+      extension could expose the conversational mode separately.
+    - Same =std/asynchttpserver= keep-alive workaround documented
+      in M3 / M4 / M5 applies: a dedicated polling thread drives
+      =asyncdispatch.poll()= while the main thread blocks in
+      synchronous =httpclient= calls; =--threads:on= is therefore
+      required for the test build, and every API call opens a
+      fresh =HttpClient= via the =withFreshClient= template.
 
 ** M7: GuiAssert-ElevenLabs plugin (TTS, optional pair)
    :PROPERTIES:
