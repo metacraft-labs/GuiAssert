@@ -9,7 +9,7 @@
 ##   5. Edge cases (empty timeline, single keyframe, missing metadata) parse
 ##      without error.
 
-import std/[json, options, strutils, unittest]
+import std/[json, options, strutils, tables, unittest]
 import ../src/gui_assert/parser
 
 const fourKeyframeYaml = """
@@ -210,3 +210,162 @@ timeline:
     let sj = parseScriptJson("""{"timeline": [{"time": 0.0, "action": "click"}]}""")
     check sj.metadata.title == ""
     check sj.timeline.len == 1
+
+  test "absence of new fields yields safe defaults":
+    # Legacy scripts (no targets, no window_layout, no target_window)
+    # must continue to parse and yield empty defaults.
+    let s = parseScriptYaml(fourKeyframeYaml)
+    check s.metadata.targets.len == 0
+    check s.metadata.windowLayout.len == 0
+    # When targets is empty, target_window stays as the empty string —
+    # legacy single-window dispatch.
+    for kf in s.timeline:
+      check kf.targetWindow == ""
+
+  test "new metadata.targets and window_layout parse from JSON":
+    const j = """
+    {
+      "metadata": {
+        "title": "Three Window",
+        "resolution": "1920x1080",
+        "fps": 30,
+        "targets": ["desktop", "terminal", "vscode"],
+        "window_layout": {
+          "desktop":  {"x": 0,    "y": 0,   "width": 1280, "height": 1080},
+          "terminal": {"x": 1280, "y": 0,   "width": 640,  "height": 540},
+          "vscode":   {"x": 1280, "y": 540, "width": 640,  "height": 540}
+        }
+      },
+      "timeline": [
+        {"time": 0.0, "action": "click", "target_window": "desktop"},
+        {"time": 1.0, "action": "type_text", "target_window": "terminal",
+         "params": {"text": "echo hi"}},
+        {"time": 2.0, "action": "open_file", "target_window": "vscode",
+         "params": {"path": "x.nim"}}
+      ]
+    }
+    """
+    let s = parseScriptJson(j)
+    check s.metadata.targets == @["desktop", "terminal", "vscode"]
+    check s.metadata.windowLayout.len == 3
+    check s.metadata.windowLayout["desktop"].x == 0
+    check s.metadata.windowLayout["desktop"].width == 1280
+    check s.metadata.windowLayout["terminal"].x == 1280
+    check s.metadata.windowLayout["terminal"].height == 540
+    check s.metadata.windowLayout["vscode"].y == 540
+    check s.timeline[0].targetWindow == "desktop"
+    check s.timeline[1].targetWindow == "terminal"
+    check s.timeline[2].targetWindow == "vscode"
+
+  test "new metadata.targets and window_layout parse from YAML":
+    const y = """
+metadata:
+  title: "Three Window"
+  resolution: "1920x1080"
+  fps: 30
+  targets: ["desktop", "terminal", "vscode"]
+  window_layout:
+    desktop:
+      x: 0
+      y: 0
+      width: 1280
+      height: 1080
+    terminal:
+      x: 1280
+      y: 0
+      width: 640
+      height: 540
+    vscode:
+      x: 1280
+      y: 540
+      width: 640
+      height: 540
+timeline:
+  - time: 0.0
+    action: click
+    target_window: desktop
+  - time: 1.0
+    action: type_text
+    target_window: terminal
+    params:
+      text: "echo hi"
+  - time: 2.0
+    action: open_file
+    target_window: vscode
+    params:
+      path: "x.nim"
+"""
+    let s = parseScriptYaml(y)
+    check s.metadata.targets == @["desktop", "terminal", "vscode"]
+    check s.metadata.windowLayout.len == 3
+    check s.metadata.windowLayout["desktop"].width == 1280
+    check s.metadata.windowLayout["terminal"].x == 1280
+    check s.metadata.windowLayout["vscode"].height == 540
+    check s.timeline[0].targetWindow == "desktop"
+    check s.timeline[1].targetWindow == "terminal"
+    check s.timeline[2].targetWindow == "vscode"
+
+  test "default target_window is 'desktop' when targets includes it":
+    const y = """
+metadata:
+  targets: ["desktop", "terminal"]
+timeline:
+  - time: 0.0
+    action: click
+  - time: 1.0
+    action: type_text
+    target_window: terminal
+    params:
+      text: "ls"
+"""
+    let s = parseScriptYaml(y)
+    check s.timeline[0].targetWindow == "desktop"
+    check s.timeline[1].targetWindow == "terminal"
+
+  test "default target_window falls back to first target when no 'desktop'":
+    const y = """
+metadata:
+  targets: ["browser", "terminal"]
+timeline:
+  - time: 0.0
+    action: click
+"""
+    let s = parseScriptYaml(y)
+    check s.timeline[0].targetWindow == "browser"
+
+  test "invalid target_window referencing an unlisted target raises":
+    const badYaml = """
+metadata:
+  targets: ["desktop", "terminal"]
+timeline:
+  - time: 0.0
+    action: click
+    target_window: vscode
+"""
+    expect ScriptValidationError:
+      discard parseScriptYaml(badYaml)
+    const badJson = """
+    {
+      "metadata": {"targets": ["desktop", "terminal"]},
+      "timeline": [
+        {"time": 0.0, "action": "click", "target_window": "vscode"}
+      ]
+    }
+    """
+    expect ScriptValidationError:
+      discard parseScriptJson(badJson)
+
+  test "window_layout key not in targets raises":
+    const badJson = """
+    {
+      "metadata": {
+        "targets": ["desktop"],
+        "window_layout": {
+          "vscode": {"x": 0, "y": 0, "width": 100, "height": 100}
+        }
+      },
+      "timeline": [{"time": 0.0, "action": "click"}]
+    }
+    """
+    expect ScriptValidationError:
+      discard parseScriptJson(badJson)

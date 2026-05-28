@@ -17,22 +17,44 @@
 ## sequences `[a, b, c]`, integer and float scalars, double-quoted strings,
 ## and plain scalars. Indentation is normalised to spaces.
 
-import std/[json, options, strutils]
+import std/[json, options, strutils, tables]
 
 type
   ScriptValidationError* = object of CatchableError
   ScriptParseError* = object of CatchableError
 
+  WindowLayout* = object
+    ## Pixel rectangle describing where a logical window should be
+    ## placed on the desktop.  Used by the three-window orchestrator
+    ## (see `metadata.window_layout` in the script schema).
+    x*: int
+    y*: int
+    width*: int
+    height*: int
+
   ScriptMetadata* = object
     title*: string
     resolution*: string
     fps*: int
+    targets*: seq[string]
+      ## Optional list of window IDs the script drives — for example
+      ## `["desktop", "terminal", "vscode"]`.  Empty for scripts that
+      ## predate the multi-window schema.
+    windowLayout*: Table[string, WindowLayout]
+      ## Optional per-target pixel layout map.  Keys must be subsets
+      ## of `targets`; validation enforces this.
 
   Keyframe* = object
     time*: float
     action*: string
     params*: JsonNode
     narration*: Option[string]
+    targetWindow*: string
+      ## Which logical window (one of `metadata.targets`) this
+      ## keyframe is dispatched to.  Defaults to "desktop" when
+      ## absent and at least one of the targets is "desktop"; if
+      ## `targets` is empty this field is also empty (legacy single-
+      ## window scripts).
 
   Script* = object
     metadata*: ScriptMetadata
@@ -71,14 +93,42 @@ proc estimateNarrationSeconds*(text: string): float =
 # JsonNode helpers (shared between JSON + YAML paths)
 # ---------------------------------------------------------------------------
 
+proc extractIntField(node: JsonNode, fieldName, path: string): int =
+  ## Read an integer or float-rounded-to-int from a JSON object.
+  ## Used by the `WindowLayout` parser for `x`/`y`/`width`/`height`.
+  if not node.hasKey(fieldName):
+    raise newException(ScriptParseError,
+      path & " is missing required field `" & fieldName & "`")
+  let v = node[fieldName]
+  case v.kind
+  of JInt:   return int(v.getInt)
+  of JFloat: return int(v.getFloat)
+  else:
+    raise newException(ScriptParseError,
+      path & "." & fieldName & " must be numeric, got " & $v.kind)
+
+proc extractWindowLayout(node: JsonNode, name: string): WindowLayout =
+  if node.kind != JObject:
+    raise newException(ScriptParseError,
+      "metadata.window_layout." & name & " must be an object, got " & $node.kind)
+  let path = "metadata.window_layout." & name
+  result = WindowLayout(
+    x: extractIntField(node, "x", path),
+    y: extractIntField(node, "y", path),
+    width: extractIntField(node, "width", path),
+    height: extractIntField(node, "height", path),
+  )
+
 proc extractMetadata(node: JsonNode): ScriptMetadata =
   if node.isNil or node.kind == JNull:
     # Default values when metadata is omitted entirely.
-    return ScriptMetadata(title: "", resolution: "", fps: 0)
+    return ScriptMetadata(title: "", resolution: "", fps: 0,
+      targets: @[], windowLayout: initTable[string, WindowLayout]())
   if node.kind != JObject:
     raise newException(ScriptParseError,
       "expected `metadata` to be an object, got " & $node.kind)
-  result = ScriptMetadata(title: "", resolution: "", fps: 0)
+  result = ScriptMetadata(title: "", resolution: "", fps: 0,
+    targets: @[], windowLayout: initTable[string, WindowLayout]())
   if node.hasKey("title"):
     let t = node["title"]
     if t.kind != JString:
@@ -95,6 +145,23 @@ proc extractMetadata(node: JsonNode): ScriptMetadata =
     of JInt:    result.fps = int(f.getInt)
     of JFloat:  result.fps = int(f.getFloat)
     else:       raise newException(ScriptParseError, "metadata.fps must be numeric")
+  if node.hasKey("targets"):
+    let t = node["targets"]
+    if t.kind != JArray:
+      raise newException(ScriptParseError,
+        "metadata.targets must be an array of strings")
+    for i, el in t.elems:
+      if el.kind != JString:
+        raise newException(ScriptParseError,
+          "metadata.targets[" & $i & "] must be a string")
+      result.targets.add el.getStr
+  if node.hasKey("window_layout"):
+    let wl = node["window_layout"]
+    if wl.kind != JObject:
+      raise newException(ScriptParseError,
+        "metadata.window_layout must be an object")
+    for key, val in wl.pairs:
+      result.windowLayout[key] = extractWindowLayout(val, key)
 
 proc keyframeFromJson(node: JsonNode, index: int): Keyframe =
   if node.kind != JObject:
@@ -133,14 +200,55 @@ proc keyframeFromJson(node: JsonNode, index: int): Keyframe =
         "timeline[" & $index & "].narration must be a string or null")
   else:
     result.narration = none(string)
+  if node.hasKey("target_window"):
+    let tw = node["target_window"]
+    if tw.kind != JString:
+      raise newException(ScriptParseError,
+        "timeline[" & $index & "].target_window must be a string")
+    result.targetWindow = tw.getStr
+  else:
+    result.targetWindow = ""
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
+proc applyTargetWindowDefaults*(script: var Script) =
+  ## Fill in default `targetWindow` values per the schema rules:
+  ##
+  ##   * When `metadata.targets` is empty the script is a legacy
+  ##     single-window script — leave `targetWindow` as the empty
+  ##     string so dispatchers can ignore it.
+  ##   * Otherwise default to `"desktop"` when that's a member of
+  ##     `targets`; otherwise default to the first listed target.
+  if script.metadata.targets.len == 0:
+    return
+  var fallback = "desktop"
+  if "desktop" notin script.metadata.targets:
+    fallback = script.metadata.targets[0]
+  for i in 0 ..< script.timeline.len:
+    if script.timeline[i].targetWindow.len == 0:
+      script.timeline[i].targetWindow = fallback
+
 proc validateScript*(script: Script) =
   ## Run all post-parse validation rules. Raises `ScriptValidationError` on
   ## the first issue. Empty timelines are valid.
+  # window_layout keys must be members of `targets`.
+  for key in script.metadata.windowLayout.keys:
+    if key notin script.metadata.targets:
+      raise newException(ScriptValidationError,
+        "metadata.window_layout key '" & key &
+        "' is not listed in metadata.targets")
+  # Per-keyframe target_window must be one of metadata.targets when
+  # targets is non-empty.  Legacy scripts (no targets) accept any
+  # target_window verbatim.
+  if script.metadata.targets.len > 0:
+    for i, kf in script.timeline:
+      if kf.targetWindow.len > 0 and kf.targetWindow notin script.metadata.targets:
+        raise newException(ScriptValidationError,
+          "timeline[" & $i & "].target_window '" & kf.targetWindow &
+          "' references an unlisted target (declared: " &
+          script.metadata.targets.join(", ") & ")")
   for i in 1 ..< script.timeline.len:
     let prev = script.timeline[i - 1]
     let cur = script.timeline[i]
@@ -168,7 +276,8 @@ proc scriptFromJsonNode(root: JsonNode): Script =
   if root.hasKey("metadata"):
     result.metadata = extractMetadata(root["metadata"])
   else:
-    result.metadata = ScriptMetadata(title: "", resolution: "", fps: 0)
+    result.metadata = ScriptMetadata(title: "", resolution: "", fps: 0,
+      targets: @[], windowLayout: initTable[string, WindowLayout]())
   result.timeline = @[]
   if root.hasKey("timeline"):
     let tl = root["timeline"]
@@ -188,6 +297,7 @@ proc parseScriptJson*(input: string): Script =
   except JsonParsingError as e:
     raise newException(ScriptParseError, "JSON parse error: " & e.msg)
   result = scriptFromJsonNode(root)
+  applyTargetWindowDefaults(result)
   validateScript(result)
 
 # ---------------------------------------------------------------------------
@@ -449,7 +559,8 @@ proc parseScriptYaml*(input: string): Script =
   if lines.len == 0:
     # Treat empty input as an empty script.
     result = Script(
-      metadata: ScriptMetadata(title: "", resolution: "", fps: 0),
+      metadata: ScriptMetadata(title: "", resolution: "", fps: 0,
+        targets: @[], windowLayout: initTable[string, WindowLayout]()),
       timeline: @[],
     )
     return
@@ -462,6 +573,7 @@ proc parseScriptYaml*(input: string): Script =
     raise newException(ScriptParseError,
       "stray content after document at line " & $lines[idx].lineNo)
   result = scriptFromJsonNode(root)
+  applyTargetWindowDefaults(result)
   validateScript(result)
 
 # Avoid an unused-symbol warning when callers only import the type aliases.
