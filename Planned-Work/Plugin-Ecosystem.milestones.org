@@ -1,0 +1,347 @@
+#+TITLE: GuiAssert Plugin Ecosystem Milestones
+
+* Document
+  :PROPERTIES:
+  :next_steps: Begin M1 — create the GuiAssert-Wav2Lip sibling plugin repo.
+  :last_updated: 2026-05-28
+  :current_milestone: M1
+  :executive_summary: Plan to develop talking-head provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing the `TalkingHeadProvider` contract defined in `GuiAssert/src/gui_assert/talking_head/core.nim`.
+  :END:
+
+* Introduction
+  :PROPERTIES:
+  :initiative_goals: Provide a pluggable contract so consumers can swap among open-source and commercial talking-head/lip-sync providers without changing GuiAssert itself, validated by strong integration tests per plugin (real subprocess invocations or HTTP mock-server tests with exact request-body assertions; live tests gated for credentialed runs).
+  :related_specs: [[file:../README.md][GuiAssert README]], [[file:../src/gui_assert/talking_head/core.nim][TalkingHeadProvider contract]]
+  :END:
+
+  GuiAssert defines the `TalkingHeadProvider` contract and ships only
+  lightweight built-ins (`stock_avatar`). Heavy providers — local ML
+  models or commercial APIs — live in sibling repositories named
+  `GuiAssert-<Provider>` and are imported by consumers behind a
+  `-d:with<Provider>` compile gate.
+
+** Plugin contract
+   The contract is `GuiAssert/src/gui_assert/talking_head/core.nim`:
+
+   - `TalkingHeadProvider` value-type with `name`, `isAvailable`, `generate`.
+   - `TalkingHeadRegistry` for runtime dispatch by string name.
+   - `cacheKeyFor(avatar, narration, providerName, device)` — stable hash.
+   - `applyCache(cacheDir, key, outputMp4, generator)` — generic memoisation.
+   - `optsFromMetadata(meta, scriptDir)` — translates YAML
+     `metadata.talking_head:` blocks into `TalkingHeadOpts`.
+
+   Each plugin exports a `register<Plugin>(reg: TalkingHeadRegistry)` proc
+   plus a constructor `<plugin>Provider(): TalkingHeadProvider`.
+
+* Milestones
+
+** M0: SadTalker restore + first combined sample
+   :PROPERTIES:
+   :status: implemented
+   :depends_on:
+   :END:
+
+*** Deliverables
+    - [x] Re-run =GuiAssert-SadTalker/scripts/install.sh= so the
+      `.venv` and `upstream/checkpoints/` exist at the new repo
+      location. Verify with =scripts/verify-install.sh=.
+    - [x] Produce =/tmp/codetracer-with-real-talking-head.mp4=:
+      29.1 s, 1920×1080, real CodeTracer browser-replay UI footage
+      composed with a real SadTalker-generated talking head in the
+      circular bottom-right overlay, narration via macOS =say=, 8
+      drawtext captions.
+    - [x] Validate the sample with =ffprobe=: container =mp4/mov=,
+      h264 video stream, aac audio, duration ≈ 29.1 s ±1 s, video at
+      1920×1080.
+    - [x] Extract a midpoint frame and confirm both the CodeTracer
+      UI is visible and the SadTalker head is present in the
+      bottom-right.
+
+*** Verification
+    - test_name: verify_sadtalker_installation_smoke
+      file: GuiAssert-SadTalker/tests/tsadtalker.nim
+      description: Compile-time gated =-d:sadtalkerLive=; produces a real talking-head MP4 from a known fixture.
+      status: implemented
+
+    - test_name: verify_combined_codetracer_sample
+      file: codetracer-marketing/tests/trecord_demo.nim
+      description: Compile-time gated =-d:withSadTalker -d:sadtalkerLive -d:liveRecording=; runs the full live pipeline against real CodeTracer + SadTalker and asserts the produced MP4 contains both video streams.
+      status: implemented
+
+*** Key Source Files
+    - GuiAssert-SadTalker/scripts/install.sh
+    - GuiAssert-SadTalker/python/render_talking_head.py
+    - codetracer-marketing/runner/record_demo.nim
+
+*** Implementation Notes
+    - The runner's =holdRemaining= logic does not currently bound the
+      screencast capture to =script.totalDuration=. When a driver step
+      runs long (for example, a UI selector that hits the
+      Playwright timeout before the target element renders), the
+      captured screencast inherits the overrun and the final MP4 ends
+      up longer than the script's declared duration. For this
+      milestone the produced sample was trimmed back to spec
+      via =ffmpeg -t <script.totalDuration> -c copy= (no
+      re-encoding, so quality is preserved). *Follow-up*: extend the
+      runner to enforce =script.totalDuration= as an upper bound on
+      screencast length so post-trimming is not required.
+    - =GuiAssert-SadTalker/flake.nix= currently requests =python310=
+      from the workspace's transitive =nixpkgs= follow-chain. The
+      pinned channel no longer exposes that attribute, so
+      =nix develop= in =GuiAssert-SadTalker= fails. The install ran
+      against a host Python 3.10 (Homebrew) successfully — every
+      other dependency is satisfied by the local venv. *Follow-up*:
+      pin the SadTalker flake to a nixpkgs revision that still
+      provides =python310=, or migrate the install to a newer
+      Python version supported by the patched SadTalker stack.
+
+** M1: GuiAssert-Wav2Lip plugin
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M0
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Wav2Lip/= with:
+      flake.nix, gui_assert_wav2lip.nimble, Justfile, LICENSE (MIT),
+      README, .gitignore, src/gui_assert_wav2lip.nim, python/,
+      scripts/install.sh + verify-install.sh, tests/twav2lip.nim.
+    - [ ] Pin upstream Wav2Lip
+      (https://github.com/Rudrabha/Wav2Lip) at a known-good commit
+      in =python/COMMIT.txt=.
+    - [ ] Bundle a thin =python/render_lipsync.py= wrapper that
+      invokes Wav2Lip's `inference.py` and produces an MP4 at the
+      requested path. Handles `--device mps|cpu|auto`. Sets
+      =PYTORCH_ENABLE_MPS_FALLBACK=1=.
+    - [ ] Apple Silicon patches (document in =python/PATCHES.md=)
+      for any numpy 2.x / PyTorch 2.x incompatibilities.
+    - [ ] Nim provider implementing the contract; registers as
+      provider name =wav2lip=. Uses GuiAssert's cache.
+    - [ ] Install script downloads weights from the official mirror
+      (~300 MB).
+    - [ ] README with cost-of-setup and Apple-Silicon caveats.
+
+*** Verification
+    - test_name: tests_wav2lip_pure
+      file: GuiAssert-Wav2Lip/tests/twav2lip.nim
+      description: Pure tests — provider construction, isAvailable with bogus/real paths, cache-key determinism, env-override handling.
+      status: pending
+
+    - test_name: verify_wav2lip_live_render
+      file: GuiAssert-Wav2Lip/tests/twav2lip.nim
+      description: Compile-time gated =-d:wav2lipLive=; runs Wav2Lip end-to-end on a known fixture WAV + portrait, asserts produced MP4 is valid (ffprobe duration ≈ input narration ±0.5 s; video stream present; bytes > 50 KB) and the cache-hit path is < 5 s.
+      status: pending
+
+*** Key Source Files
+    - GuiAssert-Wav2Lip/src/gui_assert_wav2lip.nim
+    - GuiAssert-Wav2Lip/python/render_lipsync.py
+    - GuiAssert-Wav2Lip/scripts/install.sh
+
+** M2: GuiAssert-MuseTalk plugin
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M1
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-MuseTalk/= with
+      the same layout as Wav2Lip.
+    - [ ] Pin MuseTalk (https://github.com/TMElyralab/MuseTalk) at
+      a stable commit. Document the Python 3.10 + mmcv + mmpose +
+      whisper-small download flow in =python/PATCHES.md=.
+    - [ ] Bundle =python/render_musetalk.py= wrapper, MPS-aware,
+      with a known-good fallback chain for Apple Silicon
+      compatibility issues. Document workarounds.
+    - [ ] Nim provider; registers as =musetalk=.
+    - [ ] Install script downloads weights from Hugging Face
+      (~5 GB).
+    - [ ] README acknowledging the heavier Apple-Silicon adaptation.
+
+*** Verification
+    - test_name: tests_musetalk_pure
+      file: GuiAssert-MuseTalk/tests/tmusetalk.nim
+      description: Pure tests mirroring the Wav2Lip pattern.
+      status: pending
+
+    - test_name: verify_musetalk_live_render
+      file: GuiAssert-MuseTalk/tests/tmusetalk.nim
+      description: Compile-time gated =-d:musetalkLive=; live render + ffprobe validation.
+      status: pending
+
+*** Key Source Files
+    - GuiAssert-MuseTalk/src/gui_assert_musetalk.nim
+    - GuiAssert-MuseTalk/python/render_musetalk.py
+
+** M3: GuiAssert-Did plugin (commercial)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M2
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Did/= (no python
+      directory needed — pure-Nim HTTP client).
+    - [ ] Nim provider speaking D-ID's REST API:
+      =POST /talks= with =script.input= = base64 audio, =source_url=
+      = uploaded portrait URL, =auth= = bearer
+      =Basic base64(DID_API_KEY:)=.
+    - [ ] Polling loop on =GET /talks/{id}= until =status: "done"=,
+      then downloads =result_url= MP4 to the requested path. Honour
+      a 5-minute timeout.
+    - [ ] Honour =DID_API_KEY= env var; raise =TalkingHeadError= if
+      missing.
+    - [ ] Uses GuiAssert's cache.
+    - [ ] README: cost guidance, free-tier limits.
+
+*** Verification
+    - test_name: tests_did_pure
+      file: GuiAssert-Did/tests/tdid.nim
+      description: Pure tests — request-body shape (auth header, JSON body), provider isAvailable, missing-key path, base64 encoding.
+      status: pending
+
+    - test_name: verify_did_mock_server
+      file: GuiAssert-Did/tests/tdid.nim
+      description: =std/asynchttpserver= mocks D-ID =POST /talks= and =GET /talks/{id}=; the provider's request shape (auth header, body, polling) is asserted exactly. Mock returns a valid MP4 (small testsrc fixture) which the provider downloads and caches.
+      status: pending
+
+    - test_name: verify_did_live_render
+      file: GuiAssert-Did/tests/tdid.nim
+      description: Compile-time gated =-d:didLive=; requires =DID_API_KEY= env. Runs live render; ffprobe asserts MP4 validity.
+      status: pending
+
+*** Key Source Files
+    - GuiAssert-Did/src/gui_assert_did.nim
+
+** M4: GuiAssert-HeyGen plugin (commercial)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M3
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-HeyGen/=.
+    - [ ] Nim provider speaking HeyGen v2 API:
+      =POST https://api.heygen.com/v2/video/generate= with auth
+      header =X-Api-Key=. Selects avatar_id + voice_id from opts.
+      Polls =GET /v1/video_status.get=.
+    - [ ] Honour =HEYGEN_API_KEY= env var.
+    - [ ] Uses GuiAssert's cache.
+    - [ ] README: cost ($1-4/min), pay-as-you-go since Feb 2026.
+
+*** Verification
+    - test_name: tests_heygen_pure
+      file: GuiAssert-HeyGen/tests/theygen.nim
+      description: Pure tests — request shape, auth, missing-key path.
+      status: pending
+
+    - test_name: verify_heygen_mock_server
+      file: GuiAssert-HeyGen/tests/theygen.nim
+      description: Mock-server end-to-end test asserting exact request body + polling behaviour.
+      status: pending
+
+    - test_name: verify_heygen_live_render
+      file: GuiAssert-HeyGen/tests/theygen.nim
+      description: Compile-time gated =-d:heygenLive=; requires =HEYGEN_API_KEY=.
+      status: pending
+
+*** Key Source Files
+    - GuiAssert-HeyGen/src/gui_assert_heygen.nim
+
+** M5: GuiAssert-Synthesia plugin (commercial)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M4
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Synthesia/=.
+    - [ ] Nim provider speaking Synthesia API
+      (=POST https://api.synthesia.io/v2/videos=). Authentication
+      via =Authorization: SYNTHESIA_API_KEY= header. Async creation
+      + polling.
+    - [ ] Honour =SYNTHESIA_API_KEY= env var.
+    - [ ] README: enterprise focus, plan tiers.
+
+*** Verification
+    - test_name: tests_synthesia_pure
+      file: GuiAssert-Synthesia/tests/tsynthesia.nim
+      description: Pure request shape tests.
+      status: pending
+
+    - test_name: verify_synthesia_mock_server
+      file: GuiAssert-Synthesia/tests/tsynthesia.nim
+      description: Mock-server integration.
+      status: pending
+
+    - test_name: verify_synthesia_live_render
+      file: GuiAssert-Synthesia/tests/tsynthesia.nim
+      description: Compile-time gated =-d:synthesiaLive=.
+      status: pending
+
+** M6: GuiAssert-Tavus plugin (commercial)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M5
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-Tavus/=.
+    - [ ] Nim provider speaking Tavus video API
+      (=POST https://tavusapi.com/v2/videos=). Authentication via
+      =x-api-key=. Polling for video generation.
+    - [ ] Honour =TAVUS_API_KEY= env var.
+    - [ ] README: $59/mo starter, conversational vs pre-rendered.
+
+*** Verification
+    - test_name: tests_tavus_pure / mock / live
+      file: GuiAssert-Tavus/tests/ttavus.nim
+      description: Same pattern as M3/M4/M5.
+      status: pending
+
+** M7: GuiAssert-ElevenLabs plugin (TTS, optional pair)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: M6
+   :END:
+
+*** Deliverables
+    - [ ] Create =/Users/zahary/metacraft/GuiAssert-ElevenLabs/=.
+    - [ ] Nim provider for ElevenLabs TTS — but this isn't a
+      talking-head provider per se; it's an *alternative TTS*.
+      Define and expose a *second contract*
+      =SpeechSynthesisProvider= in GuiAssert for swappable TTS,
+      so the consumer can swap =say= for ElevenLabs without
+      affecting the talking-head pipeline.
+    - [ ] =POST https://api.elevenlabs.io/v1/text-to-speech/{voice_id}=
+      with header =xi-api-key=. Returns audio bytes.
+    - [ ] Honour =ELEVENLABS_API_KEY= env var.
+
+*** Verification
+    - test_name: tests_elevenlabs_pure / mock / live
+      file: GuiAssert-ElevenLabs/tests/televenlabs.nim
+      description: Same pattern; live test gated =-d:elevenlabsLive=.
+      status: pending
+
+* Common deliverables per plugin
+
+   Each plugin repo MUST contain:
+   - =README.md= (public-safe, no internal references)
+   - =LICENSE= (MIT, matches GuiAssert)
+   - =.gitignore= (.venv, model-weight extensions, build artefacts)
+   - =flake.nix= (dev-shell deps; never bundles heavyweight ML wheels)
+   - =Justfile= (minimum =lint= and =test= recipes so workspace hooks pass)
+   - =gui_assert_<plugin>.nimble= (requires =gui_assert >= 0.1.0=)
+   - =src/gui_assert_<plugin>.nim= (provider contract impl)
+   - =tests/t<plugin>.nim= (pure + gated live tests)
+   - Documentation of cost / setup steps in README
+   - For local providers: =scripts/install.sh= + =scripts/verify-install.sh=
+   - Status update in this org file as the milestone completes
+
+* Naming & visibility
+
+   All =GuiAssert-*= plugin repos are *public*. Commit messages must
+   stay user-facing — no CodeTracer or codetracer-marketing
+   references.
+
+   codetracer-marketing is *private* — its commit messages can be
+   richer about internal context.
