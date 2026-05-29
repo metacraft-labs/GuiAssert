@@ -105,6 +105,46 @@ type
       ## in a white shirt on a slightly-grey wall, where colorkey on
       ## white would eat the shirt.
 
+  CropPolicy* = enum
+    ## Pre-key crop applied to the avatar source.  Picks a roughly
+    ## centred subregion before scaling so callers can isolate just
+    ## the head (or head + shoulders) of a portrait-framed avatar.
+    cpFull = "full"
+      ## No crop — the entire source is used.  Equivalent to the
+      ## historical behaviour.
+    cpHeadOnly = "head_only"
+      ## Crop to the upper-centre 35 % x 35 % of the source.  Suits
+      ## "head shot" placement where only the face shows.
+    cpHeadShoulders = "head_shoulders"
+      ## Crop to the upper-centre 55 % x 55 % of the source.  Keeps
+      ## the chest line so the figure has a natural lower edge.
+    cpUpperBody = "upper_body"
+      ## Crop to the upper-centre 75 % x 75 % of the source.  Closer
+      ## to the historical "all of the frame" layout but trims wide
+      ## studio padding.
+    cpCustom = "custom"
+      ## Use the explicit `cropRegion` rectangle verbatim.
+
+  CropRegion* = object
+    ## Pixel rectangle within the *source* video, used only when
+    ## `CropPolicy = cpCustom`.  All fields are in source pixels;
+    ## `w` / `h` of 0 mean "full source extent on that axis".
+    x*, y*, w*, h*: int
+
+  OverlayPosition* = enum
+    ## Where the keyed avatar lands on the canvas.
+    opAnchor = "anchor"
+      ## Use `overlayAnchor` plus the per-mode anchor expressions
+      ## (`oaBottomLeft` / `oaBottomRight` / `oaBottomCenter`).
+    opAbsolute = "absolute"
+      ## Use `overlayX` / `overlayY` directly as pixel coordinates.
+    opFractional = "fractional"
+      ## Use `overlayFracX` / `overlayFracY` as 0..1 fractions of
+      ## the *remaining canvas after the overlay's own dimensions*
+      ## (i.e. `0,0` = top-left, `1,1` = bottom-right, `0.5,0.5` =
+      ## centre).  Convenient when the avatar size is also expressed
+      ## as a fraction.
+
   ChromaKeyConfig* = object
     ## Tuning for the background-removal filter applied in
     ## `omChromaKey` mode.  Defaults are picked so HeyGen / Synthesia
@@ -118,6 +158,8 @@ type
     blend*: float          ## 0.0 .. 1.0 — soft edge falloff
     lumaThreshold*: float  ## 0.0 .. 1.0 — only used by `kmLuma`
     lumaTolerance*: float  ## 0.0 .. 1.0 — only used by `kmLuma`
+    despill*: bool         ## apply `despill` after keying to fix edge bleed
+    despillType*: string   ## "green" (default) or "blue"
 
   ComposeOptions* = object
     ## Tunable parameters for the composition. Default values match the
@@ -131,6 +173,13 @@ type
     overlayMode*: OverlayMode
     overlayAnchor*: OverlayAnchor
     chromaKey*: ChromaKeyConfig
+    cropPolicy*: CropPolicy
+    cropRegion*: CropRegion
+    overlayPosition*: OverlayPosition
+    overlayX*: int                ## pixels — used by `opAbsolute`
+    overlayY*: int
+    overlayFracX*: float          ## 0..1 — used by `opFractional`
+    overlayFracY*: float
     fontFile*: Option[string]
       ## Optional absolute path to a TTF font. When omitted we rely on
       ## ffmpeg's drawtext defaults (which on macOS falls back to the
@@ -181,7 +230,8 @@ proc defaultChromaKey*(): ChromaKeyConfig =
   ## D-ID emit when their `background` field is set to a solid green.
   ChromaKeyConfig(`method`: kmChroma, color: "0x00ff00",
                   similarity: 0.18, blend: 0.08,
-                  lumaThreshold: 0.9, lumaTolerance: 0.05)
+                  lumaThreshold: 0.9, lumaTolerance: 0.05,
+                  despill: true, despillType: "green")
 
 proc whiteScreenChromaKey*(): ChromaKeyConfig =
   ## RGB-space `colorkey` against pure white, tuned to extract a
@@ -192,7 +242,8 @@ proc whiteScreenChromaKey*(): ChromaKeyConfig =
   ## `background = green_screen`.
   ChromaKeyConfig(`method`: kmColor, color: "white",
                   similarity: 0.10, blend: 0.05,
-                  lumaThreshold: 0.9, lumaTolerance: 0.05)
+                  lumaThreshold: 0.9, lumaTolerance: 0.05,
+                  despill: false, despillType: "")
 
 proc defaultComposeOptions*(): ComposeOptions =
   ## Returns the canonical composition options used by the verification
@@ -206,6 +257,11 @@ proc defaultComposeOptions*(): ComposeOptions =
     overlayMode: omCircle,
     overlayAnchor: oaBottomRight,
     chromaKey: defaultChromaKey(),
+    cropPolicy: cpFull,
+    cropRegion: CropRegion(),
+    overlayPosition: opAnchor,
+    overlayX: 0, overlayY: 0,
+    overlayFracX: 0.0, overlayFracY: 1.0,
     fontFile: none(string),
     fontSize: 36,
     fontColor: "white",
@@ -285,17 +341,38 @@ proc avatarFilterCircle(opts: ComposeOptions): string =
     "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':" &
     "a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'[avatar]"
 
+proc cropFilterFraction(fracW, fracH: float): string =
+  ## ffmpeg `crop=` expression for a centred-upper subregion sized as
+  ## a fraction of the source.  `(in_w-out_w)/2` centres horizontally;
+  ## `0` anchors vertically to the top so head-only crops keep the
+  ## face in view.
+  &"crop=in_w*{fracW:.3f}:in_h*{fracH:.3f}:(in_w-out_w)/2:0"
+
+proc cropFilterFor(opts: ComposeOptions): string =
+  ## Build the optional `crop=...,` prefix applied to the avatar
+  ## source before scaling.  Returns an empty string for `cpFull`
+  ## so the legacy code path is unchanged.
+  case opts.cropPolicy
+  of cpFull: ""
+  of cpHeadOnly: cropFilterFraction(0.35, 0.35) & ","
+  of cpHeadShoulders: cropFilterFraction(0.55, 0.55) & ","
+  of cpUpperBody: cropFilterFraction(0.75, 0.75) & ","
+  of cpCustom:
+    let r = opts.cropRegion
+    let w = if r.w > 0: $r.w else: "in_w"
+    let h = if r.h > 0: $r.h else: "in_h"
+    &"crop={w}:{h}:{r.x}:{r.y},"
+
 proc avatarFilterChromaKey(opts: ComposeOptions): string =
-  ## Build the avatar chain for `omChromaKey` mode.  Scales the
-  ## source preserving aspect (passing `width = -1` so ffmpeg
-  ## derives the proportional width), promotes to `yuva420p` so the
-  ## chosen keying filter can write into the alpha channel, then
-  ## removes the configured background via one of three filters:
-  ## `chromakey` (YUV) for green / blue screens, `colorkey` (RGB)
-  ## for white / solid neutral backgrounds, or `lumakey` for
-  ## brightness-thresholded extraction.  The remaining alpha buffer
-  ## is bottom-anchored downstream in `overlayFilter`, so the human
-  ## figure naturally extends to the lower edge of the canvas.
+  ## Build the avatar chain for `omChromaKey` mode.  Optionally
+  ## crops the source first (head-only / head + shoulders / upper
+  ## body / custom rectangle), then scales preserving aspect
+  ## (passing `width = -1` so ffmpeg derives the proportional
+  ## width), promotes to `yuva420p` so the chosen keying filter can
+  ## write into the alpha channel, removes the configured
+  ## background via one of three filters (`chromakey` / `colorkey`
+  ## / `lumakey`), and applies an optional `despill` pass to fix
+  ## the residual green or blue spill at the figure's edges.
   let w =
     if opts.avatarWidth <= 0: -1
     else: opts.avatarWidth
@@ -308,31 +385,42 @@ proc avatarFilterChromaKey(opts: ComposeOptions): string =
       &"colorkey=color={ck.color}:similarity={ck.similarity}:blend={ck.blend}"
     of kmLuma:
       &"lumakey=threshold={ck.lumaThreshold}:tolerance={ck.lumaTolerance}"
-  &"[2:v]scale={w}:{opts.avatarHeight}," &
+  let despillExpr =
+    if ck.despill:
+      let t = if ck.despillType.len > 0: ck.despillType else: "green"
+      ",despill=type=" & t
+    else: ""
+  let cropPrefix = cropFilterFor(opts)
+  &"[2:v]" & cropPrefix &
+    &"scale={w}:{opts.avatarHeight}," &
     "format=yuva420p," &
-    keyExpr & "[avatar]"
+    keyExpr & despillExpr & "[avatar]"
 
 proc overlayExpression(opts: ComposeOptions): string =
-  ## Compute the `overlay=x:y` expression for the configured anchor.
-  ## `H`/`W` resolve to the canvas dimensions and `overlay_w`/
-  ## `overlay_h` to the scaled avatar dimensions; the bottom-anchored
-  ## modes drop the margin from the y coordinate so the figure
-  ## extends right up to the lower edge.
-  case opts.overlayAnchor
-  of oaBottomRight:
-    &"W-overlay_w-{opts.margin}:H-overlay_h-{opts.margin}"
-  of oaBottomLeft:
-    case opts.overlayMode
-    of omCircle:
-      &"{opts.margin}:H-overlay_h-{opts.margin}"
-    of omChromaKey:
-      &"{opts.margin}:H-overlay_h"
-  of oaBottomCenter:
-    case opts.overlayMode
-    of omCircle:
-      &"(W-overlay_w)/2:H-overlay_h-{opts.margin}"
-    of omChromaKey:
-      "(W-overlay_w)/2:H-overlay_h"
+  ## Compute the `overlay=x:y` expression for the configured anchor
+  ## or explicit position.  `H`/`W` resolve to the canvas dimensions
+  ## and `overlay_w`/`overlay_h` to the scaled avatar dimensions.
+  case opts.overlayPosition
+  of opAbsolute:
+    &"{opts.overlayX}:{opts.overlayY}"
+  of opFractional:
+    &"(W-overlay_w)*{opts.overlayFracX:.4f}:(H-overlay_h)*{opts.overlayFracY:.4f}"
+  of opAnchor:
+    case opts.overlayAnchor
+    of oaBottomRight:
+      &"W-overlay_w-{opts.margin}:H-overlay_h-{opts.margin}"
+    of oaBottomLeft:
+      case opts.overlayMode
+      of omCircle:
+        &"{opts.margin}:H-overlay_h-{opts.margin}"
+      of omChromaKey:
+        &"{opts.margin}:H-overlay_h"
+    of oaBottomCenter:
+      case opts.overlayMode
+      of omCircle:
+        &"(W-overlay_w)/2:H-overlay_h-{opts.margin}"
+      of omChromaKey:
+        "(W-overlay_w)/2:H-overlay_h"
 
 proc buildFilterComplex*(
     captions: seq[Caption], opts: ComposeOptions): string =

@@ -480,6 +480,54 @@ suite "presenter compose mode (chromakey)":
     check "chromakey=" notin f
     check "colorkey=" notin f
 
+  test "cropPolicy cpHeadOnly inserts a 35% centred-upper crop":
+    var p = presenterComposeOptions()
+    p.cropPolicy = cpHeadOnly
+    let f = buildFilterComplex(@[], p)
+    check "crop=in_w*0.350:in_h*0.350:(in_w-out_w)/2:0," in f
+
+  test "cropPolicy cpHeadShoulders uses a 55% centred-upper crop":
+    var p = presenterComposeOptions()
+    p.cropPolicy = cpHeadShoulders
+    let f = buildFilterComplex(@[], p)
+    check "crop=in_w*0.550:in_h*0.550:(in_w-out_w)/2:0," in f
+
+  test "cropPolicy cpCustom uses the explicit cropRegion":
+    var p = presenterComposeOptions()
+    p.cropPolicy = cpCustom
+    p.cropRegion = CropRegion(x: 200, y: 50, w: 400, h: 400)
+    let f = buildFilterComplex(@[], p)
+    check "crop=400:400:200:50," in f
+
+  test "overlayPosition opAbsolute uses explicit pixel coordinates":
+    var p = presenterComposeOptions()
+    p.overlayPosition = opAbsolute
+    p.overlayX = 850
+    p.overlayY = 20
+    let f = buildFilterComplex(@[], p)
+    check "overlay=850:20" in f
+
+  test "overlayPosition opFractional emits a (W-overlay_w)*frac expression":
+    var p = presenterComposeOptions()
+    p.overlayPosition = opFractional
+    p.overlayFracX = 0.95
+    p.overlayFracY = 0.05
+    let f = buildFilterComplex(@[], p)
+    check "overlay=(W-overlay_w)*0.9500:(H-overlay_h)*0.0500" in f
+
+  test "despill option emits a trailing despill=type=green filter":
+    var p = presenterComposeOptions()
+    p.chromaKey.despill = true
+    p.chromaKey.despillType = "green"
+    let f = buildFilterComplex(@[], p)
+    check ",despill=type=green" in f
+
+  test "despill is off by default in whiteScreenChromaKey":
+    var p = presenterComposeOptions()
+    p.chromaKey = whiteScreenChromaKey()
+    let f = buildFilterComplex(@[], p)
+    check "despill" notin f
+
   test "whiteScreenChromaKey() defaults are tuned for existing studio renders":
     let c = whiteScreenChromaKey()
     check c.`method` == kmColor
