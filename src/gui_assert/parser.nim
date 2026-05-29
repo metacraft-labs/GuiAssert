@@ -19,6 +19,10 @@
 
 import std/[json, options, strutils, tables]
 
+import ./emotive
+
+export emotive
+
 type
   ScriptValidationError* = object of CatchableError
   ScriptParseError* = object of CatchableError
@@ -72,6 +76,15 @@ type
       ## `metadata.talking_head` block is absent the `provider` field
       ## is the empty string and callers should default to the stock
       ## testsrc2 placeholder.
+    emotiveDefaults*: CommonEmotiveConfig
+      ## Script-level emotive baseline (emotion, voice settings,
+      ## gesture knobs, background mode).  Per-keyframe `emotive`
+      ## blocks layer on top via `overlay()`.  Empty for legacy
+      ## scripts.
+    avatarPreferences*: AvatarPreferences
+      ## Ordered preferred-avatar list plus an optional fallback.
+      ## Each plugin's avatar-discovery proc matches against this
+      ## ranking; explicit `per_provider` IDs short-circuit matching.
 
   Keyframe* = object
     time*: float
@@ -79,6 +92,9 @@ type
     params*: JsonNode
     narration*: Option[string]
     targetWindow*: string
+    emotive*: CommonEmotiveConfig
+      ## Per-keyframe emotive override.  Layered on top of
+      ## `metadata.emotive_defaults` via `effectiveEmotive()`.
       ## Which logical window (one of `metadata.targets`) this
       ## keyframe is dispatched to.  Defaults to "desktop" when
       ## absent and at least one of the targets is "desktop"; if
@@ -194,13 +210,17 @@ proc extractMetadata(node: JsonNode): ScriptMetadata =
     # Default values when metadata is omitted entirely.
     return ScriptMetadata(title: "", resolution: "", fps: 0,
       targets: @[], windowLayout: initTable[string, WindowLayout](),
-      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
+      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()),
+      emotiveDefaults: initEmotive(),
+      avatarPreferences: AvatarPreferences())
   if node.kind != JObject:
     raise newException(ScriptParseError,
       "expected `metadata` to be an object, got " & $node.kind)
   result = ScriptMetadata(title: "", resolution: "", fps: 0,
     targets: @[], windowLayout: initTable[string, WindowLayout](),
-    talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
+    talkingHead: TalkingHeadMeta(extras: initTable[string, string]()),
+    emotiveDefaults: initEmotive(),
+    avatarPreferences: AvatarPreferences())
   if node.hasKey("title"):
     let t = node["title"]
     if t.kind != JString:
@@ -236,6 +256,19 @@ proc extractMetadata(node: JsonNode): ScriptMetadata =
       result.windowLayout[key] = extractWindowLayout(val, key)
   if node.hasKey("talking_head"):
     result.talkingHead = extractTalkingHead(node["talking_head"])
+  if node.hasKey("emotive_defaults"):
+    let em = node["emotive_defaults"]
+    if em.kind != JObject and em.kind != JNull:
+      raise newException(ScriptParseError,
+        "metadata.emotive_defaults must be an object, got " & $em.kind)
+    result.emotiveDefaults = emotiveFromJson(em)
+  if node.hasKey("avatar_preferences"):
+    let av = node["avatar_preferences"]
+    if av.kind notin {JObject, JArray, JNull}:
+      raise newException(ScriptParseError,
+        "metadata.avatar_preferences must be an object or array, got " &
+        $av.kind)
+    result.avatarPreferences = avatarPrefsFromJson(av)
 
 proc keyframeFromJson(node: JsonNode, index: int): Keyframe =
   if node.kind != JObject:
@@ -282,6 +315,13 @@ proc keyframeFromJson(node: JsonNode, index: int): Keyframe =
     result.targetWindow = tw.getStr
   else:
     result.targetWindow = ""
+  result.emotive = initEmotive()
+  if node.hasKey("emotive"):
+    let em = node["emotive"]
+    if em.kind != JObject and em.kind != JNull:
+      raise newException(ScriptParseError,
+        "timeline[" & $index & "].emotive must be an object")
+    result.emotive = emotiveFromJson(em)
 
 # ---------------------------------------------------------------------------
 # Validation
@@ -352,7 +392,9 @@ proc scriptFromJsonNode(root: JsonNode): Script =
   else:
     result.metadata = ScriptMetadata(title: "", resolution: "", fps: 0,
       targets: @[], windowLayout: initTable[string, WindowLayout](),
-      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()))
+      talkingHead: TalkingHeadMeta(extras: initTable[string, string]()),
+      emotiveDefaults: initEmotive(),
+      avatarPreferences: AvatarPreferences())
   result.timeline = @[]
   if root.hasKey("timeline"):
     let tl = root["timeline"]
@@ -636,7 +678,9 @@ proc parseScriptYaml*(input: string): Script =
     result = Script(
       metadata: ScriptMetadata(title: "", resolution: "", fps: 0,
         targets: @[], windowLayout: initTable[string, WindowLayout](),
-        talkingHead: TalkingHeadMeta(extras: initTable[string, string]())),
+        talkingHead: TalkingHeadMeta(extras: initTable[string, string]()),
+        emotiveDefaults: initEmotive(),
+        avatarPreferences: AvatarPreferences()),
       timeline: @[],
     )
     return
@@ -651,6 +695,13 @@ proc parseScriptYaml*(input: string): Script =
   result = scriptFromJsonNode(root)
   applyTargetWindowDefaults(result)
   validateScript(result)
+
+proc effectiveEmotive*(meta: ScriptMetadata, kf: Keyframe):
+    CommonEmotiveConfig =
+  ## Project the script-level emotive defaults onto the keyframe and
+  ## layer its own overrides on top.  Plugins call this when building
+  ## the per-keyframe render request.
+  result = overlay(meta.emotiveDefaults, kf.emotive)
 
 # Avoid an unused-symbol warning when callers only import the type aliases.
 when defined(guiAssertParserSelfTest):

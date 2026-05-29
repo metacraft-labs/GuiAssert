@@ -456,3 +456,176 @@ timeline:
     """
     expect ScriptParseError:
       discard parseScriptJson(badJson)
+
+# ---------------------------------------------------------------------------
+# metadata.emotive_defaults + metadata.avatar_preferences + per-keyframe
+# emotive overrides
+# ---------------------------------------------------------------------------
+
+suite "metadata.emotive_defaults parsing":
+
+  test "absent block leaves an empty CommonEmotiveConfig":
+    let s = parseScriptJson("""
+      {"metadata":{"title":"x"},"timeline":[{"time":0,"action":"click"}]}
+    """)
+    check s.metadata.emotiveDefaults.emotion.isNone
+    check s.metadata.emotiveDefaults.intensity.isNone
+
+  test "JSON metadata.emotive_defaults populates the typed config":
+    let s = parseScriptJson("""
+      {
+        "metadata": {
+          "emotive_defaults": {
+            "emotion": "confident",
+            "intensity": 0.8,
+            "voice_speed": 1.05,
+            "voice_stability": 0.4,
+            "background": "green_screen"
+          }
+        },
+        "timeline": [{"time": 0, "action": "click"}]
+      }
+    """)
+    check s.metadata.emotiveDefaults.emotion == some(eConfident)
+    check s.metadata.emotiveDefaults.intensity == some(0.8)
+    check s.metadata.emotiveDefaults.voiceSpeed == some(1.05)
+    check s.metadata.emotiveDefaults.voiceStability == some(0.4)
+    check s.metadata.emotiveDefaults.background == some(bmGreenScreen)
+
+  test "YAML metadata.emotive_defaults populates the typed config":
+    let s = parseScriptYaml("""
+metadata:
+  emotive_defaults:
+    emotion: "excited"
+    intensity: 0.6
+    voice_pitch: 1.5
+    background: "transparent"
+timeline:
+  - time: 0
+    action: click
+""")
+    check s.metadata.emotiveDefaults.emotion == some(eExcited)
+    check s.metadata.emotiveDefaults.intensity == some(0.6)
+    check s.metadata.emotiveDefaults.voicePitch == some(1.5)
+    check s.metadata.emotiveDefaults.background == some(bmTransparent)
+
+  test "non-object emotive_defaults is rejected":
+    expect ScriptParseError:
+      discard parseScriptJson("""
+        {"metadata":{"emotive_defaults":"oops"},
+         "timeline":[{"time":0,"action":"click"}]}
+      """)
+
+# ---------------------------------------------------------------------------
+
+suite "metadata.avatar_preferences parsing":
+
+  test "absent block yields empty preferred list":
+    let s = parseScriptJson("""
+      {"timeline":[{"time":0,"action":"click"}]}
+    """)
+    check s.metadata.avatarPreferences.preferred.len == 0
+    check s.metadata.avatarPreferences.fallback == ""
+
+  test "list form populates `preferred` in order":
+    let s = parseScriptJson("""
+      {
+        "metadata": {
+          "avatar_preferences": [
+            {"name": "Sarah", "gender": "female"},
+            {"name": "Daniel", "gender": "male"}
+          ]
+        },
+        "timeline": [{"time": 0, "action": "click"}]
+      }
+    """)
+    check s.metadata.avatarPreferences.preferred.len == 2
+    check s.metadata.avatarPreferences.preferred[0].name == "Sarah"
+
+  test "object form preserves per_provider overrides + fallback":
+    let s = parseScriptJson("""
+      {
+        "metadata": {
+          "avatar_preferences": {
+            "preferred": [{
+              "name": "Anna",
+              "role": "presenter",
+              "gender": "female",
+              "tags": ["studio", "warm"],
+              "per_provider": {
+                "heygen": "Daisy-inskirt-20220818",
+                "synthesia": "anna_costume1_cameraA"
+              }
+            }],
+            "fallback": "default"
+          }
+        },
+        "timeline": [{"time": 0, "action": "click"}]
+      }
+    """)
+    check s.metadata.avatarPreferences.preferred.len == 1
+    check s.metadata.avatarPreferences.preferred[0].role == "presenter"
+    check s.metadata.avatarPreferences.preferred[0].tags == @["studio", "warm"]
+    check s.metadata.avatarPreferences.preferred[0].perProvider["heygen"] ==
+      "Daisy-inskirt-20220818"
+    check s.metadata.avatarPreferences.fallback == "default"
+
+  test "scalar avatar_preferences value is rejected":
+    expect ScriptParseError:
+      discard parseScriptJson("""
+        {"metadata":{"avatar_preferences":"oops"},
+         "timeline":[{"time":0,"action":"click"}]}
+      """)
+
+# ---------------------------------------------------------------------------
+
+suite "per-keyframe emotive overrides":
+
+  test "keyframe without an emotive block leaves an empty override":
+    let s = parseScriptJson("""
+      {"timeline":[{"time":0,"action":"click"}]}
+    """)
+    check s.timeline[0].emotive.emotion.isNone
+    check s.timeline[0].emotive.intensity.isNone
+
+  test "keyframe emotive block parses into the typed config":
+    let s = parseScriptJson("""
+      {
+        "timeline": [{
+          "time": 0,
+          "action": "click",
+          "emotive": {"emotion": "surprised", "intensity": 0.9}
+        }]
+      }
+    """)
+    check s.timeline[0].emotive.emotion == some(eSurprised)
+    check s.timeline[0].emotive.intensity == some(0.9)
+
+  test "effectiveEmotive layers keyframe overrides on script defaults":
+    let s = parseScriptJson("""
+      {
+        "metadata": {
+          "emotive_defaults": {
+            "emotion": "neutral",
+            "intensity": 0.5,
+            "voice_speed": 1.0
+          }
+        },
+        "timeline": [{
+          "time": 0,
+          "action": "click",
+          "emotive": {"emotion": "excited", "voice_pitch": 2.0}
+        }]
+      }
+    """)
+    let eff = effectiveEmotive(s.metadata, s.timeline[0])
+    check eff.emotion == some(eExcited)        # override wins
+    check eff.intensity == some(0.5)           # base wins
+    check eff.voiceSpeed == some(1.0)          # base wins
+    check eff.voicePitch == some(2.0)          # override-only field
+
+  test "non-object keyframe emotive is rejected":
+    expect ScriptParseError:
+      discard parseScriptJson("""
+        {"timeline":[{"time":0,"action":"click","emotive":"oops"}]}
+      """)
