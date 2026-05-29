@@ -80,13 +80,44 @@ type
     oaBottomRight = "bottom_right"
     oaBottomCenter = "bottom_center"
 
+  KeyMethod* = enum
+    ## How the avatar's background colour is removed in `omChromaKey`
+    ## mode.  Different backends emit different background characters
+    ## so different ffmpeg filters key them cleanly:
+    kmChroma = "chroma"
+      ## `chromakey` — YUV-space difference against the target colour.
+      ## Best fit for *chromatic* backgrounds (green / blue screens)
+      ## where the chrominance is far from any pixel in the foreground.
+      ## Falls down on neutral-toned backgrounds (white / grey) where
+      ## every grayscale pixel shares the target's chrominance and the
+      ## filter mistakenly keys out parts of the figure.
+    kmColor = "color"
+      ## `colorkey` — RGB-space distance against the target colour.
+      ## Best fit for *solid neutral* backgrounds (white, black, grey)
+      ## or any single RGB tone the figure does not contain.  Use this
+      ## for the white-studio outputs HeyGen / D-ID / Synthesia emit
+      ## by default, where the presenter is in colour and the
+      ## background is near-white.
+    kmLuma = "luma"
+      ## `lumakey` — luminance-only threshold.  Useful when the
+      ## background is the brightest (or darkest) thing in frame and
+      ## the figure contains the target colour too — e.g. a presenter
+      ## in a white shirt on a slightly-grey wall, where colorkey on
+      ## white would eat the shirt.
+
   ChromaKeyConfig* = object
-    ## Tuning for the `chromakey` filter applied in `omChromaKey`
-    ## mode. Defaults are picked so HeyGen / Synthesia / D-ID
-    ## green-screen outputs key cleanly without hand-tuning.
+    ## Tuning for the background-removal filter applied in
+    ## `omChromaKey` mode.  Defaults are picked so HeyGen / Synthesia
+    ## / D-ID green-screen outputs key cleanly without hand-tuning.
+    `method`*: KeyMethod
+      ## Picks `chromakey` vs `colorkey` vs `lumakey`.  See `KeyMethod`
+      ## for the trade-offs.  Defaults to `kmChroma` so the
+      ## green-screen path keeps working without an explicit setting.
     color*: string         ## ffmpeg colour expression, e.g. "0x00ff00"
     similarity*: float     ## 0.01 .. 0.5 — how close to `color` counts
     blend*: float          ## 0.0 .. 1.0 — soft edge falloff
+    lumaThreshold*: float  ## 0.0 .. 1.0 — only used by `kmLuma`
+    lumaTolerance*: float  ## 0.0 .. 1.0 — only used by `kmLuma`
 
   ComposeOptions* = object
     ## Tunable parameters for the composition. Default values match the
@@ -148,7 +179,20 @@ proc sanitizedEnvForFfmpeg(ffmpegPath: string): StringTableRef =
 proc defaultChromaKey*(): ChromaKeyConfig =
   ## Defaults tuned for the green-screen outputs HeyGen / Synthesia /
   ## D-ID emit when their `background` field is set to a solid green.
-  ChromaKeyConfig(color: "0x00ff00", similarity: 0.18, blend: 0.08)
+  ChromaKeyConfig(`method`: kmChroma, color: "0x00ff00",
+                  similarity: 0.18, blend: 0.08,
+                  lumaThreshold: 0.9, lumaTolerance: 0.05)
+
+proc whiteScreenChromaKey*(): ChromaKeyConfig =
+  ## RGB-space `colorkey` against pure white, tuned to extract a
+  ## presenter from the default HeyGen / D-ID / Synthesia studio
+  ## background without keying the figure's skin highlights.  Use
+  ## this when you have an existing render whose background is white
+  ## and you don't want to spend a credit re-rendering with
+  ## `background = green_screen`.
+  ChromaKeyConfig(`method`: kmColor, color: "white",
+                  similarity: 0.10, blend: 0.05,
+                  lumaThreshold: 0.9, lumaTolerance: 0.05)
 
 proc defaultComposeOptions*(): ComposeOptions =
   ## Returns the canonical composition options used by the verification
@@ -244,17 +288,29 @@ proc avatarFilterCircle(opts: ComposeOptions): string =
 proc avatarFilterChromaKey(opts: ComposeOptions): string =
   ## Build the avatar chain for `omChromaKey` mode.  Scales the
   ## source preserving aspect (passing `width = -1` so ffmpeg
-  ## derives the proportional width), then removes the configured
-  ## background colour via `chromakey`.  The remaining alpha-channel
-  ## buffer is bottom-anchored downstream in `overlayFilter`, so the
-  ## human figure naturally extends to the lower edge of the canvas.
+  ## derives the proportional width), promotes to `yuva420p` so the
+  ## chosen keying filter can write into the alpha channel, then
+  ## removes the configured background via one of three filters:
+  ## `chromakey` (YUV) for green / blue screens, `colorkey` (RGB)
+  ## for white / solid neutral backgrounds, or `lumakey` for
+  ## brightness-thresholded extraction.  The remaining alpha buffer
+  ## is bottom-anchored downstream in `overlayFilter`, so the human
+  ## figure naturally extends to the lower edge of the canvas.
   let w =
     if opts.avatarWidth <= 0: -1
     else: opts.avatarWidth
   let ck = opts.chromaKey
+  let keyExpr =
+    case ck.`method`
+    of kmChroma:
+      &"chromakey={ck.color}:{ck.similarity}:{ck.blend}"
+    of kmColor:
+      &"colorkey=color={ck.color}:similarity={ck.similarity}:blend={ck.blend}"
+    of kmLuma:
+      &"lumakey=threshold={ck.lumaThreshold}:tolerance={ck.lumaTolerance}"
   &"[2:v]scale={w}:{opts.avatarHeight}," &
     "format=yuva420p," &
-    &"chromakey={ck.color}:{ck.similarity}:{ck.blend}[avatar]"
+    keyExpr & "[avatar]"
 
 proc overlayExpression(opts: ComposeOptions): string =
   ## Compute the `overlay=x:y` expression for the configured anchor.

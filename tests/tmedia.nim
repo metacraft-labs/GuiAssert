@@ -463,6 +463,30 @@ suite "presenter compose mode (chromakey)":
     let f = buildFilterComplex(@[], p)
     check "chromakey=0x22ff22:0.25:0.15" in f
 
+  test "colorkey method emits the RGB-space colorkey filter":
+    var p = presenterComposeOptions()
+    p.chromaKey = whiteScreenChromaKey()
+    let f = buildFilterComplex(@[], p)
+    check "colorkey=color=white:similarity=0.1:blend=0.05" in f
+    check "chromakey=" notin f
+
+  test "lumakey method emits the lumakey filter with threshold + tolerance":
+    var p = presenterComposeOptions()
+    p.chromaKey.`method` = kmLuma
+    p.chromaKey.lumaThreshold = 0.92
+    p.chromaKey.lumaTolerance = 0.04
+    let f = buildFilterComplex(@[], p)
+    check "lumakey=threshold=0.92:tolerance=0.04" in f
+    check "chromakey=" notin f
+    check "colorkey=" notin f
+
+  test "whiteScreenChromaKey() defaults are tuned for existing studio renders":
+    let c = whiteScreenChromaKey()
+    check c.`method` == kmColor
+    check c.color == "white"
+    check c.similarity == 0.10
+    check c.blend == 0.05
+
   test "real ffmpeg render with chromakey-keyed presenter":
     let outDir = getTempDir() / "gui_assert_chromakey"
     createDir(outDir)
