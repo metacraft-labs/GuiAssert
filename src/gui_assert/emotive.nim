@@ -6,4 +6,5 @@
 ## their own helpers without crowding the umbrella.
 
 import emotive/core
-export core
+import emotive/discovery
+export core, discovery

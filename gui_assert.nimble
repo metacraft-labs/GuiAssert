@@ -16,3 +16,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/teditor.nim"
   exec "nim c -r --hints:off tests/tcapture.nim"
   exec "nim c -r --hints:off tests/temotive.nim"
+  exec "nim c -r --hints:off tests/tdiscovery.nim"
