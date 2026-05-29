@@ -15,3 +15,4 @@ src/gui_assert/media
 src/gui_assert/speech_synth
 *.dSYM
 .pre-commit-config.yaml
+tests/temotive

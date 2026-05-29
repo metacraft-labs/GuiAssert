@@ -28,6 +28,7 @@ import ./gui_assert/image_math
 import ./gui_assert/storyboard
 import ./gui_assert/capture
 import ./gui_assert/talking_head
+import ./gui_assert/emotive
 
 export parser
 export driver
@@ -39,6 +40,7 @@ export image_math
 export storyboard
 export capture
 export talking_head
+export emotive
 
 type
   GuiAssertHarness* = ref object
