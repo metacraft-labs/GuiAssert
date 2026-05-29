@@ -61,6 +61,33 @@ type
       ## absent the caption is placed in the lower third, above the avatar:
       ## `h-(h/6)-text_h`.
 
+  OverlayMode* = enum
+    ## How the avatar source is composited onto the screencast.
+    omCircle = "circle"
+      ## Classic bottom-right circular crop (the historical default).
+      ## `avatarWidth` x `avatarHeight` are honoured verbatim, and a
+      ## hard alpha-circle mask is drawn via the `geq` filter.
+    omChromaKey = "chromakey"
+      ## Green-screen extraction (default for the new presenter
+      ## layout). The avatar source is scaled to `avatarHeight`
+      ## preserving aspect, its chosen colour is removed via
+      ## `chromakey`, and the remaining pixels are anchored to the
+      ## canvas's bottom edge so the figure naturally extends to
+      ## the lower edge of the video.
+
+  OverlayAnchor* = enum
+    oaBottomLeft = "bottom_left"
+    oaBottomRight = "bottom_right"
+    oaBottomCenter = "bottom_center"
+
+  ChromaKeyConfig* = object
+    ## Tuning for the `chromakey` filter applied in `omChromaKey`
+    ## mode. Defaults are picked so HeyGen / Synthesia / D-ID
+    ## green-screen outputs key cleanly without hand-tuning.
+    color*: string         ## ffmpeg colour expression, e.g. "0x00ff00"
+    similarity*: float     ## 0.01 .. 0.5 — how close to `color` counts
+    blend*: float          ## 0.0 .. 1.0 — soft edge falloff
+
   ComposeOptions* = object
     ## Tunable parameters for the composition. Default values match the
     ## defaults documented in the milestones file: 1920x1080 canvas,
@@ -70,6 +97,9 @@ type
     avatarWidth*: int
     avatarHeight*: int
     margin*: int
+    overlayMode*: OverlayMode
+    overlayAnchor*: OverlayAnchor
+    chromaKey*: ChromaKeyConfig
     fontFile*: Option[string]
       ## Optional absolute path to a TTF font. When omitted we rely on
       ## ffmpeg's drawtext defaults (which on macOS falls back to the
@@ -115,6 +145,11 @@ proc sanitizedEnvForFfmpeg(ffmpegPath: string): StringTableRef =
         if ffmpegPath.startsWith("/nix/"): continue
     result[k] = v
 
+proc defaultChromaKey*(): ChromaKeyConfig =
+  ## Defaults tuned for the green-screen outputs HeyGen / Synthesia /
+  ## D-ID emit when their `background` field is set to a solid green.
+  ChromaKeyConfig(color: "0x00ff00", similarity: 0.18, blend: 0.08)
+
 proc defaultComposeOptions*(): ComposeOptions =
   ## Returns the canonical composition options used by the verification
   ## harness and by callers who do not pass overrides.
@@ -124,11 +159,27 @@ proc defaultComposeOptions*(): ComposeOptions =
     avatarWidth: 320,
     avatarHeight: 320,
     margin: 30,
+    overlayMode: omCircle,
+    overlayAnchor: oaBottomRight,
+    chromaKey: defaultChromaKey(),
     fontFile: none(string),
     fontSize: 36,
     fontColor: "white",
     boxColor: "black@0.5"
   )
+
+proc presenterComposeOptions*(): ComposeOptions =
+  ## Returns options for the green-screen presenter layout: the
+  ## avatar's green background is chroma-keyed out and the remaining
+  ## figure is anchored to the canvas's bottom-left edge so the
+  ## human body extends naturally to the lower edge of the video.
+  result = defaultComposeOptions()
+  result.overlayMode = omChromaKey
+  result.overlayAnchor = oaBottomLeft
+  # Avatar height defaults to ~60% of canvas height so the head fits
+  # within the upper portion while the body extends to the bottom.
+  result.avatarHeight = int(float(result.canvasHeight) * 0.6)
+  result.avatarWidth = -1                 ## preserve aspect
 
 # ---------------------------------------------------------------------------
 # drawtext escaping
@@ -180,25 +231,66 @@ proc buildDrawtextFilter(c: Caption, opts: ComposeOptions): string =
 # Filter graph assembly
 # ---------------------------------------------------------------------------
 
+proc avatarFilterCircle(opts: ComposeOptions): string =
+  ## Build the avatar chain for `omCircle` mode (legacy default).
+  ## Scales the source down to the configured target size, promotes
+  ## to yuva420p so the `geq` filter can write an alpha channel, and
+  ## draws a hard circular alpha mask leaving Y/U/V untouched.
+  &"[2:v]scale={opts.avatarWidth}:{opts.avatarHeight}," &
+    "format=yuva420p," &
+    "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':" &
+    "a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'[avatar]"
+
+proc avatarFilterChromaKey(opts: ComposeOptions): string =
+  ## Build the avatar chain for `omChromaKey` mode.  Scales the
+  ## source preserving aspect (passing `width = -1` so ffmpeg
+  ## derives the proportional width), then removes the configured
+  ## background colour via `chromakey`.  The remaining alpha-channel
+  ## buffer is bottom-anchored downstream in `overlayFilter`, so the
+  ## human figure naturally extends to the lower edge of the canvas.
+  let w =
+    if opts.avatarWidth <= 0: -1
+    else: opts.avatarWidth
+  let ck = opts.chromaKey
+  &"[2:v]scale={w}:{opts.avatarHeight}," &
+    "format=yuva420p," &
+    &"chromakey={ck.color}:{ck.similarity}:{ck.blend}[avatar]"
+
+proc overlayExpression(opts: ComposeOptions): string =
+  ## Compute the `overlay=x:y` expression for the configured anchor.
+  ## `H`/`W` resolve to the canvas dimensions and `overlay_w`/
+  ## `overlay_h` to the scaled avatar dimensions; the bottom-anchored
+  ## modes drop the margin from the y coordinate so the figure
+  ## extends right up to the lower edge.
+  case opts.overlayAnchor
+  of oaBottomRight:
+    &"W-overlay_w-{opts.margin}:H-overlay_h-{opts.margin}"
+  of oaBottomLeft:
+    case opts.overlayMode
+    of omCircle:
+      &"{opts.margin}:H-overlay_h-{opts.margin}"
+    of omChromaKey:
+      &"{opts.margin}:H-overlay_h"
+  of oaBottomCenter:
+    case opts.overlayMode
+    of omCircle:
+      &"(W-overlay_w)/2:H-overlay_h-{opts.margin}"
+    of omChromaKey:
+      "(W-overlay_w)/2:H-overlay_h"
+
 proc buildFilterComplex*(
     captions: seq[Caption], opts: ComposeOptions): string =
   ## Build the full `-filter_complex` argument value.
   let bgScale = &"[0:v]scale={opts.canvasWidth}:{opts.canvasHeight}:force_original_aspect_ratio=decrease," &
                 &"pad={opts.canvasWidth}:{opts.canvasHeight}:(ow-iw)/2:(oh-ih)/2,setsar=1[bg]"
 
-  # Circular avatar. The standard recipe:
-  #   1. scale the source down to the target circle size,
-  #   2. promote to yuva420p so the geq filter can write an alpha channel,
-  #   3. use geq to draw a hard circular alpha mask, leaving Y/U/V untouched.
-  # `hypot(X-W/2, Y-H/2) <= W/2` is the circle; outside it alpha=0.
   let avatarFilter =
-    &"[2:v]scale={opts.avatarWidth}:{opts.avatarHeight}," &
-    "format=yuva420p," &
-    "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':" &
-    "a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'[avatar]"
+    case opts.overlayMode
+    of omCircle:    avatarFilterCircle(opts)
+    of omChromaKey: avatarFilterChromaKey(opts)
 
   let overlayFilter =
-    &"[bg][avatar]overlay=W-overlay_w-{opts.margin}:H-overlay_h-{opts.margin}"
+    "[bg][avatar]overlay=" & overlayExpression(opts)
 
   # Captions chain. If there are no captions we close out the overlay
   # straight into [vout] so downstream `-map [vout]` still works.

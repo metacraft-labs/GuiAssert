@@ -275,6 +275,26 @@ proc generateTestSineWav(path: string) =
   ])
   doAssert code == 0, "sine wav generation failed: " & output
 
+proc generateGreenScreenAvatar(path: string) =
+  ## Generate a 5-second 400x600 MP4 with a solid green background
+  ## and a smaller red rectangle in the centre.  Used by the
+  ## `omChromaKey` end-to-end test as a synthetic stand-in for a
+  ## HeyGen / Synthesia green-screen avatar render.  The chromakey
+  ## filter should remove the green channel and leave the red
+  ## rectangle visible against the screencast underneath.
+  let (output, code) = runFfmpegEx(@[
+    "-y", "-hide_banner", "-loglevel", "error",
+    "-f", "lavfi",
+    "-i", "color=color=0x00ff00:size=400x600:duration=5:rate=30",
+    "-f", "lavfi",
+    "-i", "color=color=red:size=200x300:duration=5:rate=30",
+    "-filter_complex", "[0:v][1:v]overlay=100:150[v]",
+    "-map", "[v]",
+    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+    path
+  ])
+  doAssert code == 0, "green-screen avatar generation failed: " & output
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -381,6 +401,93 @@ suite "M3: Audio & Visual Overlay Assembly Line":
     check duration <= 5.2
 
     # Stream presence checks.
+    var hasVideo = false
+    var hasAudio = false
+    for s in probe{"streams"}.items:
+      case s{"codec_type"}.getStr()
+      of "video": hasVideo = true
+      of "audio": hasAudio = true
+      else: discard
+    check hasVideo
+    check hasAudio
+
+# ---------------------------------------------------------------------------
+# Chromakey / presenter compose-mode argv tests (pure)
+# ---------------------------------------------------------------------------
+
+suite "presenter compose mode (chromakey)":
+
+  test "presenterComposeOptions defaults to chromakey + bottom-left anchor":
+    let p = presenterComposeOptions()
+    check p.overlayMode == omChromaKey
+    check p.overlayAnchor == oaBottomLeft
+    check p.avatarWidth == -1
+    check p.avatarHeight == int(float(p.canvasHeight) * 0.6)
+    check p.chromaKey.color == "0x00ff00"
+
+  test "buildFilterComplex emits the chromakey filter chain":
+    let p = presenterComposeOptions()
+    let f = buildFilterComplex(@[], p)
+    check "chromakey=" in f
+    check "0x00ff00" in f
+    # The avatar scaling preserves aspect when avatarWidth == -1.
+    check &"scale=-1:{p.avatarHeight}" in f
+    # Bottom-anchored overlay: y=H-overlay_h (no margin) so the
+    # human figure extends naturally to the lower edge.
+    check "overlay=" & $p.margin & ":H-overlay_h" in f
+
+  test "buildFilterComplex still emits the geq circle filter in omCircle mode":
+    var p = defaultComposeOptions()
+    p.overlayMode = omCircle
+    let f = buildFilterComplex(@[], p)
+    check "geq=" in f
+    check "hypot" in f
+    check "chromakey=" notin f
+
+  test "bottom-right anchor in chromakey mode places overlay on the right edge":
+    var p = presenterComposeOptions()
+    p.overlayAnchor = oaBottomRight
+    let f = buildFilterComplex(@[], p)
+    check "W-overlay_w-" & $p.margin in f
+
+  test "bottom-center anchor in chromakey mode hugs the bottom edge":
+    var p = presenterComposeOptions()
+    p.overlayAnchor = oaBottomCenter
+    let f = buildFilterComplex(@[], p)
+    check "(W-overlay_w)/2:H-overlay_h" in f
+
+  test "ChromaKey config tuning flows through to the filter":
+    var p = presenterComposeOptions()
+    p.chromaKey = ChromaKeyConfig(color: "0x22ff22", similarity: 0.25,
+                                  blend: 0.15)
+    let f = buildFilterComplex(@[], p)
+    check "chromakey=0x22ff22:0.25:0.15" in f
+
+  test "real ffmpeg render with chromakey-keyed presenter":
+    let outDir = getTempDir() / "gui_assert_chromakey"
+    createDir(outDir)
+    let screencast = outDir / "screencast.mp4"
+    let avatar = outDir / "green_avatar.mp4"
+    let narration = outDir / "sine.wav"
+    let outputMp4 = outDir / "presenter.mp4"
+
+    for p in [screencast, avatar, narration, outputMp4]:
+      if fileExists(p): removeFile(p)
+
+    generateTestScreencast(screencast)
+    generateGreenScreenAvatar(avatar)
+    generateTestSineWav(narration)
+
+    var opts = presenterComposeOptions()
+    opts.canvasWidth = 1280
+    opts.canvasHeight = 720
+    opts.avatarHeight = 360  # half-canvas presenter
+    composeVideoWithOverlay(screencast, narration, avatar, outputMp4,
+                            @[], opts)
+    check fileExists(outputMp4)
+    let outSize = getFileSize(outputMp4)
+    check outSize > 0
+    let probe = ffprobeJson(outputMp4)
     var hasVideo = false
     var hasAudio = false
     for s in probe{"streams"}.items:
