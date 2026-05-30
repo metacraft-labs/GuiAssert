@@ -53,6 +53,7 @@ import std/[asyncdispatch, asynchttpserver, hashes, httpcore, json, mimetypes,
 import ./parser
 import ./media
 import ./speech_synth
+import ./artifact_project
 
 # ---------------------------------------------------------------------------
 # Types
@@ -67,6 +68,12 @@ type
     text*: string
     startTime*: float
     endTime*: float
+
+  StageRenderer* = proc(backend: EditorBackend): string {.closure, gcsafe.}
+    ## Per-stage rendering callback registered on the backend.  Returns
+    ## the absolute path of the produced artifact.  Should raise
+    ## `EditorError` on failure; the dispatcher updates the manifest
+    ## with the input hash on success.
 
   EditorBackend* = ref object
     ## Mutable state shared between the HTTP handler and any external
@@ -85,6 +92,24 @@ type
       ## (text, start, end) → segment MP4 path
     composedCache*: Table[string, string]
       ## hash → composed MP4 path
+    avatarCompositeCache*: Table[string, string]
+      ## hash → animated-avatar composite MP4 path
+    screencastPath*: string
+      ## Absolute path to the screencast that animated composites use as
+      ## their background.  Empty when no avatar-mode session is active.
+    scriptPath*: string
+      ## On-disk path to the YAML script driving this session.  Used to
+      ## resolve the sibling `<stem>.artifacts/` project directory.
+      ## Empty when the editor is running against an in-memory script.
+    renderOptions*: RenderOptions
+      ## Current render-pipeline options (captions / audio mode / model
+      ## selections).  Persisted to the manifest on update.
+    stageRenderers*: Table[RenderStage, StageRenderer]
+      ## Dependency-injected per-stage render proc.  `runRenderStage`
+      ## dispatches through this table so tests can substitute mock
+      ## commercial providers without touching production code.
+    sources*: seq[tuple[id, label, path: string; kind: string]]
+      ## Available source videos exposed via `/api/sources`.
     canvasWidth*: int
     canvasHeight*: int
     fps*: int
@@ -575,6 +600,12 @@ proc newEditorBackend*(
     ttsCache: initTable[string, string](),
     segmentCache: initTable[CaptionKey, string](),
     composedCache: initTable[string, string](),
+    avatarCompositeCache: initTable[string, string](),
+    screencastPath: "",
+    scriptPath: "",
+    renderOptions: defaultRenderOptions(),
+    stageRenderers: initTable[RenderStage, StageRenderer](),
+    sources: @[],
     canvasWidth: canvasWidth,
     canvasHeight: canvasHeight,
     fps: fps,
@@ -851,8 +882,19 @@ proc handleApiPreviewFile(backend: EditorBackend, req: Request) {.async.} =
   if path.len == 0 or not fileExists(path):
     await plainStatus(req, Http404, "not found")
     return
-  # Only serve files inside the cache dir or web root.
-  if not (path.startsWith(backend.cacheDir) or path.startsWith(backend.webRoot)):
+  # Allow files inside the cache / web root, the screencast, and any
+  # registered source video.
+  var allowed = path.startsWith(backend.cacheDir) or
+                path.startsWith(backend.webRoot)
+  if not allowed and backend.screencastPath.len > 0 and
+     path == backend.screencastPath:
+    allowed = true
+  if not allowed:
+    for s in backend.sources:
+      if s.path == path:
+        allowed = true
+        break
+  if not allowed:
     await plainStatus(req, Http403, "forbidden")
     return
   let data = readFile(path)
@@ -883,6 +925,371 @@ proc handleApiTimeScale(backend: EditorBackend, req: Request): Future[void] =
     "canvasHeight": backend.canvasHeight,
   })
 
+# ---------------------------------------------------------------------------
+# Avatar-track HTTP endpoints
+# ---------------------------------------------------------------------------
+
+proc resolveFfprobeBinary(ffmpegBin: string): string =
+  ## Locate `ffprobe`.  Tries the sibling of `ffmpegBin` first, then
+  ## `findExe("ffprobe")`, then `/opt/homebrew/bin/ffprobe` as a last
+  ## resort (Homebrew on Apple Silicon).
+  let sibling = ffmpegBin.replace("ffmpeg", "ffprobe")
+  if sibling.len > 0 and fileExists(sibling): return sibling
+  let onPath = findExe("ffprobe")
+  if onPath.len > 0: return onPath
+  if fileExists("/opt/homebrew/bin/ffprobe"): return "/opt/homebrew/bin/ffprobe"
+  return ""
+
+proc probeVideoDimensions(backend: EditorBackend, path: string): tuple[w, h: int] =
+  ## Probe a video's pixel dimensions via ffprobe.  Returns (0, 0) if
+  ## the probe fails so callers can decide how to recover.
+  let probeBin = resolveFfprobeBinary(backend.ffmpegBin)
+  if probeBin.len == 0: return (0, 0)
+  let env = sanitizedFfmpegEnv(backend.ffmpegBin)
+  let p = startProcess(
+    command = probeBin,
+    args = @[
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height",
+      "-of", "csv=p=0",
+      path
+    ],
+    env = env,
+    options = {poStdErrToStdOut}
+  )
+  let output = p.outputStream().readAll()
+  discard p.waitForExit()
+  p.close()
+  let stripped = output.strip()
+  let parts = stripped.split(",")
+  if parts.len >= 2:
+    try: return (parseInt(parts[0]), parseInt(parts[1]))
+    except CatchableError: discard
+  return (0, 0)
+
+proc avatarCompositeHash*(backend: EditorBackend, track: AvatarTrack): string =
+  ## Hash of (screencast, avatar source, canvas, track JSON).  Stable
+  ## across runs so the disk cache survives restarts.
+  var h: Hash = 0
+  h = h !& hash(backend.screencastPath)
+  h = h !& hash(track.sourceVideo)
+  h = h !& hash(backend.canvasWidth)
+  h = h !& hash(backend.canvasHeight)
+  h = h !& hash($avatarTrackToJson(track))
+  ($(!$h)).replace("-", "n")
+
+proc renderAvatarComposite*(backend: EditorBackend, track: AvatarTrack): string =
+  ## Render the animated avatar composite for `track`.  Result is
+  ## memoised by `(screencast, avatar source, canvas, track)`.
+  if backend.screencastPath.len == 0:
+    raise newException(EditorError, "no screencast loaded")
+  if track.sourceVideo.len == 0 or not fileExists(track.sourceVideo):
+    raise newException(EditorError,
+      "avatar source video missing: " & track.sourceVideo)
+  if track.keyframes.len == 0:
+    raise newException(EditorError, "avatar track has no keyframes")
+  let key = avatarCompositeHash(backend, track)
+  if backend.avatarCompositeCache.hasKey(key):
+    let cached = backend.avatarCompositeCache[key]
+    if fileExists(cached) and getFileSize(cached) > 0:
+      return cached
+  let outPath = backend.cacheDir / ("avatar_" & key & ".mp4")
+  if fileExists(outPath) and getFileSize(outPath) > 0:
+    backend.avatarCompositeCache[key] = outPath
+    return outPath
+  let (sw, sh) = probeVideoDimensions(backend, track.sourceVideo)
+  if sw <= 0 or sh <= 0:
+    raise newException(EditorError,
+      "could not probe dimensions of " & track.sourceVideo)
+  composeVideoWithAvatarTrack(
+    backend.screencastPath, track.sourceVideo, outPath,
+    track,
+    backend.canvasWidth, backend.canvasHeight, sw, sh,
+    useAvatarAudio = true,
+  )
+  backend.avatarCompositeCache[key] = outPath
+  return outPath
+
+proc handleApiSources(backend: EditorBackend, req: Request): Future[void] =
+  let arr = newJArray()
+  if backend.screencastPath.len > 0 and fileExists(backend.screencastPath):
+    let (w, h) = probeVideoDimensions(backend, backend.screencastPath)
+    arr.add(%* {
+      "id": "screencast",
+      "label": "Screencast",
+      "kind": "screencast",
+      "path": backend.screencastPath,
+      "width": w, "height": h,
+    })
+  for s in backend.sources:
+    let (w, h) = probeVideoDimensions(backend, s.path)
+    arr.add(%* {
+      "id": s.id, "label": s.label, "kind": s.kind, "path": s.path,
+      "width": w, "height": h,
+    })
+  return jsonOk(req, %* {"sources": arr})
+
+proc handleApiAvatarTrackGet(backend: EditorBackend, req: Request): Future[void] =
+  return jsonOk(req, avatarTrackToJson(backend.script.avatar))
+
+proc handleApiAvatarTrackPost(backend: EditorBackend, req: Request) {.async.} =
+  try:
+    let body = parseJson(req.body)
+    let track =
+      try: avatarTrackFromJson(body, "avatar")
+      except ValueError as e:
+        raise newException(EditorError, e.msg)
+    try: validate(track)
+    except ValueError as e:
+      raise newException(EditorError, e.msg)
+    backend.script.avatar = track
+    let composite =
+      try: renderAvatarComposite(backend, track)
+      except CatchableError as e:
+        await plainStatus(req, Http500, "compose failed: " & e.msg)
+        return
+    await jsonOk(req, %* {
+      "ok": true,
+      "compositePath": composite,
+      "keyframes": track.keyframes.len,
+    })
+  except CatchableError as e:
+    await plainStatus(req, Http400, "bad avatar track: " & e.msg)
+
+proc handleApiComposite(backend: EditorBackend, req: Request) {.async.} =
+  try:
+    let composite = renderAvatarComposite(backend, backend.script.avatar)
+    await jsonOk(req, %* {"ok": true, "compositePath": composite})
+  except CatchableError as e:
+    await plainStatus(req, Http500, "compose failed: " & e.msg)
+
+# ---------------------------------------------------------------------------
+# Render-stage pipeline
+# ---------------------------------------------------------------------------
+
+proc requireScriptPath(backend: EditorBackend) =
+  if backend.scriptPath.len == 0:
+    raise newException(EditorError,
+      "no script path set; render pipeline is unavailable for " &
+      "in-memory-only sessions")
+
+proc renderStateJson*(backend: EditorBackend): JsonNode =
+  ## Build the `/api/render-state` response body without IO side effects.
+  result = newJObject()
+  result["scriptPath"] = %backend.scriptPath
+  result["projectDir"] =
+    if backend.scriptPath.len > 0:
+      %projectDir(backend.scriptPath)
+    else: newJString("")
+  let manifest = if backend.scriptPath.len > 0:
+                   loadManifest(backend.scriptPath)
+                 else: emptyManifest()
+  let stages = newJArray()
+  for stage in RenderStage:
+    let expected =
+      if backend.scriptPath.len > 0:
+        inputHashFor(stage, backend.script, backend.renderOptions)
+      else: ""
+    let status =
+      if backend.scriptPath.len > 0:
+        stageStatus(manifest, backend.scriptPath, stage, expected)
+      else: ssMissing
+    var size: int64 = 0
+    var mtime: float = 0.0
+    var path = ""
+    if backend.scriptPath.len > 0:
+      path = stagePath(backend.scriptPath, stage)
+      if fileExists(path):
+        size = getFileSize(path).int64
+        mtime = toUnixFloat(getLastModificationTime(path))
+    stages.add(%* {
+      "stage": $stage,
+      "status": $status,
+      "path": path,
+      "size": size,
+      "mtime": mtime,
+      "expectedHash": expected,
+    })
+  result["stages"] = stages
+
+proc handleApiRenderState(backend: EditorBackend,
+                          req: Request): Future[void] =
+  return jsonOk(req, renderStateJson(backend))
+
+proc renderOptionsToJson(o: RenderOptions): JsonNode =
+  result = newJObject()
+  result["captions"] = %o.captions
+  result["audioMode"] = %($o.audioMode)
+  result["localHeadModel"] = %o.localHeadModel
+  result["commercialProvider"] = %o.commercialProvider
+
+proc renderOptionsFromJson(node: JsonNode): RenderOptions =
+  result = defaultRenderOptions()
+  if node.kind != JObject: return
+  if node.hasKey("captions") and node["captions"].kind == JBool:
+    result.captions = node["captions"].getBool
+  if node.hasKey("audioMode") and node["audioMode"].kind == JString:
+    result.audioMode =
+      if node["audioMode"].getStr == "audio": amAudio else: amHead
+  if node.hasKey("localHeadModel") and node["localHeadModel"].kind == JString:
+    result.localHeadModel = node["localHeadModel"].getStr
+  if node.hasKey("commercialProvider") and node["commercialProvider"].kind == JString:
+    result.commercialProvider = node["commercialProvider"].getStr
+
+proc handleApiRenderOptionsGet(backend: EditorBackend,
+                               req: Request): Future[void] =
+  return jsonOk(req, renderOptionsToJson(backend.renderOptions))
+
+proc handleApiRenderOptionsPost(backend: EditorBackend,
+                                req: Request) {.async.} =
+  try:
+    let body = parseJson(req.body)
+    backend.renderOptions = renderOptionsFromJson(body)
+    if backend.scriptPath.len > 0:
+      ensureProjectDir(backend.scriptPath)
+      var manifest = loadManifest(backend.scriptPath)
+      manifest.options = backend.renderOptions
+      saveManifest(backend.scriptPath, manifest)
+    await jsonOk(req, %* {"ok": true,
+                          "options": renderOptionsToJson(backend.renderOptions)})
+  except CatchableError as e:
+    await plainStatus(req, Http400, "bad render options: " & e.msg)
+
+# ----- per-stage renderers --------------------------------------------------
+
+proc renderLocalAudio(backend: EditorBackend): string =
+  ## Synthesise every narration line and concatenate them into a single
+  ## `local-audio.wav` aligned with the timeline.  Each line is rendered
+  ## via the host's `say` / `espeak-ng` (`speech_synth.synthesize`) and
+  ## then concatenated with silence padding so the spoken lines land at
+  ## the timestamps stored in their keyframes.
+  requireScriptPath(backend)
+  let outPath = stagePath(backend.scriptPath, rsLocalAudio)
+  ensureProjectDir(backend.scriptPath)
+  let tmpDir = backend.cacheDir / ("la-" &
+    inputHashFor(rsLocalAudio, backend.script, backend.renderOptions))
+  if not dirExists(tmpDir): createDir(tmpDir)
+  type Piece = tuple[startTime, endTime: float, wav: string]
+  var pieces: seq[Piece] = @[]
+  for i, kf in backend.script.timeline:
+    if not kf.narration.isSome: continue
+    let text = kf.narration.get
+    if text.len == 0: continue
+    let endT = if i + 1 < backend.script.timeline.len:
+                 backend.script.timeline[i + 1].time
+               else:
+                 kf.time + max(estimateNarrationSeconds(text), 1.0)
+    let wav = tmpDir / ("la_" & $i & ".wav")
+    if not (fileExists(wav) and getFileSize(wav) > 0):
+      try:
+        synthesize(text, wav)
+      except TtsError as e:
+        raise newException(EditorError,
+          "local TTS failed for keyframe " & $i & ": " & e.msg)
+    pieces.add((kf.time, endT, wav))
+  if pieces.len == 0:
+    # No narration in script — emit a 1-second silent WAV so the
+    # downstream pipeline still has an audio file.
+    let silent = ensureSilentWav(backend, 1.0)
+    copyFile(silent, outPath)
+    return outPath
+  # Build a single ffmpeg invocation that adelay-pads each piece into
+  # the right slot then amix-es them down.  We give every input the
+  # same sample rate (44.1 kHz) via aresample so the mixer doesn't
+  # complain.
+  var argv = @[
+    backend.ffmpegBin, "-y", "-hide_banner", "-loglevel", "error"
+  ]
+  for p in pieces:
+    argv.add @["-i", p.wav]
+  var filterParts: seq[string] = @[]
+  var mixInputs: seq[string] = @[]
+  for i, p in pieces:
+    let delayMs = int(p.startTime * 1000.0)
+    filterParts.add &"[{i}:a]aresample=44100,asetpts=PTS-STARTPTS," &
+      &"adelay={delayMs}|{delayMs}[a{i}]"
+    mixInputs.add &"[a{i}]"
+  filterParts.add mixInputs.join("") &
+    &"amix=inputs={pieces.len}:duration=longest:dropout_transition=0[aout]"
+  argv.add "-filter_complex"
+  argv.add filterParts.join(";")
+  argv.add @["-map", "[aout]", "-c:a", "pcm_s16le", outPath]
+  let (output, code) = runFfmpeg(backend, argv[1 .. ^1])
+  if code != 0:
+    raise newException(EditorError, "local-audio mix failed: " & output)
+  result = outPath
+
+proc registerStageRenderer*(backend: EditorBackend;
+                            stage: RenderStage;
+                            renderer: StageRenderer) =
+  ## Inject (or replace) the renderer for a stage.  Production
+  ## launchers use this to plug in the real `local-head` /
+  ## `commercial-*` implementations; tests use it to wire mocks.
+  backend.stageRenderers[stage] = renderer
+
+proc defaultLocalAudioRenderer(backend: EditorBackend): string =
+  renderLocalAudio(backend)
+
+proc registerDefaultStageRenderers*(backend: EditorBackend) =
+  ## Register the renderers that ship by default with the backend.
+  ## Currently only `local-audio` has a built-in implementation; the
+  ## remaining stages must be supplied by the launcher (production)
+  ## or by a test harness (mocks).
+  registerStageRenderer(backend, rsLocalAudio, defaultLocalAudioRenderer)
+
+proc renderStageNotImplemented(stage: RenderStage) =
+  raise newException(EditorError,
+    "render stage `" & $stage & "` has no registered renderer in this session")
+
+proc runRenderStage(backend: EditorBackend, stage: RenderStage): string =
+  ## Dispatch a single stage to its implementation; update the manifest.
+  requireScriptPath(backend)
+  if not backend.stageRenderers.hasKey(stage):
+    renderStageNotImplemented(stage)
+  let renderer = backend.stageRenderers[stage]
+  let path = renderer(backend)
+  if path.len == 0 or not fileExists(path):
+    raise newException(EditorError,
+      "renderer for stage `" & $stage & "` returned " &
+      (if path.len == 0: "an empty path"
+       else: "a path that does not exist: " & path))
+  let h = inputHashFor(stage, backend.script, backend.renderOptions)
+  var manifest = loadManifest(backend.scriptPath)
+  manifest.options = backend.renderOptions
+  updateStage(manifest, backend.scriptPath, stage, h)
+  saveManifest(backend.scriptPath, manifest)
+  return path
+
+proc parseStageName(s: string): RenderStage =
+  for st in RenderStage:
+    if $st == s: return st
+  raise newException(EditorError, "unknown render stage: " & s)
+
+proc handleApiRender(backend: EditorBackend, req: Request) {.async.} =
+  try:
+    var stageName = ""
+    for kv in req.url.query.split('&'):
+      let parts = kv.split('=', 1)
+      if parts.len == 2 and parts[0] == "stage":
+        stageName = decodeUrl(parts[1])
+    if stageName.len == 0:
+      await plainStatus(req, Http400, "missing ?stage=...")
+      return
+    let stage = parseStageName(stageName)
+    let t0 = epochTime()
+    let path = runRenderStage(backend, stage)
+    let elapsedMs = int((epochTime() - t0) * 1000)
+    await jsonOk(req, %* {
+      "ok": true,
+      "stage": $stage,
+      "path": path,
+      "elapsedMs": elapsedMs,
+      "renderState": renderStateJson(backend),
+    })
+  except CatchableError as e:
+    await plainStatus(req, Http500, "render failed: " & e.msg)
+
 proc dispatch(backend: EditorBackend, req: Request) {.async.} =
   let path = req.url.path
   case req.reqMethod
@@ -892,11 +1299,19 @@ proc dispatch(backend: EditorBackend, req: Request) {.async.} =
     of "/api/waveform": await handleApiWaveform(backend, req)
     of "/api/preview-file": await handleApiPreviewFile(backend, req)
     of "/api/timescale": await handleApiTimeScale(backend, req)
+    of "/api/sources": await handleApiSources(backend, req)
+    of "/api/avatar-track": await handleApiAvatarTrackGet(backend, req)
+    of "/api/composite": await handleApiComposite(backend, req)
+    of "/api/render-state": await handleApiRenderState(backend, req)
+    of "/api/render-options": await handleApiRenderOptionsGet(backend, req)
     else: await handleStatic(backend, req)
   of HttpPost:
     case path
     of "/api/script": await handleApiScriptPost(backend, req)
     of "/api/preview": await handleApiPreview(backend, req)
+    of "/api/avatar-track": await handleApiAvatarTrackPost(backend, req)
+    of "/api/render": await handleApiRender(backend, req)
+    of "/api/render-options": await handleApiRenderOptionsPost(backend, req)
     else: await plainStatus(req, Http404, "not found")
   else:
     await plainStatus(req, Http405, "method not allowed")

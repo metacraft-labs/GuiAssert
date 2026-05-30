@@ -17,3 +17,5 @@ src/gui_assert/speech_synth
 .pre-commit-config.yaml
 tests/temotive
 tests/tdiscovery
+tests/tartifact_project
+tests/tartifact_pipeline

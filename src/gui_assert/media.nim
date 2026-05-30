@@ -42,6 +42,9 @@
 
 import std/[options, os, osproc, streams, strformat, strtabs, strutils]
 
+import ./avatar_track
+export avatar_track
+
 type
   MediaCompositionError* = object of CatchableError
     ## Raised when ffmpeg cannot be invoked, exits non-zero, or fails to
@@ -190,6 +193,14 @@ type
       ## ffmpeg color expression for the caption background box (e.g.
       ## "black@0.5" for 50%-opaque black). Set to the empty string to
       ## disable the background box entirely.
+    useAvatarAudio*: bool
+      ## When `true`, the output's audio is taken directly from the
+      ## avatar (input 2) — useful when the avatar source is a
+      ## talking-head render that already contains the spoken line and
+      ## the caller does not want to mix in a separately-synthesized
+      ## narration WAV.  When `false` (the historical default) the
+      ## narration WAV (input 1) is mixed with a synthesised silent
+      ## stereo source to produce the output audio.
 
 proc resolveFfmpegBinary*(): string =
   ## Locate an `ffmpeg` binary on disk. Honors the `FFMPEG_BIN` environment
@@ -446,10 +457,18 @@ proc buildFilterComplex*(
     captionChain = "," & pieces.join(",")
   let videoChain = overlayFilter & captionChain & "[vout]"
 
-  # Audio: mix narration (input 1) with a synthesized silent base (input 3
-  # via the `anullsrc` lavfi pseudo-input added in `buildComposeArgv`). This
-  # keeps the graph stable whether or not the screencast itself has audio.
-  let audioChain = "[3:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0[aout]"
+  # Audio: by default mix narration (input 1) with a synthesised silent
+  # base (input 3 via the `anullsrc` lavfi pseudo-input added in
+  # `buildComposeArgv`).  This keeps the graph stable whether or not the
+  # screencast itself has audio.  When `useAvatarAudio` is true the
+  # avatar's own audio stream (input 2) is used verbatim — letting
+  # talking-head renders carry through the provider's TTS rather than
+  # the locally synthesised narration.
+  let audioChain =
+    if opts.useAvatarAudio:
+      "[2:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[aout]"
+    else:
+      "[3:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0[aout]"
 
   result = @[
     bgScale,
@@ -494,6 +513,198 @@ proc buildComposeArgv*(
     "-shortest",
     outputPath
   ]
+
+# ---------------------------------------------------------------------------
+# Avatar track — piecewise-linear ffmpeg expression assembly
+# ---------------------------------------------------------------------------
+
+proc fmtFloat(f: float): string =
+  ## Format a float for an ffmpeg filter expression without locale
+  ## surprises.  Produces `0.2`, `0`, `1.5` — never scientific
+  ## notation, never a trailing decimal point.
+  result = formatFloat(f, ffDecimal, precision = 4)
+  if '.' in result:
+    while result.len > 1 and result[^1] == '0':
+      result.setLen(result.len - 1)
+    if result.len > 1 and result[^1] == '.':
+      result.setLen(result.len - 1)
+
+proc piecewiseExpr(times, values: seq[float]): string =
+  ## Build a piecewise-linear expression in `t` for the given keyframe
+  ## (time, value) sequence.  Outside the range we hold the boundary
+  ## value; between consecutive keyframes we linearly interpolate.
+  doAssert times.len == values.len and times.len > 0,
+    "piecewise expression needs at least one keyframe"
+  if times.len == 1:
+    return fmtFloat(values[0])
+  # Build nested `if(lt(t, t_i), seg_i, ...)` from the inside out.
+  # The innermost else is the final value (held).
+  var expr = fmtFloat(values[^1])
+  for i in countdown(times.len - 1, 1):
+    let t0 = fmtFloat(times[i - 1])
+    let t1 = fmtFloat(times[i])
+    let v0 = fmtFloat(values[i - 1])
+    let v1 = fmtFloat(values[i])
+    # Linear ramp between (t0, v0) and (t1, v1).
+    let segment =
+      "(" & v0 & "+(" & v1 & "-" & v0 & ")*(t-" & t0 & ")/(" & t1 & "-" & t0 & "))"
+    expr = "if(lt(t," & t1 & ")," & segment & "," & expr & ")"
+  # Hold the first value before t0.
+  let t0 = fmtFloat(times[0])
+  let v0 = fmtFloat(values[0])
+  expr = "if(lt(t," & t0 & ")," & v0 & "," & expr & ")"
+  result = expr
+
+type
+  AvatarExprSet* = object
+    ## Per-axis piecewise-linear expressions extracted from an
+    ## `AvatarTrack`, ready to splice into an ffmpeg filter graph.
+    srcCropX*, srcCropY*, srcCropW*, srcCropH*: string
+    dstX*, dstY*, dstW*, dstH*: string
+
+proc avatarExprsFor*(track: AvatarTrack;
+                     srcWidth, srcHeight: int): AvatarExprSet =
+  ## Build piecewise-linear ffmpeg expressions for every animatable
+  ## axis of the avatar geometry.  Zero / negative crop dimensions in
+  ## a keyframe are resolved to the source's full extent.
+  doAssert track.keyframes.len > 0, "avatar track must have at least one keyframe"
+  var times: seq[float] = @[]
+  var sx, sy, sw, sh, dx, dy, dw, dh: seq[float] = @[]
+  for k in track.keyframes:
+    times.add k.time
+    sx.add k.srcCrop.x
+    sy.add k.srcCrop.y
+    let kw =
+      if k.srcCrop.w > 0: k.srcCrop.w
+      else: float(srcWidth) - k.srcCrop.x
+    let kh =
+      if k.srcCrop.h > 0: k.srcCrop.h
+      else: float(srcHeight) - k.srcCrop.y
+    sw.add kw
+    sh.add kh
+    dx.add k.dstRect.x
+    dy.add k.dstRect.y
+    dw.add k.dstRect.w
+    dh.add k.dstRect.h
+  result = AvatarExprSet(
+    srcCropX: piecewiseExpr(times, sx),
+    srcCropY: piecewiseExpr(times, sy),
+    srcCropW: piecewiseExpr(times, sw),
+    srcCropH: piecewiseExpr(times, sh),
+    dstX: piecewiseExpr(times, dx),
+    dstY: piecewiseExpr(times, dy),
+    dstW: piecewiseExpr(times, dw),
+    dstH: piecewiseExpr(times, dh),
+  )
+
+proc avatarKeyFilterExpr*(k: AvatarKeyframe): string =
+  ## ffmpeg keying filter for the avatar's chrominance / luminance /
+  ## colour key as configured by the *first* keyframe of the track.
+  ## (Key parameters do not animate — only geometry does.)
+  case k.keyMethod
+  of akmChroma:
+    "chromakey=" & k.keyColor & ":" & fmtFloat(k.keySimilarity) &
+      ":" & fmtFloat(k.keyBlend)
+  of akmColor:
+    "colorkey=color=" & k.keyColor &
+      ":similarity=" & fmtFloat(k.keySimilarity) &
+      ":blend=" & fmtFloat(k.keyBlend)
+  of akmLuma:
+    "lumakey=threshold=" & fmtFloat(k.lumaThreshold) &
+      ":tolerance=" & fmtFloat(k.lumaTolerance)
+
+proc buildAvatarTrackFilter*(track: AvatarTrack;
+                             canvasWidth, canvasHeight: int;
+                             srcWidth, srcHeight: int): string =
+  ## Build the `-filter_complex` value for `composeVideoWithAvatarTrack`.
+  ## Inputs: `[0:v]` = screencast, `[1:v]` = avatar source.
+  ## Outputs: `[vout]` (no audio mixing — caller chooses an audio map).
+  doAssert track.keyframes.len > 0
+  let e = avatarExprsFor(track, srcWidth, srcHeight)
+  let k0 = track.keyframes[0]
+  let keyExpr = avatarKeyFilterExpr(k0)
+  let despill =
+    if k0.despill: ",despill=type=" &
+      (if k0.despillType.len > 0: k0.despillType else: "green")
+    else: ""
+  let bg = &"[0:v]scale={canvasWidth}:{canvasHeight}:" &
+           "force_original_aspect_ratio=decrease," &
+           &"pad={canvasWidth}:{canvasHeight}:(ow-iw)/2:(oh-ih)/2," &
+           "setsar=1[bg]"
+  # Source crop with per-frame expressions for x/y/w/h; then scale to
+  # dst-rect dimensions (also per-frame); then key + optional despill.
+  let av = "[1:v]" &
+    &"crop=w='{e.srcCropW}':h='{e.srcCropH}':x='{e.srcCropX}':y='{e.srcCropY}':exact=1," &
+    &"scale=w='{e.dstW}':h='{e.dstH}':eval=frame:flags=bicubic," &
+    "format=yuva420p," &
+    keyExpr & despill & "[avatar]"
+  let ov = &"[bg][avatar]overlay=x='{e.dstX}':y='{e.dstY}':eval=frame[vout]"
+  result = @[bg, av, ov].join(";")
+
+proc composeVideoWithAvatarTrack*(
+    screencastPath, avatarVideoPath, outputPath: string;
+    track: AvatarTrack;
+    canvasWidth, canvasHeight: int;
+    srcWidth, srcHeight: int;
+    useAvatarAudio = true) =
+  ## Run ffmpeg with an animated avatar overlay derived from `track`.
+  ## `srcWidth` and `srcHeight` are the pixel dimensions of the avatar
+  ## source video (the caller probes them with ffprobe).
+  if not fileExists(screencastPath):
+    raise newException(MediaCompositionError,
+      "Screencast not found: " & screencastPath)
+  if not fileExists(avatarVideoPath):
+    raise newException(MediaCompositionError,
+      "Avatar video not found: " & avatarVideoPath)
+  if track.keyframes.len == 0:
+    raise newException(MediaCompositionError,
+      "Avatar track has no keyframes")
+  validate(track)
+  let parent = outputPath.parentDir()
+  if parent.len > 0 and not dirExists(parent):
+    createDir(parent)
+  let ffmpegBin = resolveFfmpegBinary()
+  let filter = buildAvatarTrackFilter(track,
+                                      canvasWidth, canvasHeight,
+                                      srcWidth, srcHeight)
+  var argv = @[
+    ffmpegBin, "-y", "-hide_banner", "-loglevel", "error",
+    "-i", screencastPath,
+    "-i", avatarVideoPath,
+    "-filter_complex", filter,
+    "-map", "[vout]",
+  ]
+  if useAvatarAudio:
+    argv.add @["-map", "1:a?"]
+  else:
+    argv.add @["-map", "0:a?"]
+  argv.add @[
+    "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-b:a", "192k",
+    "-movflags", "+faststart",
+    "-shortest",
+    outputPath
+  ]
+  let env = sanitizedEnvForFfmpeg(ffmpegBin)
+  let process = startProcess(
+    command = argv[0],
+    args = argv[1 .. ^1],
+    env = env,
+    options = {poStdErrToStdOut}
+  )
+  let output = process.outputStream().readAll()
+  let exitCode = process.waitForExit()
+  process.close()
+  if exitCode != 0:
+    raise newException(
+      MediaCompositionError,
+      "ffmpeg exited with code " & $exitCode & ":\n" & output
+    )
+  if not fileExists(outputPath) or getFileSize(outputPath) <= 0:
+    raise newException(
+      MediaCompositionError,
+      "ffmpeg produced no usable file at " & outputPath
+    )
 
 proc composeVideoWithOverlay*(
     screencastPath, narrationWavPath, avatarVideoPath, outputPath: string,

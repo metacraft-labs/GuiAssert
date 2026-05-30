@@ -20,8 +20,10 @@
 import std/[json, options, strutils, tables]
 
 import ./emotive
+import ./avatar_track
 
 export emotive
+export avatar_track
 
 type
   ScriptValidationError* = object of CatchableError
@@ -104,6 +106,9 @@ type
   Script* = object
     metadata*: ScriptMetadata
     timeline*: seq[Keyframe]
+    avatar*: AvatarTrack
+      ## Optional animated talking-head overlay.  Empty for legacy
+      ## scripts that do not need a presenter-PiP composition.
 
 const
   WordsPerMinute* = 150.0
@@ -405,6 +410,12 @@ proc scriptFromJsonNode(root: JsonNode): Script =
     else:
       for i, item in tl.elems:
         result.timeline.add keyframeFromJson(item, i)
+  if root.hasKey("avatar") and root["avatar"].kind == JObject:
+    try:
+      result.avatar = avatarTrackFromJson(root["avatar"], "avatar")
+      validate(result.avatar)
+    except ValueError as e:
+      raise newException(ScriptParseError, e.msg)
 
 proc parseScriptJson*(input: string): Script =
   ## Parse a JSON-encoded script and validate it.

@@ -3,70 +3,150 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GuiAssert Timeline Editor</title>
+    <title>GuiAssert Avatar Timeline Editor</title>
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header class="topbar">
-      <div class="brand">GuiAssert <span class="brand-sub">Timeline</span></div>
+      <div class="brand">GuiAssert <span class="brand-sub">Avatar Editor</span></div>
       <div class="status">
         <span id="status-text">idle</span>
         <span id="status-elapsed"></span>
       </div>
     </header>
 
+    <div id="stale-banner" class="banner hidden">
+      <span class="banner-msg" id="stale-banner-msg">Automation is stale</span>
+      <button class="kf-btn" id="stale-banner-render">Re-record automation</button>
+      <button class="kf-btn ghost" id="stale-banner-dismiss">dismiss</button>
+    </div>
+
     <main class="grid">
-      <section class="pane preview-pane">
-        <header class="pane-header">Preview</header>
-        <video
-          id="video-player"
-          class="video"
-          data-current-time="0"
-          controls
-          preload="metadata"
-        ></video>
-        <div class="time-readout">
-          <span>t = </span>
-          <span id="current-time">0.00</span>
-          <span>s</span>
-          <span class="sep">·</span>
-          <span>frame </span>
-          <span id="current-frame">0</span>
-        </div>
-      </section>
-
-      <section class="pane timeline-pane">
+      <section class="pane source-pane">
         <header class="pane-header">
-          Timeline
-          <span class="hint">drag keyframes · click captions</span>
+          Source — talking-head provider
+          <select id="source-picker" class="source-picker"></select>
         </header>
-        <div class="ruler" id="ruler"></div>
-        <div class="track track-action">
-          <div class="track-label">action</div>
-          <div class="track-body" id="track-action"></div>
+        <div class="video-stage" id="source-stage">
+          <video
+            id="source-video"
+            class="video"
+            controls
+            preload="metadata"
+          ></video>
+          <svg
+            id="source-overlay"
+            class="overlay"
+            preserveAspectRatio="none"
+          ></svg>
         </div>
-        <div class="track track-audio">
-          <div class="track-label">audio</div>
-          <canvas id="waveform" class="waveform"></canvas>
+        <div class="rect-info" id="source-rect-info">src crop —</div>
+      </section>
+
+      <section class="pane composite-pane">
+        <header class="pane-header">
+          Composite — output mix
+          <span class="hint">re-renders on drop</span>
+        </header>
+        <div class="video-stage" id="composite-stage">
+          <video
+            id="composite-video"
+            class="video"
+            controls
+            preload="metadata"
+          ></video>
+          <svg
+            id="composite-overlay"
+            class="overlay"
+            preserveAspectRatio="none"
+          ></svg>
         </div>
-        <div class="track track-caption">
-          <div class="track-label">caption</div>
-          <div class="track-body" id="track-caption"></div>
+        <div class="rect-info" id="composite-rect-info">dst rect —</div>
+      </section>
+
+      <section class="pane keyframes-pane">
+        <header class="pane-header">
+          Avatar Keyframes
+          <span class="hint">click a diamond to select · double-click empty area to add</span>
+        </header>
+        <div class="ruler" id="kf-ruler"></div>
+        <div class="track track-keyframes">
+          <div class="track-label">avatar</div>
+          <div class="track-body" id="kf-track"></div>
+        </div>
+        <div class="keyframe-inspector" id="kf-inspector">
+          <div class="kf-empty">no keyframe selected</div>
         </div>
       </section>
 
-      <section class="pane script-pane">
-        <header class="pane-header">Narration</header>
-        <ul class="script-list" id="script-list"></ul>
+      <section class="pane render-pane">
+        <header class="pane-header">
+          Render Manager
+          <button id="rm-refresh" class="kf-btn ghost">refresh</button>
+        </header>
+        <div class="render-options" id="render-options">
+          <div class="opt-row">
+            <label class="opt-cb">
+              <input type="checkbox" id="opt-captions" />
+              <span>Captions</span>
+            </label>
+          </div>
+          <div class="opt-row">
+            <span class="opt-label">Narration:</span>
+            <label class="opt-radio">
+              <input type="radio" name="audio-mode" value="audio" />
+              <span>Audio only</span>
+            </label>
+            <label class="opt-radio">
+              <input type="radio" name="audio-mode" value="head" />
+              <span>Talking head</span>
+            </label>
+          </div>
+          <div class="opt-row">
+            <span class="opt-label">Local model:</span>
+            <select id="opt-local-model">
+              <option value="sadtalker">SadTalker</option>
+              <option value="wav2lip">Wav2Lip</option>
+              <option value="musetalk">MuseTalk</option>
+            </select>
+          </div>
+          <div class="opt-row">
+            <span class="opt-label">Commercial:</span>
+            <select id="opt-commercial">
+              <option value="heygen">HeyGen</option>
+              <option value="synthesia">Synthesia</option>
+              <option value="tavus">Tavus</option>
+              <option value="did">D-ID</option>
+              <option value="elevenlabs">ElevenLabs (audio only)</option>
+            </select>
+          </div>
+        </div>
+        <table class="render-stages">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Status</th>
+              <th>Size</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="render-stages-body"></tbody>
+        </table>
+        <div class="render-footer" id="render-footer"></div>
       </section>
     </main>
 
     <footer class="footer">
       <span>port <span id="footer-port">7180</span></span>
       <span class="sep">·</span>
-      <span><span id="footer-px-per-sec">100</span> px/s</span>
+      <span><span id="footer-canvas">— × —</span> canvas</span>
       <span class="sep">·</span>
-      <span><span id="footer-fps">30</span> fps</span>
+      <span><span id="footer-src">— × —</span> src</span>
+      <span class="sep">·</span>
+      <span id="footer-kfs">0 keyframes</span>
+      <span class="sep">·</span>
+      <span id="footer-project">no project</span>
     </footer>
 
     <script src="/app.js"></script>

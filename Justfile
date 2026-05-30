@@ -10,7 +10,7 @@ default: test
 
 # Run every default unit test against the local nim toolchain.
 test:
-    @for f in tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout; do \
+    @for f in tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tartifact_project tartifact_pipeline; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim; \
     done
