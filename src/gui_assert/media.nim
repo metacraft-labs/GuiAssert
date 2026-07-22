@@ -305,11 +305,11 @@ proc presenterComposeOptions*(): ComposeOptions =
 proc escapeDrawtext*(s: string): string =
   ## Escape a string for inclusion as a `drawtext` option value, wrapped
   ## inside single quotes by the caller.
-  result = newStringOfCap(s.len + 8)
+  result = newStringOfCap(s.len + 16)
   for ch in s:
     case ch
     of '\\': result.add("\\\\")
-    of '\'': result.add("\\'")
+    of '\'': result.add("'\\''")
     of ':':  result.add("\\:")
     of '%':  result.add("\\%")
     else:    result.add(ch)
@@ -337,7 +337,7 @@ proc buildDrawtextFilter(c: Caption, opts: ComposeOptions): string =
     parts.add("boxborderw=12")
   parts.add("x=" & xExpr)
   parts.add("y=" & yExpr)
-  parts.add(&"enable='between(t,{c.startTime:.3f},{c.endTime:.3f})'")
+  parts.add(&"enable=between(t\\,{c.startTime:.3f}\\,{c.endTime:.3f})")
   result = "drawtext=" & parts.join(":")
 
 # ---------------------------------------------------------------------------
