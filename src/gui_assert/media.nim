@@ -329,6 +329,8 @@ proc buildDrawtextFilter(c: Caption, opts: ComposeOptions): string =
     parts.add("fontfile='" & escapeDrawtext(opts.fontFile.get) & "'")
   parts.add("fontsize=" & $opts.fontSize)
   parts.add("fontcolor=" & opts.fontColor)
+  parts.add("borderw=2")
+  parts.add("bordercolor=black")
   if opts.boxColor.len > 0:
     parts.add("box=1")
     parts.add("boxcolor=" & opts.boxColor)
@@ -341,16 +343,6 @@ proc buildDrawtextFilter(c: Caption, opts: ComposeOptions): string =
 # ---------------------------------------------------------------------------
 # Filter graph assembly
 # ---------------------------------------------------------------------------
-
-proc avatarFilterCircle(opts: ComposeOptions): string =
-  ## Build the avatar chain for `omCircle` mode (legacy default).
-  ## Scales the source down to the configured target size, promotes
-  ## to yuva420p so the `geq` filter can write an alpha channel, and
-  ## draws a hard circular alpha mask leaving Y/U/V untouched.
-  &"[2:v]scale={opts.avatarWidth}:{opts.avatarHeight}," &
-    "format=yuva420p," &
-    "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':" &
-    "a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'[avatar]"
 
 proc cropFilterFraction(fracW, fracH: float): string =
   ## ffmpeg `crop=` expression for a centred-upper subregion sized as
@@ -373,6 +365,22 @@ proc cropFilterFor(opts: ComposeOptions): string =
     let w = if r.w > 0: $r.w else: "in_w"
     let h = if r.h > 0: $r.h else: "in_h"
     &"crop={w}:{h}:{r.x}:{r.y},"
+
+proc avatarFilterCircle(opts: ComposeOptions): string =
+  ## Build the avatar chain for `omCircle` mode (legacy default).
+  ## Crops the input to a square (preserving aspect ratio), scales the
+  ## source down to the configured target size, promotes to yuva420p
+  ## so the `geq` filter can write an alpha channel, and draws a hard
+  ## circular alpha mask leaving Y/U/V untouched.
+  let cropFilter =
+    if opts.cropPolicy == cpFull:
+      "crop='min(iw,ih):min(iw,ih)',"
+    else:
+      cropFilterFor(opts) & "crop='min(iw,ih):min(iw,ih)',"
+  &"[2:v]{cropFilter}scale={opts.avatarWidth}:{opts.avatarHeight}," &
+    "format=yuva420p," &
+    "geq=lum='p(X,Y)':cb='p(X,Y)':cr='p(X,Y)':" &
+    "a='if(lte(hypot(X-W/2,Y-H/2),W/2),255,0)'[avatar]"
 
 proc avatarFilterChromaKey(opts: ComposeOptions): string =
   ## Build the avatar chain for `omChromaKey` mode.  Optionally
@@ -398,8 +406,7 @@ proc avatarFilterChromaKey(opts: ComposeOptions): string =
       &"lumakey=threshold={ck.lumaThreshold}:tolerance={ck.lumaTolerance}"
   let despillExpr =
     if ck.despill:
-      let t = if ck.despillType.len > 0: ck.despillType else: "green"
-      ",despill=type=" & t
+      ",despill=type=" & (if ck.despillType.len > 0: ck.despillType else: "green")
     else: ""
   let cropPrefix = cropFilterFor(opts)
   &"[2:v]" & cropPrefix &
@@ -468,7 +475,7 @@ proc buildFilterComplex*(
     if opts.useAvatarAudio:
       "[2:a]aresample=async=1:first_pts=0,asetpts=PTS-STARTPTS[aout]"
     else:
-      "[3:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0[aout]"
+      "[3:a][1:a]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[aout]"
 
   result = @[
     bgScale,
@@ -505,7 +512,8 @@ proc buildComposeArgv*(
     "-map", "[vout]",
     "-map", "[aout]",
     "-c:v", "libx264",
-    "-preset", "veryfast",
+    "-preset", "medium",
+    "-crf", "18",
     "-pix_fmt", "yuv420p",
     "-c:a", "aac",
     "-b:a", "192k",
