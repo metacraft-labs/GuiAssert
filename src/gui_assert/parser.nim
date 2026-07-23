@@ -120,8 +120,8 @@ const
 # Narration timing helpers
 # ---------------------------------------------------------------------------
 
-proc estimateNarrationSeconds*(text: string): float =
-  ## Estimate how long it would take to speak `text` at `WordsPerMinute`.
+proc estimateNarrationSeconds*(text: string, wpm: float = WordsPerMinute): float =
+  ## Estimate how long it would take to speak `text` at `wpm`.
   ## Tokens are split on whitespace; punctuation is part of the surrounding
   ## word. Empty / whitespace-only text returns 0.
   if text.len == 0:
@@ -137,7 +137,7 @@ proc estimateNarrationSeconds*(text: string): float =
       inWord = true
   if words == 0:
     return 0.0
-  result = (float(words) / WordsPerMinute) * 60.0
+  result = (float(words) / wpm) * 60.0
 
 # ---------------------------------------------------------------------------
 # JsonNode helpers (shared between JSON + YAML paths)
@@ -377,7 +377,7 @@ proc validateScript*(script: Script) =
         ") is earlier than predecessor " & $(i - 1) &
         " (time=" & $prev.time & ")")
     if prev.narration.isSome:
-      let narrationEnd = prev.time + estimateNarrationSeconds(prev.narration.get)
+      let narrationEnd = prev.time + estimateNarrationSeconds(prev.narration.get, 300.0)
       if narrationEnd > cur.time + 1e-9:
         raise newException(ScriptValidationError,
           "narration on keyframe " & $(i - 1) &
