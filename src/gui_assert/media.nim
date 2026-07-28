@@ -63,6 +63,14 @@ type
       ## Optional ffmpeg-expression override for the Y coordinate. When
       ## absent the caption is placed in the lower third, above the avatar:
       ## `h-(h/6)-text_h`.
+    textFile*: Option[string]
+      ## Optional path to a file holding the caption text. When set, the
+      ## clause uses drawtext's `textfile=` instead of `text=`. This is the
+      ## robust way to render multi-line captions (real newlines) and text
+      ## with awkward characters (apostrophes, colons): the file content is
+      ## read verbatim, sidestepping the filtergraph escaping rules that make
+      ## inline `text=` unsafe for wrapped, punctuated sentences. When absent,
+      ## the inline `text` field is used as before.
 
   OverlayMode* = enum
     ## How the avatar source is composited onto the screencast.
@@ -324,7 +332,13 @@ proc buildDrawtextFilter(c: Caption, opts: ComposeOptions): string =
     if c.y.isSome: c.y.get
     else: "h-(h/6)-text_h"
   var parts: seq[string] = @[]
-  parts.add("text='" & escapeDrawtext(c.text) & "'")
+  if c.textFile.isSome:
+    # `textfile=` reads the caption text verbatim from disk — the robust path
+    # for multi-line / punctuated captions (no filtergraph escaping hazards).
+    # Only the path itself needs escaping for the filter argument.
+    parts.add("textfile='" & escapeDrawtext(c.textFile.get) & "'")
+  else:
+    parts.add("text='" & escapeDrawtext(c.text) & "'")
   if opts.fontFile.isSome:
     parts.add("fontfile='" & escapeDrawtext(opts.fontFile.get) & "'")
   parts.add("fontsize=" & $opts.fontSize)
