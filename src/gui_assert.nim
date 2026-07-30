@@ -31,6 +31,7 @@ import ./gui_assert/talking_head
 import ./gui_assert/emotive
 import ./gui_assert/window_layout
 import ./gui_assert/input
+import ./gui_assert/pacing
 
 export parser
 export driver
@@ -45,6 +46,7 @@ export talking_head
 export emotive
 export window_layout
 export input
+export pacing
 
 type
   GuiAssertHarness* = ref object

@@ -19,3 +19,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tdiscovery.nim"
   exec "nim c -r --hints:off tests/twindow_layout.nim"
   exec "nim c -r --hints:off tests/tinput.nim"
+  exec "nim c -r --hints:off tests/tpacing.nim"

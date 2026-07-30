@@ -10,10 +10,14 @@ default: test
 
 # Run every default unit test against the local nim toolchain.
 test:
-    @for f in tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tartifact_project tartifact_pipeline; do \
+    @for f in tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim; \
     done
+
+# Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
+test-pacing:
+    nim c -r --hints:off tests/tpacing.nim
 
 # Required by the workspace's pre-commit hook (`just lint`).  Add real
 # linters here as they come online (e.g. `nim check`).
