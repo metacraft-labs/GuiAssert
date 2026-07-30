@@ -31,6 +31,51 @@ suite "window_layout AppleScript builder":
     let s = buildSetBoundsScript("Weird \"Name\"", 0, 0, 1, 1)
     check s.contains("\\\"Name\\\"")
 
+suite "window_layout activate/focus builder":
+
+  test "buildActivateScript uses bundle-id form when input has a dot":
+    let s = buildActivateScript("com.apple.TextEdit")
+    check s == "tell application id \"com.apple.TextEdit\" to activate"
+
+  test "buildActivateScript uses application-name form for plain names":
+    let s = buildActivateScript("TextEdit")
+    check s == "tell application \"TextEdit\" to activate"
+
+  test "buildActivateScript escapes embedded quotes and backslashes":
+    let s = buildActivateScript("Weird \"Name\"\\x")
+    check s == "tell application \"Weird \\\"Name\\\"\\\\x\" to activate"
+
+  test "processNameOf derives label from a bundle id":
+    check processNameOf("com.apple.TextEdit") == "TextEdit"
+    check processNameOf("com.microsoft.VSCode") == "VSCode"
+
+  test "processNameOf passes plain names and paths through unchanged":
+    check processNameOf("TextEdit") == "TextEdit"
+    check processNameOf("/Applications/Visual Studio Code.app") ==
+      "/Applications/Visual Studio Code.app"
+
+  test "buildFocusScript targets System Events by process name":
+    let s = buildFocusScript("TextEdit")
+    check s ==
+      "tell application \"System Events\" to " &
+      "set frontmost of process \"TextEdit\" to true"
+
+  test "buildFocusScript normalises a bundle id to its process name":
+    let s = buildFocusScript("com.apple.TextEdit")
+    check s ==
+      "tell application \"System Events\" to " &
+      "set frontmost of process \"TextEdit\" to true"
+
+  test "buildFocusScript escapes quotes in the process name":
+    let s = buildFocusScript("Odd \"App\"")
+    check s ==
+      "tell application \"System Events\" to " &
+      "set frontmost of process \"Odd \\\"App\\\"\" to true"
+
+  test "buildOsascriptArgv wraps a script as a single -e argument":
+    let script = buildActivateScript("TextEdit")
+    check buildOsascriptArgv(script) == @["-e", script]
+
 suite "window_layout open argv builder":
 
   test "buildOpenArgv with a .app path uses -a":
@@ -86,6 +131,9 @@ when defined(appiumLive):
           x: 100, y: 100, width: 800, height: 600)
         let handle = launchWindow(spec)
         check handle.pid > 0
+        # Bring it to the foreground.
+        handle.activate()
+        handle.focus()
         # Move it.
         handle.setBounds(200, 200, 900, 700)
         # Terminate.

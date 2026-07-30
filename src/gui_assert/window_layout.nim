@@ -90,6 +90,54 @@ proc buildSetBoundsScript*(bundleIdOrName: string,
       "\" to set bounds of front window to {" &
       $x & ", " & $y & ", " & $x2 & ", " & $y2 & "}"
 
+proc buildActivateScript*(bundleIdOrName: string): string =
+  ## Build the AppleScript that brings `bundleIdOrName` to the
+  ## foreground via the application's own `activate` verb.  Exposed so
+  ## tests can verify the exact wire format without invoking
+  ## `osascript`.
+  ##
+  ## As with `buildSetBoundsScript`, we address the target by `id` when
+  ## the input looks like a bundle id (contains a dot) and by `name`
+  ## otherwise.  `activate` unminimises the app, raises its windows, and
+  ## makes it the frontmost application.
+  if '.' in bundleIdOrName:
+    result = "tell application id \"" & applescriptEscape(bundleIdOrName) &
+      "\" to activate"
+  else:
+    result = "tell application \"" & applescriptEscape(bundleIdOrName) &
+      "\" to activate"
+
+proc processNameOf*(bundleIdOrName: string): string =
+  ## Derive the name System Events uses for a running process from a
+  ## bundle id or app name.  System Events keys processes by their
+  ## visible process name (`com.apple.TextEdit` → `TextEdit`,
+  ## `TextEdit` → `TextEdit`), so we take the label after the last dot
+  ## when the input is a bundle id and pass plain names through
+  ## unchanged.
+  if '.' in bundleIdOrName and "/" notin bundleIdOrName:
+    let lastDot = bundleIdOrName.rfind('.')
+    if lastDot >= 0 and lastDot + 1 < bundleIdOrName.len:
+      return bundleIdOrName[lastDot + 1 .. ^1]
+  return bundleIdOrName
+
+proc buildFocusScript*(bundleIdOrName: string): string =
+  ## Build the AppleScript that makes `bundleIdOrName` the frontmost
+  ## process via `System Events`.  This is the accessibility-driven
+  ## counterpart to `buildActivateScript`: where `activate` asks the app
+  ## itself to come forward, this forces the window server to raise the
+  ## process even for apps that ignore `activate`.  Exposed for tests.
+  ##
+  ## System Events addresses processes by name, so we normalise bundle
+  ## ids to their process-name label via `processNameOf` first.
+  result = "tell application \"System Events\" to set frontmost of process \"" &
+    applescriptEscape(processNameOf(bundleIdOrName)) & "\" to true"
+
+proc buildOsascriptArgv*(script: string): seq[string] =
+  ## Build the argv passed to `osascript` for a single inline script.
+  ## Public so tests can assert the exact subprocess invocation without
+  ## running `osascript`.
+  result = @["-e", script]
+
 proc buildOpenArgv*(spec: WindowSpec): seq[string] =
   ## Build the `open` argv for launching the requested app with
   ## `-n` (force new instance) and forwarding `args` via `--args`.
@@ -122,7 +170,7 @@ proc runOsascript(script: string): tuple[output: string, code: int] =
       "osascript not found on PATH (required for macOS window layout)")
   let p = startProcess(
     command = bin,
-    args = @["-e", script],
+    args = buildOsascriptArgv(script),
     options = {poStdErrToStdOut})
   let combined = p.outputStream().readAll()
   let code = p.waitForExit()
@@ -238,6 +286,39 @@ proc setBounds*(h: WindowHandle, x, y, w, hgt: int) =
   if osCode != 0:
     raise newException(WindowLayoutError,
       "osascript setBounds failed (" & $osCode & "): " & osOut)
+
+proc activateApp*(bundleIdOrName: string) =
+  ## Bring `bundleIdOrName` to the foreground via the application's
+  ## `activate` verb.  Raises `WindowLayoutError` if `osascript` fails
+  ## (e.g. the target app is not running, or macroautomation is denied
+  ## by TCC, which surfaces as a non-zero exit + `-1743`/`-600` error).
+  let script = buildActivateScript(bundleIdOrName)
+  let (osOut, osCode) = runOsascript(script)
+  if osCode != 0:
+    raise newException(WindowLayoutError,
+      "osascript activate failed (" & $osCode & "): " & osOut)
+
+proc focusWindow*(bundleIdOrName: string) =
+  ## Force `bundleIdOrName` to become the frontmost process via
+  ## `System Events`.  Use this when `activateApp` is not enough (some
+  ## apps ignore `activate`).  Requires Accessibility/Automation
+  ## permission for the controlling process; a TCC denial surfaces as a
+  ## non-zero exit code and raises `WindowLayoutError`.
+  let script = buildFocusScript(bundleIdOrName)
+  let (osOut, osCode) = runOsascript(script)
+  if osCode != 0:
+    raise newException(WindowLayoutError,
+      "osascript focus failed (" & $osCode & "): " & osOut)
+
+proc activate*(h: WindowHandle) =
+  ## Convenience wrapper: activate the app behind this handle by its
+  ## bundle id / derived label.
+  activateApp(h.bundleId)
+
+proc focus*(h: WindowHandle) =
+  ## Convenience wrapper: force this handle's process frontmost via
+  ## System Events.
+  focusWindow(h.bundleId)
 
 proc terminate*(h: WindowHandle) =
   ## Politely terminate the window's process.  We try `kill <pid>`
