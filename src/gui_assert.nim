@@ -30,6 +30,7 @@ import ./gui_assert/capture
 import ./gui_assert/talking_head
 import ./gui_assert/emotive
 import ./gui_assert/window_layout
+import ./gui_assert/input
 
 export parser
 export driver
@@ -43,6 +44,7 @@ export capture
 export talking_head
 export emotive
 export window_layout
+export input
 
 type
   GuiAssertHarness* = ref object
