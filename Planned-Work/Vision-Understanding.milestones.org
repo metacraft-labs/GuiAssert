@@ -80,20 +80,21 @@
 
 ** VU3: Query / assertion API
    :PROPERTIES:
-   :status: planned
+   :status: completed
+   :status_note: Extended video_analysis.nim with pure query API: containsText (text-level substring over each frame's reading-order text, case-insensitive by default, multi-word phrases match across words), locateText (word-level substring over individual OcrWord.text → seq of (frame index, OcrWord); multi-word needles only match a single word), seenUrl (substring over frame urls), distinctStateCount (= frames.len), textInRegion (word-level match restricted to words whose [x,y,w,h] bbox has standard half-open axis-aligned intersection with the query rect; out-of-range frame → false). All pure; no subprocess/mocks. Added vu3 suite (3 tests) to tvideo_analysis.nim with hand-built VideoAnalysis fixtures. Full suite 11/11 green (4 VU1 + 4 VU2 + 3 VU3) with real ffmpeg + tesseract for the e2e tests.
    :depends_on: VU2
    :END:
 
 *** Deliverables
-    - [ ] Pure queries over =VideoAnalysis=: =containsText= (case-insensitive),
+    - [X] Pure queries over =VideoAnalysis=: =containsText= (case-insensitive),
       =locateText= (→ frame index + =OcrWord=), =seenUrl=, =distinctStateCount=,
       =textInRegion= (frame, rect, needle).
 
 *** Verification
-    - [ ] =test_contains_locate=: finds/locates text present in a hand-built
+    - [X] =test_contains_locate=: finds/locates text present in a hand-built
       analysis; returns empty for absent text.
-    - [ ] =test_seen_url_and_state_count=: URL substring + state count correct.
-    - [ ] =test_text_in_region=: matches only when the word's bbox intersects
+    - [X] =test_seen_url_and_state_count=: URL substring + state count correct.
+    - [X] =test_text_in_region=: matches only when the word's bbox intersects
       the region.
 
 ** VU4: Window detection from pixels only (pure CV)

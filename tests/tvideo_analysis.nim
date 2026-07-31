@@ -294,3 +294,120 @@ suite "video_analysis vu2 e2e":
     let t1 = analysis.frames[1].text.toUpperAscii
     check t0.contains("ALPHA")
     check t1.contains("BETA")
+
+# ---------------------------------------------------------------------------
+# VU3 pure query / assertion API
+# ---------------------------------------------------------------------------
+#
+# Matching rules under test (see video_analysis.nim):
+#   * containsText — text-level substring over each frame's reading-order text.
+#   * locateText   — word-level substring over each individual OcrWord.text.
+# Both case-insensitive by default. All hand-built; no ffmpeg/tesseract.
+
+proc mkWordWH(text: string, x, y, w, h: int, blockNum, lineNum: int): OcrWord =
+  ## Like mkWord but with an explicit bbox width/height for region tests.
+  result.text = text
+  result.confidence = 90.0
+  result.bbox = [x, y, w, h]
+  result.blockNum = blockNum
+  result.lineNum = lineNum
+
+suite "video_analysis vu3 pure":
+  test "test_contains_locate":
+    var a: VideoAnalysis
+    a.info = VideoInfo(path: "/tmp/demo.mp4", durationS: 3.0,
+                       width: 640, height: 480)
+    var f0: Keyframe
+    f0.index = 0
+    f0.words = @[mkWord("Home", 0, 0, 0, 0), mkWord("page", 50, 0, 0, 0)]
+    f0.text = wordsToReadingOrderText(f0.words)   # "Home page"
+    var f1: Keyframe
+    f1.index = 1
+    f1.words = @[mkWord("Docs", 0, 0, 0, 0), mkWord("Settings", 60, 0, 0, 0)]
+    f1.text = wordsToReadingOrderText(f1.words)   # "Docs Settings"
+    a.frames = @[f0, f1]
+
+    # containsText: present text found case-insensitively; absent text false.
+    check containsText(a, "home")            # lowercase needle, "Home" word
+    check containsText(a, "SETTINGS")        # uppercase needle, "Settings"
+    check containsText(a, "Home page")       # multi-word phrase, text-level
+    check containsText(a, "Home", caseInsensitive = false)   # exact case
+    check not containsText(a, "home", caseInsensitive = false)  # case matters
+    check not containsText(a, "Login")       # absent
+    check not containsText(a, "")            # empty needle never matches
+
+    # locateText: right frame index + matching word for a present needle.
+    let hits = locateText(a, "docs")
+    check hits.len == 1
+    check hits[0].frame == 1
+    check hits[0].word.text == "Docs"
+
+    # A needle present in two frames' words returns two hits with correct words.
+    let sHits = locateText(a, "s")   # "page"? no. matches "Docs","Settings"
+    # "s" appears in "Docs" and "Settings" only (word-level).
+    check sHits.len == 2
+    check sHits[0].frame == 1
+    check sHits[0].word.text == "Docs"
+    check sHits[1].frame == 1
+    check sHits[1].word.text == "Settings"
+
+    # Absent needle -> empty seq.
+    check locateText(a, "Login").len == 0
+    # Multi-word phrase does NOT match at the word level (documented rule).
+    check locateText(a, "Home page").len == 0
+
+  test "test_seen_url_and_state_count":
+    var a: VideoAnalysis
+    a.info = VideoInfo(path: "/tmp/demo.mp4", durationS: 3.0,
+                       width: 640, height: 480)
+    var f0: Keyframe
+    f0.index = 0
+    f0.urls = @["http://127.0.0.1:5000"]
+    var f1: Keyframe
+    f1.index = 1
+    f1.urls = @["127.0.0.1:8080/docs/index.html"]
+    a.frames = @[f0, f1]
+
+    # seenUrl: substring present in some frame's urls -> true.
+    check seenUrl(a, "127.0.0.1:5000")
+    check seenUrl(a, "/docs/index.html")
+    check seenUrl(a, "8080")
+    # Absent substring -> false.
+    check not seenUrl(a, "example.com")
+    check not seenUrl(a, "9999")
+    check not seenUrl(a, "")
+
+    # distinctStateCount equals the number of frames.
+    check distinctStateCount(a) == 2
+
+  test "test_text_in_region":
+    var a: VideoAnalysis
+    a.info = VideoInfo(path: "/tmp/demo.mp4", durationS: 1.0,
+                       width: 640, height: 480)
+    var f0: Keyframe
+    f0.index = 0
+    # Two words at known, non-overlapping bboxes:
+    #   "Save"  at [10,10,40,20]  (x:10..50,  y:10..30)
+    #   "Cancel" at [200,200,60,20] (x:200..260, y:200..220)
+    f0.words = @[
+      mkWordWH("Save", 10, 10, 40, 20, 0, 0),
+      mkWordWH("Cancel", 200, 200, 60, 20, 1, 0),
+    ]
+    a.frames = @[f0]
+
+    # A rect over the "Save" word finds it.
+    check textInRegion(a, 0, 0, 0, 60, 40, "Save")
+    # Case-insensitive by default.
+    check textInRegion(a, 0, 0, 0, 60, 40, "save")
+    # A rect that overlaps "Save" but queries the wrong needle -> false.
+    check not textInRegion(a, 0, 0, 0, 60, 40, "Cancel")
+    # A rect over the "Cancel" word finds it (not "Save").
+    check textInRegion(a, 0, 190, 190, 100, 60, "Cancel")
+    check not textInRegion(a, 0, 190, 190, 100, 60, "Save")
+    # A rect in an empty area intersects nothing -> false even for present text.
+    check not textInRegion(a, 0, 400, 400, 50, 50, "Save")
+    check not textInRegion(a, 0, 400, 400, 50, 50, "Cancel")
+    # Touching-but-not-overlapping edge (rect ends exactly at x=10) -> false.
+    check not textInRegion(a, 0, 0, 10, 10, 20, "Save")
+    # Out-of-range frame -> false.
+    check not textInRegion(a, 5, 0, 0, 640, 480, "Save")

@@ -316,6 +316,99 @@ proc toDigest*(a: VideoAnalysis): string =
   result = lines.join("\n")
 
 # ---------------------------------------------------------------------------
+# Pure query / assertion API (VU3)
+# ---------------------------------------------------------------------------
+#
+# These operate over an already-assembled `VideoAnalysis` and never touch a
+# subprocess or the filesystem — they let a test (or an agent) assert, from the
+# pixels-derived timeline alone, "did text X appear?", "where?", "was URL Y
+# seen?", "how many distinct states?", "is text X in this region of frame N?".
+#
+# Matching rules:
+#   * `containsText` matches at the *text level*: the needle is searched as a
+#     substring of each frame's reconstructed reading-order `text` (words joined
+#     by spaces within a line and by "\n" across lines). This means a multi-word
+#     needle like "Home page" can match across adjacent words on the same line.
+#   * `locateText` matches at the *word level*: the needle is searched as a
+#     substring of each individual `OcrWord.text`. A multi-word needle therefore
+#     only matches if a *single* word contains it verbatim (OCR emits one token
+#     per whitespace-separated word, so multi-word needles rarely match here —
+#     use `containsText` for cross-word phrases).
+# Both are case-insensitive by default (`caseInsensitive = true`).
+
+proc matchesSub(haystack, needle: string, caseInsensitive: bool): bool =
+  ## Substring test, optionally case-insensitive. An empty needle never matches
+  ## (so `containsText`/`locateText` don't report spurious hits for "").
+  if needle.len == 0:
+    return false
+  if caseInsensitive:
+    haystack.toLowerAscii.contains(needle.toLowerAscii)
+  else:
+    haystack.contains(needle)
+
+proc containsText*(a: VideoAnalysis, needle: string,
+                   caseInsensitive = true): bool =
+  ## True if any frame's reconstructed reading-order `text` contains `needle`
+  ## as a substring (text-level match; case-insensitive by default). Because
+  ## the match is against the joined line text, multi-word phrases can match.
+  for f in a.frames:
+    if matchesSub(f.text, needle, caseInsensitive):
+      return true
+  return false
+
+proc locateText*(a: VideoAnalysis, needle: string,
+                 caseInsensitive = true):
+                 seq[tuple[frame: int, word: OcrWord]] =
+  ## Return every occurrence of `needle` across the timeline as
+  ## `(frame index, matching OcrWord)` pairs. The match is *word-level*: the
+  ## needle must be a substring of an individual `OcrWord.text` (a multi-word
+  ## needle only matches if a single OCR word contains it). Case-insensitive by
+  ## default. Returns an empty seq when nothing matches.
+  result = @[]
+  for f in a.frames:
+    for w in f.words:
+      if matchesSub(w.text, needle, caseInsensitive):
+        result.add((frame: f.index, word: w))
+
+proc seenUrl*(a: VideoAnalysis, substr: string): bool =
+  ## True if any frame's extracted `urls` contains an entry that has `substr`
+  ## as a substring (case-sensitive, since URLs are compared verbatim). An
+  ## empty `substr` never matches.
+  if substr.len == 0:
+    return false
+  for f in a.frames:
+    for u in f.urls:
+      if u.contains(substr):
+        return true
+  return false
+
+proc distinctStateCount*(a: VideoAnalysis): int =
+  ## Number of detected distinct visual states (frames) in the timeline.
+  a.frames.len
+
+proc textInRegion*(a: VideoAnalysis, frame: int, x, y, w, h: int,
+                   needle: string, caseInsensitive = true): bool =
+  ## True if, in frame `frame`, some OCR word whose bounding box *intersects*
+  ## the rectangle `(x, y, w, h)` has text containing `needle` (word-level,
+  ## case-insensitive by default). Rectangles are `[x, y, w, h]` (top-left
+  ## origin, width/height); intersection is the standard axis-aligned overlap
+  ## test. An out-of-range `frame` index yields false.
+  if frame < 0 or frame >= a.frames.len:
+    return false
+  for word in a.frames[frame].words:
+    let wx = word.bbox[0]
+    let wy = word.bbox[1]
+    let ww = word.bbox[2]
+    let wh = word.bbox[3]
+    # Standard half-open axis-aligned rectangle intersection.
+    let overlaps =
+      wx < x + w and x < wx + ww and
+      wy < y + h and y < wy + wh
+    if overlaps and matchesSub(word.text, needle, caseInsensitive):
+      return true
+  return false
+
+# ---------------------------------------------------------------------------
 # Binary discovery (honors FFMPEG / FFPROBE, then FFMPEG_BIN / PATH)
 # ---------------------------------------------------------------------------
 
