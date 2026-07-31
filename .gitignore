@@ -12,6 +12,7 @@ tests/twindow_layout
 tests/tinput
 tests/tpacing
 tests/tvideo_analysis
+tests/tchange_detect
 tests/tvision_windows
 tests/tvision_cli
 tests/tocr_vision

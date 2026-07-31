@@ -181,7 +181,34 @@
 
 ** VU8: Change-detection hardening (tiled SSIM + pHash dedup + ECR)
    :PROPERTIES:
-   :status: planned
+   :status: completed
+   :status_note: Added three pure-CV signals to image_math.nim —
+     tiledSsim(a,b,gridX=4,gridY=4)->(minLocal,meanLocal) (per-cell SSIM over a
+     4x4 grid; minLocal = most-changed cell), dctHash(img)->uint64 (32x32
+     area-downscale -> separable 2D DCT-II -> top-left 8x8 low-freq block ->
+     bit=coeff>median-of-63-AC-coeffs) with hammingDistance(a,b)=popcount(xor),
+     and edgeChangeRatio(a,b,threshold=32) (|edges(a) XOR edges(b)| / union of
+     forward-difference-gradient edge maps). Wired into video_analysis.nim:
+     segmentByChange now DEFAULTS to the local detector (useLocal=true) —
+     boundary when 1-tiledSsim.minLocal > localThreshold (default 0.35, grid
+     4x4); useLocal=false restores the exact legacy global-SSIM path
+     (ssimThreshold=0.12). segmentBoundaries is unchanged and is fed the
+     local-min-derived series. analyzeVideo now extracts+pHashes each keyframe
+     BEFORE OCR and collapses consecutive near-duplicate states via the new
+     pure dedupeConsecutive(a, hashes, maxDist=6) (extends kept tEnd,
+     reindexes) so redundant frames don't bloat OCR/index; phashDupThreshold
+     param (default 6, <0 disables). Tuned honestly: with the default local
+     detector AND dedup the real-ffmpeg 2-state fixture still yields exactly 2
+     states (e2e_segment_two_state_video + e2e_analyze_fixture_video both green;
+     ALPHA vs BETA keyframes are far apart in pHash so are NOT merged). New
+     tests/tchange_detect.nim (5 pure tests, no ffmpeg): test_tiled_ssim_local_
+     change (128x128 textured pair, one bright rect in a corner cell -> global
+     SSIM 0.91 stays high / would NOT fire, minLocal 0.23 DOES fire),
+     test_phash_hamming (identical=0, tiny 10x10 patch=4 <=6, checkerboard=32;
+     small<big) + dedup collapse/keep + radius-0 no-merge, test_edge_change_
+     ratio (added box ECR=1.0 high, uniform +20 shift ECR=0.0 low). Full run:
+     tchange_detect 5, tvideo_analysis 11, tvision_windows 3, tvision_cli 5,
+     tocr_vision 5 — all green (29/29).
    :depends_on: VU1
    :END:
 
@@ -189,21 +216,21 @@
    near-duplicates. Add pure-CV signals per the SOTA survey.
 
 *** Deliverables
-    - [ ] Tiled/local SSIM in =segmentByChange= (grid of local SSIM; trigger on
+    - [X] Tiled/local SSIM in =segmentByChange= (grid of local SSIM; trigger on
       max local drop, not global mean) so small dialogs / address-bar edits are
       caught. Keep global SSIM as a fallback/param.
-    - [ ] =dctHash(img: GrayImage): uint64= (pHash) + Hamming dedup pass that
+    - [X] =dctHash(img: GrayImage): uint64= (pHash) + Hamming dedup pass that
       collapses near-duplicate keyframes before OCR.
-    - [ ] =edgeChangeRatio(a, b: GrayImage): float= as a complementary change
+    - [X] =edgeChangeRatio(a, b: GrayImage): float= as a complementary change
       signal; document how it combines with SSIM.
 
 *** Verification
-    - [ ] =test_phash_hamming=: identical images → distance 0; a small local
+    - [X] =test_phash_hamming=: identical images → distance 0; a small local
       change → small distance; very different → large. Dedup collapses
       near-dupes, keeps distinct.
-    - [ ] =test_tiled_ssim_local_change=: a synthetic pair differing only in a
+    - [X] =test_tiled_ssim_local_change=: a synthetic pair differing only in a
       small corner region → tiled detector fires though global SSIM would not.
-    - [ ] =test_edge_change_ratio=: added edges (text/box appears) → high ECR;
+    - [X] =test_edge_change_ratio=: added edges (text/box appears) → high ECR;
       colour-only change → low ECR.
 
 ** VU9: OCR quality (upscale + dark-mode inversion + per-region PSM + confidence)

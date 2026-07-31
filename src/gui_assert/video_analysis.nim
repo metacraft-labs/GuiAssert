@@ -409,6 +409,43 @@ proc textInRegion*(a: VideoAnalysis, frame: int, x, y, w, h: int,
   return false
 
 # ---------------------------------------------------------------------------
+# Pure pHash dedup (VU8)
+# ---------------------------------------------------------------------------
+#
+# After per-state keyframes are chosen, consecutive states whose keyframes are
+# perceptual near-duplicates (small pHash Hamming distance) add no information
+# and only bloat the index / OCR. `dedupeConsecutive` collapses such runs,
+# extending the kept state's `tEnd` to cover the dropped one and re-indexing.
+# It is pure: the caller supplies the pre-computed per-frame hashes (in the same
+# order as `a.frames`), so the merge logic is unit-testable without decoding any
+# image. `hammingDistance`/`dctHash` live in `image_math`.
+
+proc dedupeConsecutive*(a: VideoAnalysis, hashes: seq[uint64],
+                        maxDist = 6): VideoAnalysis =
+  ## Collapse consecutive frames whose keyframe pHash Hamming distance is
+  ## `<= maxDist` into the earlier frame (keeping its OCR / text as the
+  ## representative and extending its `tEnd`). Distinct states — a Hamming
+  ## distance above `maxDist` — are preserved. Frames are re-indexed `0..n-1`.
+  ## `hashes[i]` must be the pHash of `a.frames[i]`.
+  result.info = a.info
+  result.frames = @[]
+  if a.frames.len == 0:
+    return
+  doAssert hashes.len == a.frames.len,
+    "dedupeConsecutive: hashes/frames length mismatch"
+  var keptHashes: seq[uint64] = @[]
+  for i in 0 ..< a.frames.len:
+    if result.frames.len > 0 and
+       hammingDistance(keptHashes[^1], hashes[i]) <= maxDist:
+      # Near-duplicate of the previously kept state: extend its time range.
+      result.frames[^1].tEnd = a.frames[i].tEnd
+    else:
+      result.frames.add(a.frames[i])
+      keptHashes.add(hashes[i])
+  for i in 0 ..< result.frames.len:
+    result.frames[i].index = i
+
+# ---------------------------------------------------------------------------
 # Pure token-efficient agent index (VU5)
 # ---------------------------------------------------------------------------
 #
@@ -659,20 +696,31 @@ proc probeVideo*(path: string): VideoInfo =
   result.path = path
 
 proc segmentByChange*(path: string, sampleFps = 2.0, scaleW = 320,
-                      ssimThreshold = 0.12):
+                      ssimThreshold = 0.12, useLocal = true,
+                      gridX = 4, gridY = 4, localThreshold = 0.35):
                       seq[tuple[tStart, tEnd, changeScore: float]] =
   ## Sample `path` at `sampleFps` fps (downscaled to width `scaleW`), score
-  ## consecutive frames with SSIM, and collapse visually similar runs into
-  ## segments. Returns one entry per detected distinct state.
+  ## consecutive frames, and collapse visually similar runs into segments.
+  ## Returns one entry per detected distinct state.
+  ##
+  ## VU8: by DEFAULT (`useLocal = true`) the detector scores each consecutive
+  ## pair by `tiledSsim(prev, cur, gridX, gridY).minLocal` — the SSIM of the
+  ## MOST-changed cell of a `gridX` x `gridY` grid — and starts a new segment
+  ## when `1 - minLocal > localThreshold`. This catches small, localised UI
+  ## changes (a dialog, an address-bar edit) that a whole-frame SSIM, dominated
+  ## by the unchanged background, would smear below the threshold. Set
+  ## `useLocal = false` to fall back to the legacy global-SSIM path
+  ## (`1 - computeSsim > ssimThreshold`) unchanged.
   ##
   ## Defaults: `sampleFps = 2.0` gives enough temporal resolution to place a
-  ## boundary within ~0.5s while keeping the SSIM work small; `scaleW = 320`
-  ## downscales heavily so whole-frame SSIM is fast yet still discriminates a
-  ## full-screen state change; `ssimThreshold = 0.12` (i.e. a state change
-  ## must drop SSIM by >12%) sits comfortably above the sub-1% jitter between
-  ## visually identical frames while remaining well below the large drop a
-  ## real screen transition produces. These are the values validated by the
-  ## 2-state e2e fixture.
+  ## boundary within ~0.5s while keeping the work small; `scaleW = 320`
+  ## downscales heavily so per-cell SSIM is fast yet still discriminates a
+  ## state change; `ssimThreshold = 0.12` is the legacy global cutoff;
+  ## `gridX = gridY = 4` gives 16 cells (each cell is a meaningful UI region at
+  ## `scaleW = 320`) and `localThreshold = 0.35` (the most-changed cell must
+  ## drop by >35%) sits well above per-cell compression jitter between visually
+  ## identical frames yet far below the near-total local drop a real change
+  ## produces. Both paths keep the 2-state e2e fixture at exactly 2 states.
   if not fileExists(path):
     raise newException(VideoAnalysisError, "Video not found: " & path)
 
@@ -709,16 +757,23 @@ proc segmentByChange*(path: string, sampleFps = 2.0, scaleW = 320,
       # A single sampled frame is one segment spanning one sample interval.
       return @[(0.0, 1.0 / sampleFps, 1.0)]
 
-    # Decode consecutive pairs and compute SSIM between them.
-    var ssims: seq[float] = @[]
+    # Decode consecutive pairs and score them. In the default local mode the
+    # series is each pair's tiled `minLocal` (most-changed cell); otherwise it
+    # is the legacy whole-frame SSIM. Either way `segmentBoundaries` triggers a
+    # new segment when `1 - series[i] > threshold`.
+    var series: seq[float] = @[]
     var prev = decodeGray(frameFiles[0])
     for i in 1 ..< frameFiles.len:
       let cur = decodeGray(frameFiles[i])
-      ssims.add(computeSsim(prev, cur))
+      if useLocal:
+        series.add(tiledSsim(prev, cur, gridX, gridY).minLocal)
+      else:
+        series.add(computeSsim(prev, cur))
       prev = cur
 
     let numFrames = frameFiles.len
-    let boundaries = segmentBoundaries(ssims, ssimThreshold)
+    let threshold = if useLocal: localThreshold else: ssimThreshold
+    let boundaries = segmentBoundaries(series, threshold)
 
     result = @[]
     for si in 0 ..< boundaries.len:
@@ -726,7 +781,7 @@ proc segmentByChange*(path: string, sampleFps = 2.0, scaleW = 320,
       let nb = if si + 1 < boundaries.len: boundaries[si + 1] else: numFrames
       let tStart = float(b) / sampleFps
       let tEnd = float(nb) / sampleFps
-      let score = if b == 0: 1.0 else: 1.0 - ssims[b - 1]
+      let score = if b == 0: 1.0 else: 1.0 - series[b - 1]
       result.add((tStart, tEnd, score))
   finally:
     try:
@@ -760,7 +815,8 @@ proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
                    ssimThreshold = 0.12,
                    ocrPsms: seq[int] = @[6, 11],
                    ocrOpts = initOcrOptions(upscale = 2.0,
-                                            invert = oiAuto)): VideoAnalysis =
+                                            invert = oiAuto),
+                   phashDupThreshold = 6): VideoAnalysis =
   ## Full VU2 pipeline: probe `path`, segment it into distinct visual states
   ## (`segmentByChange`), then for each state extract ONE full-resolution
   ## keyframe at the state's temporal midpoint, OCR it, and assemble the
@@ -786,7 +842,12 @@ proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
   # `imagePath`s point here so callers can use the extracted PNGs.
   let kfDir = createTempDir("gui_assert_kf_", "")
 
-  result.frames = @[]
+  # Extract one keyframe per segment and hash it (VU8 pHash), building the
+  # timeline skeleton WITHOUT OCR yet.
+  var prelim: VideoAnalysis
+  prelim.info = result.info
+  prelim.frames = @[]
+  var hashes: seq[uint64] = @[]
   for i, seg in segments:
     let mid = (seg.tStart + seg.tEnd) / 2.0
     let outPng = kfDir / ("state_" & align($i, 5, '0') & ".png")
@@ -798,10 +859,26 @@ proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
     kf.tEnd = seg.tEnd
     kf.changeScore = seg.changeScore
     kf.imagePath = outPng
-    kf.words = runOcrMultiPsm(outPng, ocrPsms, ocrOpts)
-    kf.text = wordsToReadingOrderText(kf.words)
-    kf.urls = extractUrls(kf.text)
-    result.frames.add(kf)
+    prelim.frames.add(kf)
+    hashes.add(dctHash(decodeGray(outPng)))
+
+  # VU8: collapse consecutive near-duplicate states (pHash Hamming distance
+  # <= phashDupThreshold) BEFORE OCR so redundant frames don't bloat the OCR
+  # pass or the resulting index. `phashDupThreshold < 0` disables the pass.
+  let deduped =
+    if phashDupThreshold >= 0 and prelim.frames.len > 1:
+      dedupeConsecutive(prelim, hashes, phashDupThreshold)
+    else:
+      prelim
+
+  # OCR the surviving keyframes.
+  result.frames = @[]
+  for kf in deduped.frames:
+    var f = kf
+    f.words = runOcrMultiPsm(f.imagePath, ocrPsms, ocrOpts)
+    f.text = wordsToReadingOrderText(f.words)
+    f.urls = extractUrls(f.text)
+    result.frames.add(f)
 
 # ---------------------------------------------------------------------------
 # Effectful frame emission for the CLI (VU5)
