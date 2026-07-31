@@ -24,8 +24,8 @@
 
 ** VU1: Video segmentation by visual change
    :PROPERTIES:
-   :status: implemented
-   :status_note: video_analysis.nim + tvideo_analysis.nim landed; 4/4 VU1 tests green against real ffmpeg (segmentByChange defaults sampleFps=2.0, scaleW=320, ssimThreshold=0.12).
+   :status: completed
+   :status_note: Independently verified: video_analysis.nim + tvideo_analysis.nim landed; 4/4 VU1 tests green against real ffmpeg (real 2-state mp4 fixture generated at test time, boundary at ~1.5s). segmentByChange defaults sampleFps=2.0, scaleW=320, ssimThreshold=0.12. Pure procs + effectful probe/segment reviewed as genuine (no stubs/skips).
    :depends_on:
    :END:
 

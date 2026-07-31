@@ -11,6 +11,7 @@ tests/tappium
 tests/twindow_layout
 tests/tinput
 tests/tpacing
+tests/tvideo_analysis
 tests/ttalking_head
 tests/tspeech_synthesis
 src/gui_assert/media
