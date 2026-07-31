@@ -304,21 +304,44 @@
 
 ** VU7: Apply to the substrate videos (campaign tie-in)
    :PROPERTIES:
-   :status: planned
+   :status: completed
    :depends_on: VU3
+   :status_note: Completed & verified. Implemented in codetracer-marketing (runner/vm-record):
+     verify_recording.nim (reusable verifyRecording(mp4, beats): VerifyResult
+     over a Beat type — bkMinStates / bkContainsText / bkSeenUrlOrText — built on
+     the VU3 query API distinctStateCount/containsText/seenUrl, plus a
+     PASS/FAIL CLI reporting the timestamp/state + matched OCR text per beat);
+     wired as a gate via verify-gate.sh into record-linux.sh and
+     record-{macos,windows}.sh (ON by default, SKIP_VERIFY=1 bypass; resolves
+     FFMPEG/FFPROBE/TESSERACT_BIN like the rest of the harness). Tests
+     tverify_recording.nim: e2e_verify_linux_session (real ffmpeg+tesseract; uses
+     the real gitignored linux-session.mp4 when present else a self-contained
+     synthetic 3-state drawtext stand-in) and verify_gate_fails_on_empty (black
+     video → FAIL). DEMONSTRATED on the REAL 49.72s linux-session.mp4: all 4
+     linux beats PASS — 9 distinct states; "flame" @1.50s (state 1); "CodeTracer"
+     @17.00s (state 4, docs Introduction); "Browser Replay" @30.50s (state 7,
+     OCR "CodeTracer Browser Replay"). OCR GAP FOUND (→ VU9): analyzeVideo's
+     runOcr uses tesseract --psm 6 (single uniform block); on the busy desktop
+     frame the wall of terminal build-log text swamps the smaller Browser-Replay
+     window heading, so "Browser Replay"/"Worker error" are dropped. The verifier
+     compensates with a sparse psm-11 pass over several frames per state
+     (single-midpoint keyframe sampling was also fragile — t=38.25s landed on a
+     blurred transition frame while t=36-38s read the heading cleanly). Motivates
+     VU9's per-region PSM selection so the base analyzeVideo pipeline surfaces
+     these headings without the verifier-side workaround.
    :END:
 
 *** Deliverables
-    - [ ] In codetracer-marketing =runner/vm-record=, a post-record verifier that
+    - [X] In codetracer-marketing =runner/vm-record=, a post-record verifier that
       runs =analyzeVideo= on the produced mp4 and asserts the required beats:
       ≥2 distinct states, a window with the terminal's build-log text, a
       CodeTracer URL/heading seen, the Browser Replay client title seen.
-    - [ ] Wire it as a gate in =record-linux.sh= (and the mac/Windows
+    - [X] Wire it as a gate in =record-linux.sh= (and the mac/Windows
       orchestrators) so a recording that does not actually show the beats fails
       loudly instead of silently producing an empty video.
 
 *** Verification
-    - [ ] =e2e_verify_linux_session=: run the verifier on the committed-workflow
+    - [X] =e2e_verify_linux_session=: run the verifier on the committed-workflow
       output for linux-session.mp4; assert all required beats are found.
-    - [ ] =verify_gate_fails_on_empty=: feed the verifier a black/empty video;
+    - [X] =verify_gate_fails_on_empty=: feed the verifier a black/empty video;
       assert it fails (no false green).
