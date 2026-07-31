@@ -12,6 +12,7 @@ tests/twindow_layout
 tests/tinput
 tests/tpacing
 tests/tvideo_analysis
+tests/tvision_windows
 tests/ttalking_head
 tests/tspeech_synthesis
 src/gui_assert/media

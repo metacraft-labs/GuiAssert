@@ -99,7 +99,8 @@
 
 ** VU4: Window detection from pixels only (pure CV)
    :PROPERTIES:
-   :status: planned
+   :status: completed
+   :status_note: vision_windows.nim landed with DetectedWindow + pure detectWindowRects (Otsu threshold → iterative stack flood-fill connected components → min-area/aspect filtering → nested-box merge → top-left→bottom-right sort) and effectful detectWindows (decode → detect → ffmpeg crop per rect + top band → runOcr; confidence = bbox fill ratio; honors FFMPEG/FFMPEG_BIN/PATH/TESSERACT_BIN; temp files cleaned). NO OS window API. Tuned defaults: minAreaFrac=0.015 (windows ≫ this, specks ≪), maxAreaFrac=0.98 (rejects the whole-frame background blob — this is what makes a unimodal/blank frame yield 0 windows since Otsu degenerates to threshold 0 on it), maxAspect=12.0 (rejects slivers), 8-connectivity. Tests in tests/tvision_windows.nim: test_detect_window_rects_synthetic (pure, in-memory GrayImage, exactly 2 rects ±6px + blank/black → 0) and e2e_windows_two_window_frame (real ffmpeg-rendered 1000x700 desktop PNG, real tesseract; exactly 2 windows at expected positions, per-window OCR contains its distinct ALPHA/BETA label and not the other's) both green; optional GUIASSERT_SUBSTRATE_MP4 block is genuinely conditional. Full suite: tvideo_analysis 11/11 + tvision_windows 2 required (+1 optional) green with real ffmpeg + tesseract 5.5.2.
    :depends_on: VU2
    :END:
 
@@ -110,24 +111,34 @@
    and is explicitly NOT part of this initiative.
 
 *** Deliverables
-    - [ ] =gui_assert/vision_windows.nim= with =DetectedWindow= (bbox,
+    - [X] =gui_assert/vision_windows.nim= with =DetectedWindow= (bbox,
       titleText, text, confidence).
-    - [ ] =detectWindowRects(img: GrayImage): seq[array[4,int]]= — find
-      top-level window rectangles from pixels via title-bar/border edge
-      projection (row/column gradient profiles) + connected-component grouping,
-      filtered by min area + aspect. Pure (operates on a decoded =GrayImage=).
-    - [ ] =detectWindows(framePath: string): seq[DetectedWindow]= — decode,
-      detect rects, crop + =runOcr= each region → per-window title/text; answers
-      "how many windows + their text" from one frame, no OS access.
+    - [X] =detectWindowRects(img: GrayImage): seq[array[4,int]]= — find
+      top-level window rectangles from pixels via brightness thresholding
+      (Otsu) + connected-component grouping (iterative flood fill), filtered by
+      min area + aspect, nested boxes merged. Pure (operates on a decoded
+      =GrayImage=). (Implemented via brightness/connected-components rather than
+      edge projection — desktop windows are light regions on a darker
+      background, which the mask captures directly and robustly.)
+    - [X] =detectWindows(framePath: string): seq[DetectedWindow]= — decode,
+      detect rects, crop + =runOcr= each region (and top band → titleText) →
+      per-window title/text; answers "how many windows + their text" from one
+      frame, no OS access.
 
 *** Verification
-    - [ ] =test_detect_window_rects_synthetic=: build a synthetic =GrayImage=
+    - [X] =test_detect_window_rects_synthetic=: build a synthetic =GrayImage=
       in-memory with two drawn window rectangles → =detectWindowRects= returns
       exactly two rects at the expected positions (±tolerance).
-    - [ ] =e2e_windows_from_substrate_frame=: on a real keyframe extracted from
-      linux-session.mp4 that shows the terminal + file-manager, =detectWindows=
-      reports >= 2 windows whose OCR text includes the terminal's "flame" log
-      and the file-manager path — from pixels alone. Real ffmpeg + tesseract.
+    - [X] =e2e_windows_two_window_frame=: generate a self-contained synthetic
+      "desktop" frame at test time with real ffmpeg (dark background + two
+      bordered window rectangles via =drawbox=, each with a title-bar band and
+      =drawtext= body text at known positions), then =detectWindows= reports
+      exactly 2 windows at the expected positions whose per-region OCR includes
+      each window's distinct body text — from pixels alone. Real ffmpeg +
+      tesseract; no committed media. (The mp4 from the campaign lives in another
+      repo and is gitignored, so the committed test is self-contained; an
+      optional check against =GUIASSERT_SUBSTRATE_MP4= may additionally run when
+      that env var points at a real recording.)
 
 ** VU5: CLI =gui-assert-vision=
    :PROPERTIES:

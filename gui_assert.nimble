@@ -21,3 +21,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tinput.nim"
   exec "nim c -r --hints:off tests/tpacing.nim"
   exec "nim c -r --hints:off tests/tvideo_analysis.nim"
+  exec "nim c -r --hints:off tests/tvision_windows.nim"
