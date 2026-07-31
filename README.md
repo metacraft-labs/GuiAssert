@@ -27,7 +27,30 @@ GuiAssert/
 
 ## Running tests
 
-From inside a Nim development shell:
+### Reproducible toolchain (recommended)
+
+The repo ships a `flake.nix` that pins the whole vision toolchain — `nim`,
+`nimble`, `ffmpeg` (with `drawtext`/libx264), and `tesseract` 5.x (English
+traineddata included). The devShell exports `FFMPEG_BIN`/`FFPROBE`/
+`TESSERACT_BIN` (and puts them on `PATH`) so the OCR/ffmpeg modules resolve the
+**pinned** binaries with zero host setup:
+
+```sh
+nix develop -c nimble test
+```
+
+Run just the vision suites the same way:
+
+```sh
+nix develop -c bash -c 'for f in tvideo_analysis tvision_windows tvision_cli; do nim c -r --hints:off tests/$f.nim; done'
+```
+
+The `just analyze VIDEO` recipe is meant to be run inside this shell too, e.g.
+`nix develop -c just analyze session.mp4`.
+
+### Against a host toolchain
+
+From inside any Nim development shell with `ffmpeg`/`tesseract` on `PATH`:
 
 ```sh
 nim c -r --hints:off tests/tparser.nim

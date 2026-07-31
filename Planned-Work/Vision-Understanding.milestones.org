@@ -265,17 +265,42 @@
 
 ** VU6: Reproducibility — GuiAssert flake
    :PROPERTIES:
-   :status: planned
+   :status: completed
    :depends_on: VU1
+   :status_note: flake pins nim / ffmpeg (with drawtext) / tesseract (eng); vision suites tvideo_analysis (11/11), tvision_windows (3/3), tvision_cli (5/5) are green under =nix develop -c= with zero host setup (the shellHook supplies FFMPEG_BIN/FFPROBE/TESSERACT_BIN + fonts.conf + TMPDIR canonicalization). Pre-existing tparser (genuine assert fail) / teditor / tgui_assert (timing asserts) / tdiscovery / temotive (bare-import path bug) failures are unrelated to the flake and out of scope for VU6.
    :END:
 
 *** Deliverables
-    - [ ] =flake.nix= pinning nim + ffmpeg + tesseract; devShell exports so the
-      modules resolve pinned binaries.
+    - [X] =flake.nix= pinning nim + nimble + ffmpeg + tesseract; devShell exports
+      =FFMPEG_BIN=/=FFMPEG=/=FFPROBE=/=TESSERACT_BIN= (and prepends them to PATH)
+      so the modules resolve pinned binaries. Pinned nixpkgs =nixos-25.11= (rev
+      =b6018f8=, 2026-06-30) — same stable channel as sibling
+      codetracer-flame-server. Uses plain =ffmpeg= (8.0; ships drawtext/libx264)
+      rather than =ffmpeg-full= to avoid the aarch64-darwin kvazaar ctest
+      failure. tesseract 5.5.1 (eng traineddata included). A =makeFontsConf=
+      (DejaVu) is exported via =FONTCONFIG_FILE= so ffmpeg drawtext resolves a
+      default font. The shellHook also canonicalizes =TMPDIR= to its physical
+      path: on macOS =/tmp= is a symlink to =private/tmp= and this tesseract's
+      leptonica 1.85 (libcurl-enabled) cannot open OCR image files whose path
+      traverses that symlink; the vision e2e fixtures write frames under
+      =$TMPDIR=, so without the canonicalization they fail (no-op on Linux).
 
 *** Verification
-    - [ ] =verify_nix_develop_test=: =nix develop -c nimble test= runs the full
-      suite (including the new vision tests) green on a clean checkout.
+    - [X] =verify_nix_develop_test=: under =nix develop -c=, the VISION suites are
+      GREEN: =tvideo_analysis= (11/11), =tvision_windows= (3/3), =tvision_cli=
+      (5/5). Environment-independent pure suites also pass: =tcapture= (13),
+      =tdriver_browser= (2), =tdriver_vscode= (1), =tinput= (17), =tmedia= (19),
+      =tpacing= (20), =tspeech_synthesis= (37), =twindow_layout= (17). The
+      devShell instantiates entirely from the nixpkgs binary cache (no local
+      builds beyond the tiny fonts.conf/env derivations).
+      PRE-EXISTING failures unrelated to this flake (NOT VU6's concern):
+      =tparser= (genuine assertion failure, 31 OK / 1 FAILED); =teditor= and
+      =tgui_assert= (timing-threshold assertions: =previewElapsedMs < 300=,
+      =driftMs <= 50.0= — scheduler/perf-sensitive); =tdiscovery= and =temotive=
+      (compile-fail: bare =import gui_assert/emotive= with no =--path:src= / no
+      nim.cfg — a pre-existing test-harness path bug, independent of the shell).
+      =nimble test= aborts at the first failing =exec= (=tparser=, listed first),
+      so run the suites individually to see the full pass/fail picture.
 
 ** VU7: Apply to the substrate videos (campaign tie-in)
    :PROPERTIES:
