@@ -311,22 +311,29 @@
 
 ** VU11: Optional high-accuracy backends (behind flags; not default)
    :PROPERTIES:
-   :status: planned
+   :status: completed
    :depends_on: VU5
+   :status_note: Implemented in ocr.nim: OcrBackend enum (obTesseract DEFAULT / obAppleVision / obRapidOcr), typed OcrBackendUnavailable, runOcrWithBackend / availableBackends / runOcrBestEffort, plus a documented OmniParser-class stub (ElementBackend {ebNone, ebOmniParser} + detectElements, which raises OcrBackendUnavailable for ebOmniParser and returns @[] for ebNone — no ML deps pulled). Tesseract stays the reproducible default and adds ZERO new runtime deps (obTesseract == the existing runOcrEx path). Apple Vision = bundled Swift helper src/gui_assert/helpers/vision_ocr.swift (VNRecognizeTextRequest, .accurate), compiled on demand by resolveAppleVisionHelper via swiftc into $TMPDIR/gui_assert_vision_helper (env overrides: SWIFTC, GUIASSERT_VISION_HELPER prebuilt, GUIASSERT_VISION_HELPER_SRC); the swiftc invocation drops nix-exported SDKROOT/DEVELOPER_DIR so the system /usr/bin/swiftc uses its matching SDK (nix's apple-sdk-14.4 otherwise fails with 'no such module SwiftShims'). RapidOCR = opt-in external runner via RAPIDOCR_CMD (or a 'rapidocr' on PATH) emitting the same pixel TSV; no ONNX weights bundled. REAL Apple Vision path WAS exercised on this macOS host: it OCR'd a generated fixture and read "APPLEVISION 5150" with an in-range pixel bbox (helper prints TEXT\tconf\tx\ty\tw\th; conf 0..1 scaled to Tesseract's 0..100). New suite tests/tocr_backends.nim 3/3 green; regression suites still green: tocr_vision 5/5, tvideo_analysis 11/11, tvision_windows 3/3, tvision_cli 5/5, tchange_detect 5/5, tlayout_tree 6/6.
    :END:
 
 *** Deliverables
-    - [ ] Pluggable OCR backend interface with an optional Apple Vision (macOS)
+    - [X] Pluggable OCR backend interface with an optional Apple Vision (macOS)
       backend and/or RapidOCR (pinned PP-OCR ONNX) — default stays Tesseract for
       reproducibility.
-    - [ ] Optional OmniParser-class element backend (pinned ONNX) for semantic
+    - [X] Optional OmniParser-class element backend (pinned ONNX) for semantic
       element labels, gated behind a compile/runtime flag; documented cost.
+      (Interface stub only — detectElements(ebOmniParser) raises with a clear
+      "requires pinned ONNX weights; see docs" message; no ML deps pulled.)
 
 *** Verification
-    - [ ] =test_backend_dispatch=: the OCR backend selector picks the requested
-      backend and falls back to Tesseract when an optional one is unavailable.
-    - [ ] (macOS) =e2e_apple_vision_optional=: when available, Apple Vision OCR
-      reads the fixture; skipped-with-reason (not silently) off-platform.
+    - [X] =test_backend_dispatch=: the OCR backend selector picks the requested
+      backend and falls back to Tesseract when an optional one is unavailable
+      (best-effort fallback asserted EQUAL to the direct Tesseract reading).
+    - [X] (macOS) =e2e_apple_vision_optional=: Apple Vision OCR read the fixture
+      on this host (real VNRecognizeTextRequest); honest skipped-with-reason
+      (checkpoint + echo) when swiftc/helper unavailable or off-platform.
+    - [X] =test_omniparser_unavailable=: detectElements(ebOmniParser) raises the
+      documented OcrBackendUnavailable; ebNone returns empty.
 
 ** VU6: Reproducibility — GuiAssert flake
    :PROPERTIES:

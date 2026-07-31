@@ -26,3 +26,4 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tlayout_tree.nim"
   exec "nim c -r --hints:off tests/tvision_cli.nim"
   exec "nim c -r --hints:off tests/tocr_vision.nim"
+  exec "nim c -r --hints:off tests/tocr_backends.nim"

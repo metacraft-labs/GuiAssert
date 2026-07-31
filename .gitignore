@@ -17,6 +17,7 @@ tests/tvision_windows
 tests/tlayout_tree
 tests/tvision_cli
 tests/tocr_vision
+tests/tocr_backends
 src/gui_assert_vision
 vision-out/
 tests/ttalking_head
