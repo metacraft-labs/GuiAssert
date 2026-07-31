@@ -27,6 +27,18 @@
 import std/[options, strformat, strutils]
 import ./parser
 
+const
+  DefaultStoryboardApp* = "app"
+    ## Fallback for `StoryboardRequest.app`.  Deliberately generic: a default
+    ## naming a specific product would re-couple this engine to it for every
+    ## caller that did not think to override, which is exactly how the
+    ## hardcoded "codetracer" survived here unnoticed.
+
+  DefaultStoryboardWorkspaceRoot* = "./examples"
+    ## Fallback for `StoryboardRequest.workspaceRoot`.  A relative path with
+    ## no project in it, so the recipes remain runnable out of the box while
+    ## naming nothing product-specific.
+
 type
   StoryboardError* = object of CatchableError
     ## Raised when the backend produces YAML that the M2 parser rejects.
@@ -38,6 +50,19 @@ type
     resolution*: string   ## e.g. "1920x1080"
     fps*: int             ## frames per second; M2 parser does not validate
                           ## the value beyond it being numeric
+    app*: string          ## application the recipes drive.  Empty means
+                          ## `DefaultStoryboardApp`.  This engine is
+                          ## project-agnostic: the recipe library used to
+                          ## hardcode "codetracer", which made a public,
+                          ## reusable component silently specific to one
+                          ## product.  Callers name their own app here.
+    workspaceRoot*: string
+                          ## directory the per-recipe workspace names are
+                          ## resolved against.  Empty means
+                          ## `DefaultStoryboardWorkspaceRoot`.  Same reason:
+                          ## the `./examples/...` paths the recipes open are a
+                          ## property of the *project* being filmed, not of
+                          ## the storyboard engine.
 
   StoryboardBackend* = object
     ## A pluggable translator. The closure receives the request and must
@@ -132,15 +157,27 @@ proc layoutKeyframes(keyframes: var seq[Keyframe], totalDuration: float) =
 # Recipe library
 # ---------------------------------------------------------------------------
 
+proc appName(req: StoryboardRequest): string =
+  ## The application every recipe's `launch_app` keyframe targets.
+  if req.app.len > 0: req.app else: DefaultStoryboardApp
+
+proc workspace(req: StoryboardRequest; name: string): string =
+  ## Resolve a recipe's workspace name against the caller's root, so the
+  ## recipes describe *which scenario* to open without owning where a given
+  ## project keeps it.
+  let root = if req.workspaceRoot.len > 0: req.workspaceRoot
+             else: DefaultStoryboardWorkspaceRoot
+  if root.endsWith("/"): root & name else: root & "/" & name
+
 proc recursiveSteppingRecipe(req: StoryboardRequest): seq[Keyframe] =
   result = @[
     Keyframe(
       time: 0.0,
       action: "launch_app",
       params: @[
-        KfParam(key: "app", value: escapeYamlString("codetracer")),
+        KfParam(key: "app", value: escapeYamlString(req.appName)),
         KfParam(key: "workspace",
-                value: escapeYamlString("./examples/fibonacci"))
+                value: escapeYamlString(req.workspace("fibonacci")))
       ],
       narration: some(
         "Welcome. Let's trace a recursive Fibonacci call.")
@@ -181,9 +218,9 @@ proc breakpointRecipe(req: StoryboardRequest): seq[Keyframe] =
       time: 0.0,
       action: "launch_app",
       params: @[
-        KfParam(key: "app", value: escapeYamlString("codetracer")),
+        KfParam(key: "app", value: escapeYamlString(req.appName)),
         KfParam(key: "workspace",
-                value: escapeYamlString("./examples/server"))
+                value: escapeYamlString(req.workspace("server")))
       ],
       narration: some(
         "Let's set a breakpoint on the request handler.")
@@ -227,9 +264,12 @@ proc hotReloadRecipe(req: StoryboardRequest): seq[Keyframe] =
       time: 0.0,
       action: "launch_app",
       params: @[
-        KfParam(key: "app", value: escapeYamlString("vs-code")),
+        # Was hardcoded to "vs-code" — a second product name, in a recipe the
+        # caller may well be filming in their own editor.  Same rule as every
+        # other recipe: the app under test comes from the request.
+        KfParam(key: "app", value: escapeYamlString(req.appName)),
         KfParam(key: "workspace",
-                value: escapeYamlString("./examples/hot-reload"))
+                value: escapeYamlString(req.workspace("hot-reload")))
       ],
       narration: some(
         "Watch hot reload in action.")
@@ -272,7 +312,7 @@ proc defaultRecipe(req: StoryboardRequest): seq[Keyframe] =
     Keyframe(
       time: 0.0,
       action: "launch_app",
-      params: @[KfParam(key: "app", value: escapeYamlString("codetracer"))],
+      params: @[KfParam(key: "app", value: escapeYamlString(req.appName))],
       narration: some("Launching the demo application.")
     ),
     Keyframe(
@@ -300,9 +340,13 @@ proc pickRecipe(goal: string, req: StoryboardRequest): seq[Keyframe] =
   return defaultRecipe(req)
 
 proc titleForRequest(req: StoryboardRequest): string =
+  ## Title the video after the app being filmed.  This used to read
+  ## "CodeTracer: …" unconditionally, so every video produced by every
+  ## consumer of this engine was titled after one product.
+  let app = req.appName
   if req.goal.len == 0:
-    return "CodeTracer Demo"
-  result = "CodeTracer: " & req.goal
+    return app & " Demo"
+  result = app & ": " & req.goal
 
 # ---------------------------------------------------------------------------
 # Backend constructors

@@ -175,6 +175,41 @@ suite "verify_agent_storyboard_generation":
       check script.metadata.resolution == "1920x1080"
       check script.metadata.fps == 30
 
+  test "the app and workspace root come from the request, not the engine":
+    # GuiAssert is a project-agnostic engine consumed by several repos, so no
+    # recipe may name a particular product.  This asserts BOTH directions: a
+    # caller's values reach every generated keyframe, and the shipped defaults
+    # name nothing product-specific.  A regression to a hardcoded app would
+    # fail the `notin` checks even while every other storyboard test passed.
+    let backend = newRuleBasedBackend()
+    for goal in ["Demonstrate recursive stepping",
+                 "Set a breakpoint and inspect variables",
+                 "Show the hot-reload workflow end to end",
+                 "An unknown demo theme nobody recognises"]:
+      let req = StoryboardRequest(
+        goal: goal,
+        durationSec: 15.0,
+        resolution: "1920x1080",
+        fps: 30,
+        app: "my-editor",
+        workspaceRoot: "/srv/demos"
+      )
+      let yaml = generateScriptYaml(backend, req)
+      checkpoint "goal: " & goal
+      validateScript(parseScriptYaml(yaml))
+      check "my-editor" in yaml
+      check "codetracer" notin yaml
+      check "./examples/" notin yaml
+
+    # Defaults: still runnable, still naming no product.
+    let dflt = StoryboardRequest(
+      goal: "Demonstrate recursive stepping",
+      durationSec: 15.0, resolution: "1920x1080", fps: 30)
+    let dfltYaml = generateScriptYaml(backend, dflt)
+    validateScript(parseScriptYaml(dfltYaml))
+    check DefaultStoryboardApp in dfltYaml
+    check "codetracer" notin dfltYaml
+
   test "unrecognised goal falls back to a sensible default":
     let backend = newRuleBasedBackend()
     let req = StoryboardRequest(
