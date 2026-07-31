@@ -5,12 +5,32 @@ Related: [[Home-Demo-Screencast.milestones.org]] (codetracer-specs/Marketing),
 [[../src/gui_assert/ocr.nim]], [[../src/gui_assert/image_math.nim]],
 [[../src/gui_assert/media.nim]], [[../src/gui_assert/window_layout.nim]].
 
+## Two distinct capability sets (this initiative is the second)
+
+GuiAssert's GUI-understanding work splits into two independent capability sets;
+**this initiative is strictly the second one.**
+
+1. **OS-driven automation (appium-like).** Enumerate top-level windows,
+   read their titles/bounds, focus/activate/resize, click and type — using the
+   host's OS/accessibility APIs (macOS Accessibility/`CGWindowList`, Windows
+   UIAutomation/`EnumWindows`, Linux EWMH/`wmctrl`, Appium/WebDriver). This set
+   already *partially exists* (`window_layout.nim`, `appium.nim`, `input.nim`)
+   and is what drives the substrate recordings. It is **out of scope here.**
+
+2. **Pure computer-vision analysis (this initiative).** Answer the same kinds of
+   questions **from pixels alone** — a screenshot or a recorded video — with **no
+   OS API available**. This is the only option when analysing a recorded mp4, a
+   screen streamed from a remote/VM/kiosk session, a single-surface app that
+   draws its own widgets (games, canvas/WebGL, custom GPU UIs), or footage from a
+   machine we cannot introspect. Everything below uses only decoded frame pixels
+   + OCR; it never calls an OS window API.
+
 ## Problem
 
-GuiAssert can *drive* a GUI session and *capture* it, but it cannot yet turn a
-screenshot or a recorded video into a **structured, queryable, assertable**
-description. Today an agent (or a test) confronted with `linux-session.mp4` has
-no programmatic way to answer:
+For the pure-CV case, GuiAssert cannot yet turn a screenshot or a recorded
+video into a **structured, queryable, assertable** description. Today an agent
+(or a test) confronted with `linux-session.mp4` — a *recording*, where no live
+OS query is possible — has no programmatic way to answer:
 
 - "How many top-level windows are visible, and what is each one's text?"
 - "At what timestamps did the on-screen content change?"
@@ -68,33 +88,37 @@ Effectful, integration-tested against real ffmpeg+tesseract: `probeVideo`,
 `segmentByChange` (sample at low fps + downscaled, SSIM consecutive frames,
 boundary when `1-SSIM > threshold`), `analyzeVideo`.
 
-### 2. `gui_assert/windows.nim` — window enumeration (two backends, one API)
+### 2. `gui_assert/vision_windows.nim` — window detection from pixels only
+
+Answers "how many top-level windows are visible, and what is each one's text?"
+from a single decoded frame, **with no OS API** — the only option for a
+recording, a remote/VM screen, or a self-drawn surface.
 
 ```nim
-type WindowInfo* = object
-  title*: string
-  bbox*: array[4, int]           # [x,y,w,h]
-  text*: string                  # OCR of the window region (vision backend)
-  source*: WindowSource          # wsOsAccessibility | wsVision
-proc enumerateWindows*(source: WindowEnumSource): seq[WindowInfo]
+type DetectedWindow* = object
+  bbox*: array[4, int]           # [x,y,w,h] in frame pixels
+  titleText*: string             # OCR of the detected title-bar band (if any)
+  text*: string                  # OCR of the whole window region
+  confidence*: float             # detector confidence for the rectangle
+proc detectWindowRects*(img: GrayImage): seq[array[4, int]]
+proc detectWindows*(framePath: string): seq[DetectedWindow]   # rects + per-region OCR
 ```
 
-- **OS backend (ground truth, live sessions):** parse `CGWindowListCopyWindowInfo`
-  (macOS, via a tiny bundled helper or `osascript`), `EnumWindows` (Windows,
-  via PowerShell), `wmctrl -l -G` (Linux). Parsers are pure + unit-tested; the
-  enumeration is integration-tested where a session exists.
-- **Vision backend (screenshot/video only — the recorded-substrate case):**
-  detect top-level window rectangles from a `GrayImage` via title-bar / border
-  edge projection + connected-component grouping, then `runOcr` each region.
-  This is what lets `enumerateWindows(wsVision)` answer "how many windows + text"
-  from a single mp4 frame with no OS access.
+Pure CV: `detectWindowRects` finds top-level window rectangles from a
+`GrayImage` (`decodeGray`) via title-bar / border edge projection (row/column
+gradient profiles) + connected-component grouping of the resulting box edges,
+filtered by minimum area and aspect. `detectWindows` then crops each rectangle
+and `runOcr`s it, returning per-window text — so window count + per-window text
+come purely from pixels. No `CGWindowList`/`EnumWindows`/`wmctrl` here; that
+ground-truth path belongs to the separate OS-driven capability set.
 
 ### 3. CLI `gui-assert-vision`
 
 `analyze <video>` → writes `timeline.json`, `digest.md`, `keyframes/*.png`;
-`describe <image>` → windows + text of one screenshot;
-`windows <image|--live>` → window count + per-window title/text.
-The reusable tool: point it at any recording and get a structured description.
+`describe <image>` → detected windows + text of one screenshot (pure CV);
+`windows <image>` → window count + per-window title/text (pure CV).
+The reusable tool: point it at any recording/screenshot and get a structured
+description, without touching the host's OS window APIs.
 
 ### 4. Query / assertion API (pure)
 

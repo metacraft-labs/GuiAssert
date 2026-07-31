@@ -5,7 +5,7 @@
   :next_steps: VU1 first — video segmentation by visual change (SSIM). Then VU2 (OCR timeline), VU3 (query/assertion API), VU4 (window enumeration), VU5 (CLI), VU6 (flake), VU7 (apply to substrate videos).
   :last_updated: 2026-07-31
   :current_milestone: VU1
-  :executive_summary: Turn screenshots and recorded videos into structured, queryable, assertable descriptions, so tests (and agents) can ask "how many top-level windows are visible and what is their text?", "when did the screen change?", "did window X / URL Y appear?". Composes existing GuiAssert primitives (ocr.runOcr, image_math.computeSsim/decodeGray, media.resolveFfmpegBinary) into a video-analysis module, a window-enumeration module (OS + vision backends), a query/assertion API, and a CLI. Extension of the "The Flame" home-demo campaign; validated end-to-end against the real substrate recording linux-session.mp4.
+  :executive_summary: PURE computer-vision analysis (no OS APIs) that turns screenshots and recorded videos into structured, queryable, assertable descriptions, so tests (and agents) can ask — from pixels alone — "how many top-level windows are visible and what is their text?", "when did the screen change?", "did window X / URL Y appear?". This is for programs/situations where OS window APIs are unavailable (recordings, remote/VM screens, self-drawn surfaces). The separate OS-driven/appium window-enumeration capability (window_layout.nim, appium.nim) is NOT in scope here. Composes existing GuiAssert primitives (ocr.runOcr, image_math.computeSsim/decodeGray, media.resolveFfmpegBinary) into a video-analysis module, a pixel-only window detector, a query/assertion API, and a CLI. Extension of the "The Flame" home-demo campaign; validated end-to-end against the real substrate recording linux-session.mp4.
   :END:
 
 * Introduction
@@ -24,29 +24,30 @@
 
 ** VU1: Video segmentation by visual change
    :PROPERTIES:
-   :status: planned
+   :status: implemented
+   :status_note: video_analysis.nim + tvideo_analysis.nim landed; 4/4 VU1 tests green against real ffmpeg (segmentByChange defaults sampleFps=2.0, scaleW=320, ssimThreshold=0.12).
    :depends_on:
    :END:
 
 *** Deliverables
-    - [ ] =gui_assert/video_analysis.nim= with the =VideoInfo= /
+    - [X] =gui_assert/video_analysis.nim= with the =VideoInfo= /
       =Keyframe= / =VideoAnalysis= types and the segmentation core.
-    - [ ] Pure procs: =buildProbeArgv=, =parseProbeJson= (ffprobe JSON →
+    - [X] Pure procs: =buildProbeArgv=, =parseProbeJson= (ffprobe JSON →
       =VideoInfo=), =buildSampleFramesArgv= (extract N fps at a downscaled
       size), =buildExtractFrameArgv= (one PNG at time T), =segmentBoundaries=
       (list of consecutive-frame SSIMs + threshold → segment boundary indices).
-    - [ ] Effectful =probeVideo= and =segmentByChange= composing
+    - [X] Effectful =probeVideo= and =segmentByChange= composing
       =resolveFfmpegBinary= + =decodeGray= + =computeSsim=.
 
 *** Verification
-    - [ ] =test_parse_probe_json=: parses a representative ffprobe JSON sample
+    - [X] =test_parse_probe_json=: parses a representative ffprobe JSON sample
       into the right duration/width/height.
-    - [ ] =test_segment_boundaries=: given a hand-authored SSIM series, returns
+    - [X] =test_segment_boundaries=: given a hand-authored SSIM series, returns
       exactly the expected boundaries at the expected threshold (and merges
       runs below threshold into one segment).
-    - [ ] =test_build_argv_shapes=: probe/sample/extract argv contain the pinned
+    - [X] =test_build_argv_shapes=: probe/sample/extract argv contain the pinned
       binary, the input path, the fps/scale, and the output pattern.
-    - [ ] =e2e_segment_two_state_video=: generate a 2-state fixture video with
+    - [X] =e2e_segment_two_state_video=: generate a 2-state fixture video with
       ffmpeg (colour A + drawtext for ~1.5s, then colour B for ~1.5s), run
       =segmentByChange=, assert exactly 2 distinct states with a boundary near
       1.5s. Real ffmpeg; no committed media.
@@ -94,32 +95,37 @@
     - [ ] =test_text_in_region=: matches only when the word's bbox intersects
       the region.
 
-** VU4: Window enumeration (OS + vision backends)
+** VU4: Window detection from pixels only (pure CV)
    :PROPERTIES:
    :status: planned
    :depends_on: VU2
    :END:
 
+   Scope: PURE computer vision — answer "how many top-level windows + their
+   text" from a single decoded frame with NO OS API. The OS-driven / appium
+   window enumeration (CGWindowList / EnumWindows / wmctrl) is a SEPARATE,
+   already-partially-existing capability set (window_layout.nim, appium.nim)
+   and is explicitly NOT part of this initiative.
+
 *** Deliverables
-    - [ ] =gui_assert/windows.nim= with =WindowInfo=, =enumerateWindows(source)=.
-    - [ ] OS-backend parsers (pure): =parseWmctrlList= (Linux =wmctrl -l -G=),
-      =parseCgWindowList= (macOS helper JSON), =parseEnumWindows= (Windows
-      PowerShell output) → =seq[WindowInfo]= with titles + bboxes.
-    - [ ] Vision backend: =detectWindowRects(GrayImage): seq[array[4,int]]=
-      (title-bar/border edge projection + connected components), then =runOcr=
-      per region → per-window text; answers "how many windows + their text"
-      from a single frame.
+    - [ ] =gui_assert/vision_windows.nim= with =DetectedWindow= (bbox,
+      titleText, text, confidence).
+    - [ ] =detectWindowRects(img: GrayImage): seq[array[4,int]]= — find
+      top-level window rectangles from pixels via title-bar/border edge
+      projection (row/column gradient profiles) + connected-component grouping,
+      filtered by min area + aspect. Pure (operates on a decoded =GrayImage=).
+    - [ ] =detectWindows(framePath: string): seq[DetectedWindow]= — decode,
+      detect rects, crop + =runOcr= each region → per-window title/text; answers
+      "how many windows + their text" from one frame, no OS access.
 
 *** Verification
-    - [ ] =test_parse_wmctrl= / =test_parse_cgwindowlist= /
-      =test_parse_enumwindows=: representative samples → correct counts,
-      titles, bboxes.
-    - [ ] =test_detect_window_rects_synthetic=: a synthetic frame with two
-      drawn window rectangles → exactly two rects at the expected positions.
-    - [ ] =e2e_windows_from_substrate_frame=: on a real keyframe from
-      linux-session.mp4 that shows the terminal + file-manager, the vision
-      backend reports ≥2 windows and their OCR text includes the terminal's
-      "flame" log and the file-manager path.
+    - [ ] =test_detect_window_rects_synthetic=: build a synthetic =GrayImage=
+      in-memory with two drawn window rectangles → =detectWindowRects= returns
+      exactly two rects at the expected positions (±tolerance).
+    - [ ] =e2e_windows_from_substrate_frame=: on a real keyframe extracted from
+      linux-session.mp4 that shows the terminal + file-manager, =detectWindows=
+      reports >= 2 windows whose OCR text includes the terminal's "flame" log
+      and the file-manager path — from pixels alone. Real ffmpeg + tesseract.
 
 ** VU5: CLI =gui-assert-vision=
    :PROPERTIES:
