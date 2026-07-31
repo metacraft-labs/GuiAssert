@@ -377,7 +377,7 @@ proc validateScript*(script: Script) =
         ") is earlier than predecessor " & $(i - 1) &
         " (time=" & $prev.time & ")")
     if prev.narration.isSome:
-      let narrationEnd = prev.time + estimateNarrationSeconds(prev.narration.get, 300.0)
+      let narrationEnd = prev.time + estimateNarrationSeconds(prev.narration.get, WordsPerMinute)
       if narrationEnd > cur.time + 1e-9:
         raise newException(ScriptValidationError,
           "narration on keyframe " & $(i - 1) &

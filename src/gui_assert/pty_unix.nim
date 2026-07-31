@@ -15,6 +15,9 @@ type
   PtyPair* = object
     master*: cint     # opened master fd (O_RDWR | O_NOCTTY)
     slaveName*: string  # path returned by ptsname()
+    slaveKeep*: cint  # parent-held slave fd, kept open so raw-mode termios
+                      # persists and the master never sees a slaveless EIO
+                      # (-1 when not held)
     child*: Pid       # forked child pid (0 if not spawned yet)
 
 # Declare the BSD/POSIX pty helpers that std/posix does not surface uniformly
@@ -63,7 +66,29 @@ proc openPtyPair*(): PtyPair =
   if name.isNil:
     discard close(m)
     raise newException(OSError, "ptsname returned NULL")
-  result = PtyPair(master: m, slaveName: $name, child: 0)
+  # Put the slave into raw mode *before* the child is spawned and before any
+  # caller can write to the master.  If we relied solely on the child running
+  # setRaw() after fork(), the parent could write the first keyframe's bytes
+  # while the pts was still in the default cooked+echo mode, causing the line
+  # discipline to echo that first line back (as "line\r\n") in addition to the
+  # child's own output.  That doubled prefix both corrupts the output stream
+  # and lets byte-count waits satisfy early on the echo before later keyframes
+  # arrive.  termios state is a property of the pts device and persists while
+  # the slave stays open, so setting it here is inherited by the child when it
+  # opens the slave.  We keep this parent-held slave fd open for the lifetime of
+  # the pair: on macOS a master write with no slave open fails with EIO, and a
+  # persistently open slave also guarantees the raw termios stays in effect.
+  let sfd = open(cstring($name), posix.O_RDWR or posix.O_NOCTTY)
+  if sfd < 0:
+    discard close(m)
+    raise newException(OSError, "opening pty slave failed: " & $strerror(errno))
+  try:
+    setRaw(sfd)
+  except OSError:
+    discard close(sfd)
+    discard close(m)
+    raise
+  result = PtyPair(master: m, slaveName: $name, slaveKeep: sfd, child: 0)
 
 proc spawnInPty*(pty: var PtyPair, argv: openArray[string]) =
   ## Fork a child process whose stdin/stdout/stderr are wired to the slave
@@ -86,8 +111,11 @@ proc spawnInPty*(pty: var PtyPair, argv: openArray[string]) =
       quit(126)
     # On Linux you'd ioctl TIOCSCTTY; on macOS opening the slave after setsid
     # already attaches it as controlling tty. We close the master in the
-    # child so it doesn't keep the parent end alive accidentally.
+    # child so it doesn't keep the parent end alive accidentally, and close the
+    # inherited copy of the parent-held slave fd (the child uses its own slaveFd).
     discard close(pty.master)
+    if pty.slaveKeep >= 0:
+      discard close(pty.slaveKeep)
     discard dup2(slaveFd, 0)
     discard dup2(slaveFd, 1)
     discard dup2(slaveFd, 2)
@@ -140,6 +168,9 @@ proc readPtyAvailable*(pty: PtyPair, maxBytes: int = 4096): string =
 proc closePty*(pty: var PtyPair) =
   ## Close the master fd and reap the child. Best-effort: callers should not
   ## raise from finalisation.
+  if pty.slaveKeep >= 0:
+    discard close(pty.slaveKeep)
+    pty.slaveKeep = -1
   if pty.master >= 0:
     discard close(pty.master)
     pty.master = -1
