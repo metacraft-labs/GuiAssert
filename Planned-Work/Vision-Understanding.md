@@ -112,13 +112,41 @@ and `runOcr`s it, returning per-window text — so window count + per-window tex
 come purely from pixels. No `CGWindowList`/`EnumWindows`/`wmctrl` here; that
 ground-truth path belongs to the separate OS-driven capability set.
 
-### 3. CLI `gui-assert-vision`
+### 3. Token-efficient agent index (THE primary deliverable)
 
-`analyze <video>` → writes `timeline.json`, `digest.md`, `keyframes/*.png`;
-`describe <image>` → detected windows + text of one screenshot (pure CV);
-`windows <image>` → window count + per-window title/text (pure CV).
-The reusable tool: point it at any recording/screenshot and get a structured
-description, without touching the host's OS window APIs.
+SOTA long-video agent systems (DrVideo, VideoAgent) never feed many frames to
+the model: they turn the video into a **textual document + retrieval loop** and
+pull individual frames **only on demand**. GuiAssert adopts this directly. The
+`analyze` output is a single hierarchical JSON index with three levels:
+
+1. **Summary** (~hundreds of tokens, zero images): duration, dimensions, frame
+   count, N states, the distinct window titles seen, the URLs seen. Answers
+   "what is this recording?" with no frames.
+2. **Segment timeline**: one row per stable UI state —
+   `{id, start, end, thumbnail, activeWindow, regionTree, text (reading order),
+   urls, textDiffVsPrev}`. The **text-diff vs the previous state** ("+ dialog
+   'Delete file?'", "− toolbar", "addr A→B") is the highest-signal / lowest-token
+   description of *what changed*.
+3. **Searchable text/element index**: every OCR'd string + detected region as
+   `{text, confidence, bbox, segmentId, timestamp}` so an agent can **grep the
+   video** — locate the exact timestamps where a string/URL/window appears, then
+   extract only those 1–3 frames to actually look at.
+
+### 4. CLI `gui-assert-vision` — two modes: explore & grep
+
+- `analyze <video>` → writes `index.json` (the 3-level index above) + `digest.md`
+  (human/agent-readable timeline with per-state text-diffs) + `keyframes/*.png`.
+- `find <text|url|regex> <video-or-index>` → the "grep the video" command:
+  returns matching `{timestamp, segmentId, bbox, confidence}` rows.
+- `extract-frame --at <ts> | --segment <id>` → emits ONLY the requested frame(s)
+  for the agent to view; `contact-sheet <video>` → one tiled keyframe grid for a
+  single-image "gestalt" of the whole recording.
+- `describe <image>` / `windows <image>` → detected windows + text of one
+  screenshot (pure CV), no OS window APIs.
+
+The workflow: **read the index/digest to explore casually; grep → extract 1–3
+frames to write or verify a precise assertion** — minimizing both tokens and
+images.
 
 ### 4. Query / assertion API (pure)
 
@@ -139,3 +167,34 @@ pure and tested against inline fixtures. Pipeline procs are tested against
 **real** ffmpeg + tesseract using fixtures *generated at test time* (ffmpeg
 `drawtext` frames + a 2-state fixture video), so OCR/SSIM run against genuine
 binaries with no committed media blobs and no stubbed subprocesses.
+
+## State of the art & our choices (2026 survey)
+
+A SOTA survey (OmniParser v2; DrVideo/VideoAgent long-video agents; PySceneDetect
+detectors; Tesseract vs PaddleOCR/RapidOCR/Apple Vision; Set-of-Mark) informed
+these decisions. Full sources in the initiative notes.
+
+- **Agent token-efficiency (highest leverage).** The winning pattern is
+  *video→document + retrieval*: emit a compact textual index and pull frames
+  only on demand (DrVideo). We adopt the 3-level index + `find`/`extract-frame`/
+  `contact-sheet` above. This — not ML — is our top priority (VU5).
+- **Change detection.** Global SSIM is dominated by large unchanged regions and
+  misses small-but-important UI changes (a new dialog, an address-bar edit). Go
+  **tiled/local SSIM** (trigger on the max local drop), add **pHash (DCT) dedup**
+  of keyframes before OCR, an **edge-change-ratio** secondary signal (fires on
+  text scroll / window open-close, quiet on colour-only change), and
+  **freezedetect** to skip idle stretches + snap keyframes to the settled state
+  (VU8). ThresholdDetector/fade metrics are useless for screens.
+- **OCR.** Biggest levers for screen text: **2–4× Lanczos upscaling**,
+  **per-region PSM** (11/12 full-frame, 7 single-line, 6 block — pairs with our
+  window detection), **dark-mode detection + inversion** (Tesseract expects
+  dark-on-light; un-inverted dark UIs silently fail), light contrast only. Keep
+  **Tesseract** as the reproducible default; expose **Apple Vision** (macOS) and
+  **RapidOCR (pinned PP-OCR ONNX)** as optional high-accuracy backends behind
+  flags (VU9 / VU11). Emit word-level bbox + confidence into the index.
+- **Layout/window detection.** Beyond Otsu+CC (VU4), add pure-CV **morphological
+  close/open → Hough/LSD line detection** (title bars/toolbars/borders) **→ MSER**
+  text regions **→ projection profiles → contour-hierarchy region tree** (VU10).
+  This recovers most of OmniParser's *structural* value without ML; semantic
+  element labels ("Save button") remain ML-only and are an optional backend
+  (VU11) — OCR text near a region is a cheap proxy.

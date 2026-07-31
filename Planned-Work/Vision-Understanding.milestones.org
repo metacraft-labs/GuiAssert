@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: VU1 first — video segmentation by visual change (SSIM). Then VU2 (OCR timeline), VU3 (query/assertion API), VU4 (window enumeration), VU5 (CLI), VU6 (flake), VU7 (apply to substrate videos).
+  :next_steps: VU1-VU4 completed. NEXT: VU5 (token-efficient agent index + grep/extract CLI — highest leverage per the SOTA survey), then VU6 (flake), VU7 (substrate tie-in). Then hardening from the SOTA survey: VU8 (tiled SSIM + pHash dedup + ECR), VU9 (OCR upscale + dark-mode inversion + per-region PSM), VU10 (classical layout tree: morphology/Hough/MSER/projections), VU11 (optional Apple Vision / RapidOCR / OmniParser backends behind flags). Finish with a SKILL.md documenting the tooling for agents.
   :last_updated: 2026-07-31
   :current_milestone: VU1
   :executive_summary: PURE computer-vision analysis (no OS APIs) that turns screenshots and recorded videos into structured, queryable, assertable descriptions, so tests (and agents) can ask — from pixels alone — "how many top-level windows are visible and what is their text?", "when did the screen change?", "did window X / URL Y appear?". This is for programs/situations where OS window APIs are unavailable (recordings, remote/VM screens, self-drawn surfaces). The separate OS-driven/appium window-enumeration capability (window_layout.nim, appium.nim) is NOT in scope here. Composes existing GuiAssert primitives (ocr.runOcr, image_math.computeSsim/decodeGray, media.resolveFfmpegBinary) into a video-analysis module, a pixel-only window detector, a query/assertion API, and a CLI. Extension of the "The Flame" home-demo campaign; validated end-to-end against the real substrate recording linux-session.mp4.
@@ -140,21 +140,127 @@
       optional check against =GUIASSERT_SUBSTRATE_MP4= may additionally run when
       that env var points at a real recording.)
 
-** VU5: CLI =gui-assert-vision=
+** VU5: Token-efficient agent index + CLI (grep the video → extract frames)
    :PROPERTIES:
    :status: planned
    :depends_on: VU3
    :END:
 
+   THE priority milestone for agent token-efficiency (DrVideo/VideoAgent
+   video→document + retrieval pattern). Emit a compact hierarchical index so an
+   agent explores via text and pulls only 1-3 frames on demand.
+
 *** Deliverables
-    - [ ] =src/gui_assert_vision.nim= CLI: =analyze <video>= (writes
-      timeline.json + digest.md + keyframes/), =describe <image>=,
-      =windows <image|--live>=. A =just analyze VIDEO= recipe.
+    - [ ] Index builder (extend video_analysis.nim): =buildIndex(a: VideoAnalysis)=
+      → a 3-level JSON: (1) summary {duration, dims, frameCount, stateCount,
+      windowTitles seen, urls seen}; (2) segments [{id, start, end, thumbnail,
+      text, urls, textDiffVsPrev}]; (3) flat searchable text index
+      [{text, confidence, bbox, segmentId, timestamp}].
+    - [ ] Pure =textDiff(prev, cur: string): string= — compact "+ added / −
+      removed line" summary of what changed between consecutive states.
+    - [ ] Pure =findInIndex(index, query, regex=false)= → matches
+      [{timestamp, segmentId, bbox, confidence}].
+    - [ ] =src/gui_assert_vision.nim= CLI: =analyze <video>= (writes index.json +
+      digest.md + keyframes/); =find <query> <video|index.json>= (grep the
+      video); =extract-frame --at <ts> | --segment <id>= (emit ONLY those
+      frames); =contact-sheet <video>= (one tiled keyframe grid); =describe
+      <image>= / =windows <image>= (pure CV). A =just analyze VIDEO= recipe.
 
 *** Verification
     - [ ] =test_cli_arg_parse=: subcommand + flag parsing (pure).
-    - [ ] =e2e_cli_analyze=: run the CLI on the VU1 fixture video; assert
-      timeline.json is valid JSON with ≥2 states and digest.md is non-empty.
+    - [ ] =test_text_diff=: consecutive texts → correct +added/−removed summary.
+    - [ ] =test_build_index_shape=: index has all 3 levels with per-segment
+      textDiff + a populated searchable text index (hand-built analysis).
+    - [ ] =test_find_in_index=: locates a known string's timestamp/segment/bbox;
+      empty for absent; regex mode works.
+    - [ ] =e2e_cli_analyze_and_find=: run the CLI on the VU1 2-state fixture;
+      assert index.json is valid 3-level JSON with ≥2 states, =find "BETA"=
+      returns the 2nd state's timestamp, and =extract-frame --at= emits exactly
+      one PNG. Real ffmpeg + tesseract.
+
+** VU8: Change-detection hardening (tiled SSIM + pHash dedup + ECR)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU1
+   :END:
+
+   Global SSIM misses small-but-important UI changes and over-keeps
+   near-duplicates. Add pure-CV signals per the SOTA survey.
+
+*** Deliverables
+    - [ ] Tiled/local SSIM in =segmentByChange= (grid of local SSIM; trigger on
+      max local drop, not global mean) so small dialogs / address-bar edits are
+      caught. Keep global SSIM as a fallback/param.
+    - [ ] =dctHash(img: GrayImage): uint64= (pHash) + Hamming dedup pass that
+      collapses near-duplicate keyframes before OCR.
+    - [ ] =edgeChangeRatio(a, b: GrayImage): float= as a complementary change
+      signal; document how it combines with SSIM.
+
+*** Verification
+    - [ ] =test_phash_hamming=: identical images → distance 0; a small local
+      change → small distance; very different → large. Dedup collapses
+      near-dupes, keeps distinct.
+    - [ ] =test_tiled_ssim_local_change=: a synthetic pair differing only in a
+      small corner region → tiled detector fires though global SSIM would not.
+    - [ ] =test_edge_change_ratio=: added edges (text/box appears) → high ECR;
+      colour-only change → low ECR.
+
+** VU9: OCR quality (upscale + dark-mode inversion + per-region PSM + confidence)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU2
+   :END:
+
+*** Deliverables
+    - [ ] 2-4x Lanczos upscaling of regions before OCR; light contrast only.
+    - [ ] Dark-mode detection (region mean luma) + inversion before tesseract
+      (which expects dark-on-light) — fixes silent failures on dark UIs.
+    - [ ] Per-region PSM selection (11/12 full-frame, 7 single-line, 6 block),
+      wired to the window/region detector; keep word-level bbox + confidence in
+      the index.
+
+*** Verification
+    - [ ] =e2e_ocr_dark_mode=: a light-on-dark drawtext frame that FAILS OCR
+      without inversion but PASSES with it (assert both directions).
+    - [ ] =e2e_ocr_upscale_small_text=: a tiny-font frame OCR'd correctly only
+      after upscaling (assert the improvement).
+
+** VU10: Classical layout tree (morphology + Hough/LSD + MSER + projections)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU4
+   :END:
+
+*** Deliverables
+    - [ ] Morphological close/open before CC; Hough/LSD line detection for title
+      bars/toolbars/borders; MSER (or equivalent) for text regions; projection
+      profiles for row/column structure; contour-hierarchy → a per-segment
+      region TREE (panel-within-window nesting) stored in the index.
+
+*** Verification
+    - [ ] =test_hough_titlebar_synthetic=: a frame with a title-bar line + panel
+      separator → detected as the expected horizontal/vertical structure.
+    - [ ] =test_region_tree_nesting=: a window containing two panels → a tree
+      with the window as parent and two child regions.
+
+** VU11: Optional high-accuracy backends (behind flags; not default)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU5
+   :END:
+
+*** Deliverables
+    - [ ] Pluggable OCR backend interface with an optional Apple Vision (macOS)
+      backend and/or RapidOCR (pinned PP-OCR ONNX) — default stays Tesseract for
+      reproducibility.
+    - [ ] Optional OmniParser-class element backend (pinned ONNX) for semantic
+      element labels, gated behind a compile/runtime flag; documented cost.
+
+*** Verification
+    - [ ] =test_backend_dispatch=: the OCR backend selector picks the requested
+      backend and falls back to Tesseract when an optional one is unavailable.
+    - [ ] (macOS) =e2e_apple_vision_optional=: when available, Apple Vision OCR
+      reads the fixture; skipped-with-reason (not silently) off-platform.
 
 ** VU6: Reproducibility — GuiAssert flake
    :PROPERTIES:
