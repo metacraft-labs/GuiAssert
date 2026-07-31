@@ -7,9 +7,10 @@
 ## `segmentByChange` pipeline (real ffmpeg frame sampling + real SSIM) against
 ## it, per the workspace "mock as little as possible" policy.
 
-import std/[unittest, os, osproc, streams, strtabs, strutils, tempfiles]
+import std/[unittest, os, osproc, streams, strtabs, strutils, tempfiles, json]
 
 import ../src/gui_assert/video_analysis
+import ../src/gui_assert/ocr
 
 # ---------------------------------------------------------------------------
 # Helpers for the e2e fixture
@@ -170,3 +171,126 @@ suite "video_analysis e2e":
     # The first segment starts at 0 with a full change score by convention.
     check segments[0].tStart == 0.0
     check segments[0].changeScore == 1.0
+
+# ---------------------------------------------------------------------------
+# VU2 pure procs
+# ---------------------------------------------------------------------------
+
+proc mkWord(text: string, x, y: int, blockNum, lineNum: int): OcrWord =
+  result.text = text
+  result.confidence = 90.0
+  result.bbox = [x, y, 40, 18]
+  result.blockNum = blockNum
+  result.lineNum = lineNum
+
+suite "video_analysis vu2 pure":
+  test "test_extract_urls":
+    let noisy =
+      "gatewayBaseUrl — root URL of the server, e.g. http://127.0.0.1:5000. " &
+      "The client then fetches 127.0.0.1:8080/docs/index.html for the docs. " &
+      "See unit 217 of CodeTracer 1.55.0 for details."
+    let urls = extractUrls(noisy)
+    # Both real URLs are pulled out...
+    check "http://127.0.0.1:5000" in urls
+    check "127.0.0.1:8080/docs/index.html" in urls
+    # ...and the distractors are NOT mistaken for URLs.
+    check "unit" notin urls
+    check "217" notin urls
+    check "1.55.0" notin urls
+    check "CodeTracer" notin urls
+    # The full form's embedded host:port is not double-reported as a bare URL.
+    check "127.0.0.1:5000" notin urls
+    check urls.len == 2
+
+  test "test_reading_order":
+    # Two lines across two blocks, words supplied out of order. Reading order
+    # must be top line first (words left→right), then bottom line.
+    let words = @[
+      mkWord("Bar", 80, 60, 1, 0),
+      mkWord("World", 100, 10, 0, 0),
+      mkWord("Foo", 20, 62, 1, 0),
+      mkWord("Hello", 10, 12, 0, 0),
+    ]
+    check wordsToReadingOrderText(words) == "Hello World\nFoo Bar"
+
+  test "test_digest_json_shape":
+    var a: VideoAnalysis
+    a.info = VideoInfo(path: "/tmp/demo.mp4", durationS: 3.0,
+                       width: 640, height: 480)
+    var f0: Keyframe
+    f0.index = 0
+    f0.tStart = 0.0
+    f0.tEnd = 1.5
+    f0.changeScore = 1.0
+    f0.imagePath = "/tmp/kf/state_00000.png"
+    f0.words = @[mkWord("Home", 0, 0, 0, 0), mkWord("page", 50, 0, 0, 0)]
+    f0.text = "Home page http://127.0.0.1:5000 welcome"
+    f0.urls = @["http://127.0.0.1:5000"]
+    var f1: Keyframe
+    f1.index = 1
+    f1.tStart = 1.5
+    f1.tEnd = 3.0
+    f1.changeScore = 0.8
+    f1.imagePath = "/tmp/kf/state_00001.png"
+    f1.words = @[mkWord("Docs", 0, 0, 0, 0)]
+    f1.text = "Docs 127.0.0.1:8080/docs/index.html"
+    f1.urls = @["127.0.0.1:8080/docs/index.html"]
+    a.frames = @[f0, f1]
+
+    # JSON: one entry per frame, every field present.
+    let j = toJson(a)
+    check j["info"]["path"].getStr == "/tmp/demo.mp4"
+    check j["info"]["width"].getInt == 640
+    check j["frames"].len == 2
+    for idx in 0 ..< 2:
+      let fj = j["frames"][idx]
+      check fj["index"].getInt == idx
+      check fj.hasKey("tStart")
+      check fj.hasKey("tEnd")
+      check fj.hasKey("changeScore")
+      check fj.hasKey("imagePath")
+      check fj.hasKey("text")
+      check fj.hasKey("urls")
+      check fj.hasKey("wordCount")
+    check j["frames"][0]["wordCount"].getInt == 2
+    check j["frames"][0]["urls"][0].getStr == "http://127.0.0.1:5000"
+    check j["frames"][1]["wordCount"].getInt == 1
+
+    # Digest: markdown timeline mentioning every state, its t-range, URL, text.
+    let d = toDigest(a)
+    check d.contains("/tmp/demo.mp4")
+    check d.contains("640x480")
+    check d.contains("State 0")
+    check d.contains("State 1")
+    check d.contains("0.00–1.50 s")
+    check d.contains("1.50–3.00 s")
+    check d.contains("http://127.0.0.1:5000")
+    check d.contains("127.0.0.1:8080/docs/index.html")
+    check d.contains("Home page")
+    check d.contains("Docs")
+
+# ---------------------------------------------------------------------------
+# VU2 end-to-end: analyze a generated 2-state fixture with real ffmpeg+tesseract
+# ---------------------------------------------------------------------------
+
+suite "video_analysis vu2 e2e":
+  test "e2e_analyze_fixture_video":
+    let ffmpeg = resolveFfmpegForFixture()
+    check ffmpegSupportsDrawtext(ffmpeg)  # OCR labels require real drawtext
+    let tmp = createTempDir("tvideo_vu2_e2e_", "")
+    defer: removeDir(tmp)
+    let fixture = tmp / "two_state.mp4"
+    generateTwoStateVideo(ffmpeg, fixture, useDrawtext = true)
+
+    let analysis = analyzeVideo(fixture)
+    # Exactly two distinct states, each with an extracted keyframe on disk.
+    check analysis.frames.len == 2
+    for f in analysis.frames:
+      check fileExists(f.imagePath)
+      check getFileSize(f.imagePath) > 0
+
+    # The OCR'd label of each state (allowing OCR noise: uppercased substring).
+    let t0 = analysis.frames[0].text.toUpperAscii
+    let t1 = analysis.frames[1].text.toUpperAscii
+    check t0.contains("ALPHA")
+    check t1.contains("BETA")

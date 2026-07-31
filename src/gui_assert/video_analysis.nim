@@ -26,7 +26,8 @@
 ## timeline shape is stable) but are only *populated* by VU2's OCR pass; VU1
 ## fills in the segmentation fields only.
 
-import std/[json, os, osproc, streams, strtabs, strutils, algorithm, tempfiles]
+import std/[json, os, osproc, streams, strtabs, strutils, algorithm,
+            tempfiles, re, sets, tables]
 
 import ./media
 import ./image_math
@@ -160,6 +161,159 @@ proc segmentBoundaries*(ssims: seq[float], threshold: float): seq[int] =
   for i in 0 ..< ssims.len:
     if (1.0 - ssims[i]) > threshold:
       result.add(i + 1)
+
+# ---------------------------------------------------------------------------
+# Pure OCR post-processing: URL extraction + reading-order reconstruction
+# ---------------------------------------------------------------------------
+
+proc trimUrlEnds(s: string): string =
+  ## Strip surrounding punctuation that OCR / prose commonly glues onto a URL
+  ## token (a trailing sentence period, wrapping brackets/quotes, etc.). Port
+  ## and path separators are interior, so trimming the ends never touches them.
+  const junk = {'.', ',', ';', ':', '!', '?', ')', '(', '[', ']', '{', '}',
+                '\'', '"', '<', '>', '`', '\\'}
+  result = s.strip()
+  while result.len > 0 and result[0] in junk:
+    result = result[1 .. ^1]
+  while result.len > 0 and result[^1] in junk:
+    result.setLen(result.len - 1)
+
+# Full `http(s)://…` forms — grab everything up to the next whitespace, then
+# let `trimUrlEnds` peel a trailing `.`/`)` etc.
+let fullUrlRe = re"(?i)\bhttps?://[^\s]+"
+
+# Bare `host[:port][/path]` forms. The host is an IPv4 literal or a dotted
+# domain ending in an alphabetic TLD; a match must carry a `:port` and/or a
+# `/path` so that plain dotted numbers (version strings like `1.2.3`) and bare
+# words never qualify.
+let bareUrlRe = re(
+  r"(?i)\b(?:(?:\d{1,3}\.){3}\d{1,3}|(?:[a-z0-9-]+\.)+[a-z]{2,})" &
+  r"(?::\d{1,5}(?:/[^\s]*)?|/[^\s]*)")
+
+proc extractUrls*(text: string): seq[string] =
+  ## Extract URLs from noisy OCR text. Recognises both fully-qualified
+  ## `http(s)://host[:port]/path` URLs and bare `host:port/path` forms (e.g.
+  ## `127.0.0.1:8080/docs/index.html`), de-duplicates while preserving first
+  ## appearance order, and rejects non-URL tokens (plain words, bare numbers,
+  ## dotted version strings). Fully-qualified matches are found first and
+  ## masked out so their embedded host:port is not re-reported as a second,
+  ## bare URL.
+  result = @[]
+  var seen = initHashSet[string]()
+
+  var candidates: seq[string] = @[]
+  for m in findAll(text, fullUrlRe):
+    candidates.add(m)
+  # Mask out fully-qualified matches so their embedded host:port is not
+  # re-reported by the bare-form pass.
+  let masked = replace(text, fullUrlRe, " ")
+  for m in findAll(masked, bareUrlRe):
+    candidates.add(m)
+
+  for raw in candidates:
+    let u = trimUrlEnds(raw)
+    if u.len == 0: continue
+    if u notin seen:
+      seen.incl(u)
+      result.add(u)
+
+proc wordsToReadingOrderText*(words: seq[OcrWord]): string =
+  ## Reconstruct human reading-order text from unordered OCR words. Words are
+  ## grouped by `(blockNum, lineNum)`; the resulting lines are ordered by their
+  ## top-y (the minimum `bbox[1]` in the group), and words within a line by
+  ## their left-x (`bbox[0]`). Lines are joined with `"\n"`, words with a
+  ## single space.
+  var groups = initOrderedTable[(int, int), seq[OcrWord]]()
+  for w in words:
+    let key = (w.blockNum, w.lineNum)
+    if key notin groups:
+      groups[key] = @[]
+    groups[key].add(w)
+
+  type Line = tuple[topY: int, minX: int, text: string]
+  var lines: seq[Line] = @[]
+  for key, ws in groups:
+    var ordered = ws
+    ordered.sort(proc(a, b: OcrWord): int = cmp(a.bbox[0], b.bbox[0]))
+    var topY = high(int)
+    var minX = high(int)
+    var pieces: seq[string] = @[]
+    for w in ordered:
+      if w.bbox[1] < topY: topY = w.bbox[1]
+      if w.bbox[0] < minX: minX = w.bbox[0]
+      pieces.add(w.text)
+    lines.add((topY: topY, minX: minX, text: pieces.join(" ")))
+
+  # Order lines top-to-bottom, tie-break left-to-right.
+  lines.sort(proc(a, b: Line): int =
+    result = cmp(a.topY, b.topY)
+    if result == 0: result = cmp(a.minX, b.minX))
+
+  var outLines: seq[string] = @[]
+  for ln in lines:
+    outLines.add(ln.text)
+  result = outLines.join("\n")
+
+# ---------------------------------------------------------------------------
+# Pure serialization: JSON + markdown digest
+# ---------------------------------------------------------------------------
+
+proc toJson*(a: VideoAnalysis): JsonNode =
+  ## Serialize a `VideoAnalysis` to a `JsonNode`: the container `info` plus one
+  ## object per detected state carrying its index, time range, change score,
+  ## keyframe image path, reading-order text, detected URLs and OCR word count.
+  result = %*{
+    "info": {
+      "path": a.info.path,
+      "durationS": a.info.durationS,
+      "width": a.info.width,
+      "height": a.info.height
+    },
+    "frames": newJArray()
+  }
+  for f in a.frames:
+    result["frames"].add(%*{
+      "index": f.index,
+      "tStart": f.tStart,
+      "tEnd": f.tEnd,
+      "changeScore": f.changeScore,
+      "imagePath": f.imagePath,
+      "text": f.text,
+      "urls": f.urls,
+      "wordCount": f.words.len
+    })
+
+proc toDigest*(a: VideoAnalysis): string =
+  ## Render a markdown timeline of the analysis: a header with the source path,
+  ## dimensions and duration, then one `## State N [tStart–tEnd s]` section per
+  ## detected state carrying its change score, any detected URLs and a short
+  ## excerpt (~200 chars) of the state's reading-order text.
+  var lines: seq[string] = @[]
+  lines.add("# Video analysis: " & a.info.path)
+  lines.add("")
+  lines.add("- Dimensions: " & $a.info.width & "x" & $a.info.height)
+  lines.add("- Duration: " & formatFloat(a.info.durationS, ffDecimal,
+                                         precision = 2) & "s")
+  lines.add("- States: " & $a.frames.len)
+  lines.add("")
+  for f in a.frames:
+    let ts = formatFloat(f.tStart, ffDecimal, precision = 2)
+    let te = formatFloat(f.tEnd, ffDecimal, precision = 2)
+    let cs = formatFloat(f.changeScore, ffDecimal, precision = 3)
+    lines.add("## State " & $f.index & "  [" & ts & "–" & te & " s]  change=" &
+              cs)
+    if f.urls.len > 0:
+      lines.add("")
+      lines.add("Detected URLs:")
+      for u in f.urls:
+        lines.add("- " & u)
+    lines.add("")
+    var excerpt = f.text.replace("\n", " ").strip()
+    if excerpt.len > 200:
+      excerpt = excerpt[0 ..< 200] & "…"
+    lines.add("> " & excerpt)
+    lines.add("")
+  result = lines.join("\n")
 
 # ---------------------------------------------------------------------------
 # Binary discovery (honors FFMPEG / FFPROBE, then FFMPEG_BIN / PATH)
@@ -310,3 +464,63 @@ proc segmentByChange*(path: string, sampleFps = 2.0, scaleW = 320,
       removeDir(tmpDir)
     except OSError:
       discard
+
+proc extractKeyframe(ffmpegBin, path: string, t: float, outPng: string) =
+  ## Run ffmpeg to write one full-resolution PNG at timestamp `t`.
+  let argv = buildExtractFrameArgv(path, t, outPng)
+  let env = sanitizedEnv(ffmpegBin)
+  let p = startProcess(
+    command = ffmpegBin,
+    args = argv,
+    env = env,
+    options = {poStdErrToStdOut}
+  )
+  let output = p.outputStream().readAll()
+  let code = p.waitForExit()
+  p.close()
+  if code != 0:
+    raise newException(VideoAnalysisError,
+      "ffmpeg keyframe extraction failed (" & $code & ") at t=" &
+      formatFloat(t, ffDecimal, precision = 3) & " on " & path & ": " & output)
+  if not (fileExists(outPng) and getFileSize(outPng) > 0):
+    raise newException(VideoAnalysisError,
+      "ffmpeg produced no keyframe at t=" &
+      formatFloat(t, ffDecimal, precision = 3) & " on " & path)
+
+proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
+                   ssimThreshold = 0.12): VideoAnalysis =
+  ## Full VU2 pipeline: probe `path`, segment it into distinct visual states
+  ## (`segmentByChange`), then for each state extract ONE full-resolution
+  ## keyframe at the state's temporal midpoint, OCR it, and assemble the
+  ## timeline. Each `Keyframe` gets `words` (raw OCR), `text`
+  ## (`wordsToReadingOrderText`) and `urls` (`extractUrls` over that text).
+  ##
+  ## Keyframe PNGs are written into a fresh temp directory that is *not*
+  ## removed; the caller can read/relocate them via each frame's `imagePath`.
+  ## Honors FFMPEG / FFPROBE / FFMPEG_BIN and TESSERACT_BIN like the rest of
+  ## the module (the OCR pass resolves tesseract via `ocr.runOcr`).
+  result.info = probeVideo(path)
+
+  let segments = segmentByChange(path, sampleFps, scaleW, ssimThreshold)
+  let ffmpegBin = resolveFfmpeg()
+
+  # Persistent keyframe dir (deliberately not cleaned up): the returned
+  # `imagePath`s point here so callers can use the extracted PNGs.
+  let kfDir = createTempDir("gui_assert_kf_", "")
+
+  result.frames = @[]
+  for i, seg in segments:
+    let mid = (seg.tStart + seg.tEnd) / 2.0
+    let outPng = kfDir / ("state_" & align($i, 5, '0') & ".png")
+    extractKeyframe(ffmpegBin, path, mid, outPng)
+
+    var kf: Keyframe
+    kf.index = i
+    kf.tStart = seg.tStart
+    kf.tEnd = seg.tEnd
+    kf.changeScore = seg.changeScore
+    kf.imagePath = outPng
+    kf.words = runOcr(outPng)
+    kf.text = wordsToReadingOrderText(kf.words)
+    kf.urls = extractUrls(kf.text)
+    result.frames.add(kf)

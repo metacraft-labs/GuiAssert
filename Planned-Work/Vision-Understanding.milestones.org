@@ -54,27 +54,28 @@
 
 ** VU2: Frame OCR + timeline assembly
    :PROPERTIES:
-   :status: planned
+   :status: completed
+   :status_note: Independently verified & committed. Extended video_analysis.nim with pure extractUrls (masks full http(s):// matches, then bare host:port/path via IPv4/dotted-domain regex requiring a port and/or path so version strings like 1.55.0 and bare words are rejected; de-duped, order-preserving), wordsToReadingOrderText (group by (blockNum,lineNum), order lines by top-y then words by x), toJson/toDigest, and effectful analyzeVideo (probe → segmentByChange → one full-res keyframe per state at its midpoint → runOcr → reading-order text → URLs; keyframe PNGs left in a temp dir, paths returned in imagePath). VU2 additions reviewed as genuine (no stubs/skips/weakened asserts). Full suite 8/8 green (VU1's 4 + VU2's 4) against real ffmpeg + tesseract 5.5.2; e2e_analyze_fixture_video OCRs genuine ALPHA/BETA drawtext labels off a 2-state fixture generated at test time.
    :depends_on: VU1
    :END:
 
 *** Deliverables
-    - [ ] =analyzeVideo(path, opts): VideoAnalysis= — segment, extract one
+    - [X] =analyzeVideo(path, opts): VideoAnalysis= — segment, extract one
       keyframe per state, =runOcr= it, reconstruct reading-order text, extract
       URLs.
-    - [ ] Pure =extractUrls= (http(s):// and =host:port/path= forms) and
+    - [X] Pure =extractUrls= (http(s):// and =host:port/path= forms) and
       =wordsToReadingOrderText= (sort by line/block then x).
-    - [ ] =toJson= and =toDigest= (markdown timeline: per state → t-range,
+    - [X] =toJson= and =toDigest= (markdown timeline: per state → t-range,
       change score, detected URLs, text excerpt).
 
 *** Verification
-    - [ ] =test_extract_urls=: pulls =http://127.0.0.1:5000= and
+    - [X] =test_extract_urls=: pulls =http://127.0.0.1:5000= and
       =127.0.0.1:8080/docs/index.html= from a noisy OCR string; rejects
       non-URLs.
-    - [ ] =test_reading_order=: unordered =OcrWord= set → correct line order.
-    - [ ] =test_digest_json_shape=: =toDigest=/=toJson= over a hand-built
+    - [X] =test_reading_order=: unordered =OcrWord= set → correct line order.
+    - [X] =test_digest_json_shape=: =toDigest=/=toJson= over a hand-built
       analysis contain every state and its fields.
-    - [ ] =e2e_analyze_fixture_video=: analyze the VU1 2-state fixture; assert
+    - [X] =e2e_analyze_fixture_video=: analyze the VU1 2-state fixture; assert
       the OCR text of each state contains its drawtext label.
 
 ** VU3: Query / assertion API
