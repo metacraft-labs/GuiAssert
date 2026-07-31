@@ -1,0 +1,173 @@
+#+TITLE: GuiAssert Vision Understanding Milestones
+
+* Document
+  :PROPERTIES:
+  :next_steps: VU1 first — video segmentation by visual change (SSIM). Then VU2 (OCR timeline), VU3 (query/assertion API), VU4 (window enumeration), VU5 (CLI), VU6 (flake), VU7 (apply to substrate videos).
+  :last_updated: 2026-07-31
+  :current_milestone: VU1
+  :executive_summary: Turn screenshots and recorded videos into structured, queryable, assertable descriptions, so tests (and agents) can ask "how many top-level windows are visible and what is their text?", "when did the screen change?", "did window X / URL Y appear?". Composes existing GuiAssert primitives (ocr.runOcr, image_math.computeSsim/decodeGray, media.resolveFfmpegBinary) into a video-analysis module, a window-enumeration module (OS + vision backends), a query/assertion API, and a CLI. Extension of the "The Flame" home-demo campaign; validated end-to-end against the real substrate recording linux-session.mp4.
+  :END:
+
+* Introduction
+  :PROPERTIES:
+  :initiative_goals: A reusable vision-understanding layer for GuiAssert, validated by strong integration tests that run real ffmpeg + tesseract on fixtures generated at test time (no committed media, no stubbed subprocesses). Pure parser/geometry procs are unit-tested against inline fixtures.
+  :related_specs: [[file:Vision-Understanding.md][Vision Understanding spec]], [[file:../src/gui_assert/ocr.nim][ocr]], [[file:../src/gui_assert/image_math.nim][image_math]]
+  :END:
+
+  Design and rationale live in [[file:Vision-Understanding.md]]. This file tracks
+  execution. Milestones are implemented one at a time via the campaign sub-agent
+  loop: an implementation agent (no commits) followed by an independent
+  verification agent that runs the tests, rejects weak/skipped tests, and
+  commits only on green.
+
+* Milestones
+
+** VU1: Video segmentation by visual change
+   :PROPERTIES:
+   :status: planned
+   :depends_on:
+   :END:
+
+*** Deliverables
+    - [ ] =gui_assert/video_analysis.nim= with the =VideoInfo= /
+      =Keyframe= / =VideoAnalysis= types and the segmentation core.
+    - [ ] Pure procs: =buildProbeArgv=, =parseProbeJson= (ffprobe JSON →
+      =VideoInfo=), =buildSampleFramesArgv= (extract N fps at a downscaled
+      size), =buildExtractFrameArgv= (one PNG at time T), =segmentBoundaries=
+      (list of consecutive-frame SSIMs + threshold → segment boundary indices).
+    - [ ] Effectful =probeVideo= and =segmentByChange= composing
+      =resolveFfmpegBinary= + =decodeGray= + =computeSsim=.
+
+*** Verification
+    - [ ] =test_parse_probe_json=: parses a representative ffprobe JSON sample
+      into the right duration/width/height.
+    - [ ] =test_segment_boundaries=: given a hand-authored SSIM series, returns
+      exactly the expected boundaries at the expected threshold (and merges
+      runs below threshold into one segment).
+    - [ ] =test_build_argv_shapes=: probe/sample/extract argv contain the pinned
+      binary, the input path, the fps/scale, and the output pattern.
+    - [ ] =e2e_segment_two_state_video=: generate a 2-state fixture video with
+      ffmpeg (colour A + drawtext for ~1.5s, then colour B for ~1.5s), run
+      =segmentByChange=, assert exactly 2 distinct states with a boundary near
+      1.5s. Real ffmpeg; no committed media.
+
+** VU2: Frame OCR + timeline assembly
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU1
+   :END:
+
+*** Deliverables
+    - [ ] =analyzeVideo(path, opts): VideoAnalysis= — segment, extract one
+      keyframe per state, =runOcr= it, reconstruct reading-order text, extract
+      URLs.
+    - [ ] Pure =extractUrls= (http(s):// and =host:port/path= forms) and
+      =wordsToReadingOrderText= (sort by line/block then x).
+    - [ ] =toJson= and =toDigest= (markdown timeline: per state → t-range,
+      change score, detected URLs, text excerpt).
+
+*** Verification
+    - [ ] =test_extract_urls=: pulls =http://127.0.0.1:5000= and
+      =127.0.0.1:8080/docs/index.html= from a noisy OCR string; rejects
+      non-URLs.
+    - [ ] =test_reading_order=: unordered =OcrWord= set → correct line order.
+    - [ ] =test_digest_json_shape=: =toDigest=/=toJson= over a hand-built
+      analysis contain every state and its fields.
+    - [ ] =e2e_analyze_fixture_video=: analyze the VU1 2-state fixture; assert
+      the OCR text of each state contains its drawtext label.
+
+** VU3: Query / assertion API
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU2
+   :END:
+
+*** Deliverables
+    - [ ] Pure queries over =VideoAnalysis=: =containsText= (case-insensitive),
+      =locateText= (→ frame index + =OcrWord=), =seenUrl=, =distinctStateCount=,
+      =textInRegion= (frame, rect, needle).
+
+*** Verification
+    - [ ] =test_contains_locate=: finds/locates text present in a hand-built
+      analysis; returns empty for absent text.
+    - [ ] =test_seen_url_and_state_count=: URL substring + state count correct.
+    - [ ] =test_text_in_region=: matches only when the word's bbox intersects
+      the region.
+
+** VU4: Window enumeration (OS + vision backends)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU2
+   :END:
+
+*** Deliverables
+    - [ ] =gui_assert/windows.nim= with =WindowInfo=, =enumerateWindows(source)=.
+    - [ ] OS-backend parsers (pure): =parseWmctrlList= (Linux =wmctrl -l -G=),
+      =parseCgWindowList= (macOS helper JSON), =parseEnumWindows= (Windows
+      PowerShell output) → =seq[WindowInfo]= with titles + bboxes.
+    - [ ] Vision backend: =detectWindowRects(GrayImage): seq[array[4,int]]=
+      (title-bar/border edge projection + connected components), then =runOcr=
+      per region → per-window text; answers "how many windows + their text"
+      from a single frame.
+
+*** Verification
+    - [ ] =test_parse_wmctrl= / =test_parse_cgwindowlist= /
+      =test_parse_enumwindows=: representative samples → correct counts,
+      titles, bboxes.
+    - [ ] =test_detect_window_rects_synthetic=: a synthetic frame with two
+      drawn window rectangles → exactly two rects at the expected positions.
+    - [ ] =e2e_windows_from_substrate_frame=: on a real keyframe from
+      linux-session.mp4 that shows the terminal + file-manager, the vision
+      backend reports ≥2 windows and their OCR text includes the terminal's
+      "flame" log and the file-manager path.
+
+** VU5: CLI =gui-assert-vision=
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU3
+   :END:
+
+*** Deliverables
+    - [ ] =src/gui_assert_vision.nim= CLI: =analyze <video>= (writes
+      timeline.json + digest.md + keyframes/), =describe <image>=,
+      =windows <image|--live>=. A =just analyze VIDEO= recipe.
+
+*** Verification
+    - [ ] =test_cli_arg_parse=: subcommand + flag parsing (pure).
+    - [ ] =e2e_cli_analyze=: run the CLI on the VU1 fixture video; assert
+      timeline.json is valid JSON with ≥2 states and digest.md is non-empty.
+
+** VU6: Reproducibility — GuiAssert flake
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU1
+   :END:
+
+*** Deliverables
+    - [ ] =flake.nix= pinning nim + ffmpeg + tesseract; devShell exports so the
+      modules resolve pinned binaries.
+
+*** Verification
+    - [ ] =verify_nix_develop_test=: =nix develop -c nimble test= runs the full
+      suite (including the new vision tests) green on a clean checkout.
+
+** VU7: Apply to the substrate videos (campaign tie-in)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: VU3
+   :END:
+
+*** Deliverables
+    - [ ] In codetracer-marketing =runner/vm-record=, a post-record verifier that
+      runs =analyzeVideo= on the produced mp4 and asserts the required beats:
+      ≥2 distinct states, a window with the terminal's build-log text, a
+      CodeTracer URL/heading seen, the Browser Replay client title seen.
+    - [ ] Wire it as a gate in =record-linux.sh= (and the mac/Windows
+      orchestrators) so a recording that does not actually show the beats fails
+      loudly instead of silently producing an empty video.
+
+*** Verification
+    - [ ] =e2e_verify_linux_session=: run the verifier on the committed-workflow
+      output for linux-session.mp4; assert all required beats are found.
+    - [ ] =verify_gate_fails_on_empty=: feed the verifier a black/empty video;
+      assert it fails (no false green).
