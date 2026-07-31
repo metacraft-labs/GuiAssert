@@ -142,8 +142,9 @@
 
 ** VU5: Token-efficient agent index + CLI (grep the video → extract frames)
    :PROPERTIES:
-   :status: planned
+   :status: completed
    :depends_on: VU3
+   :note: Implemented in video_analysis.nim (pure textDiff/buildIndex/findInIndex + effectful extractFrameTo/contactSheet) and the new src/gui_assert_vision.nim CLI (analyze/find/extract-frame/contact-sheet/describe/windows/--help; pure parseVisionArgs). 3-level index (summary+segments+textIndex). Tests in tests/tvision_cli.nim (5): all pass; tvideo_analysis (11) + tvision_windows (3) still green. Justfile `analyze` recipe added; nimble test task + gitignore updated. Real ffmpeg+tesseract e2e (compiles the CLI, runs on a generated 2-state fixture); no committed media, no stubs.
    :END:
 
    THE priority milestone for agent token-efficiency (DrVideo/VideoAgent
@@ -151,29 +152,29 @@
    agent explores via text and pulls only 1-3 frames on demand.
 
 *** Deliverables
-    - [ ] Index builder (extend video_analysis.nim): =buildIndex(a: VideoAnalysis)=
+    - [X] Index builder (extend video_analysis.nim): =buildIndex(a: VideoAnalysis)=
       → a 3-level JSON: (1) summary {duration, dims, frameCount, stateCount,
       windowTitles seen, urls seen}; (2) segments [{id, start, end, thumbnail,
       text, urls, textDiffVsPrev}]; (3) flat searchable text index
       [{text, confidence, bbox, segmentId, timestamp}].
-    - [ ] Pure =textDiff(prev, cur: string): string= — compact "+ added / −
+    - [X] Pure =textDiff(prev, cur: string): string= — compact "+ added / −
       removed line" summary of what changed between consecutive states.
-    - [ ] Pure =findInIndex(index, query, regex=false)= → matches
+    - [X] Pure =findInIndex(index, query, regex=false)= → matches
       [{timestamp, segmentId, bbox, confidence}].
-    - [ ] =src/gui_assert_vision.nim= CLI: =analyze <video>= (writes index.json +
+    - [X] =src/gui_assert_vision.nim= CLI: =analyze <video>= (writes index.json +
       digest.md + keyframes/); =find <query> <video|index.json>= (grep the
       video); =extract-frame --at <ts> | --segment <id>= (emit ONLY those
       frames); =contact-sheet <video>= (one tiled keyframe grid); =describe
       <image>= / =windows <image>= (pure CV). A =just analyze VIDEO= recipe.
 
 *** Verification
-    - [ ] =test_cli_arg_parse=: subcommand + flag parsing (pure).
-    - [ ] =test_text_diff=: consecutive texts → correct +added/−removed summary.
-    - [ ] =test_build_index_shape=: index has all 3 levels with per-segment
+    - [X] =test_cli_arg_parse=: subcommand + flag parsing (pure).
+    - [X] =test_text_diff=: consecutive texts → correct +added/−removed summary.
+    - [X] =test_build_index_shape=: index has all 3 levels with per-segment
       textDiff + a populated searchable text index (hand-built analysis).
-    - [ ] =test_find_in_index=: locates a known string's timestamp/segment/bbox;
+    - [X] =test_find_in_index=: locates a known string's timestamp/segment/bbox;
       empty for absent; regex mode works.
-    - [ ] =e2e_cli_analyze_and_find=: run the CLI on the VU1 2-state fixture;
+    - [X] =e2e_cli_analyze_and_find=: run the CLI on the VU1 2-state fixture;
       assert index.json is valid 3-level JSON with ≥2 states, =find "BETA"=
       returns the 2nd state's timestamp, and =extract-frame --at= emits exactly
       one PNG. Real ffmpeg + tesseract.

@@ -13,6 +13,9 @@ tests/tinput
 tests/tpacing
 tests/tvideo_analysis
 tests/tvision_windows
+tests/tvision_cli
+src/gui_assert_vision
+vision-out/
 tests/ttalking_head
 tests/tspeech_synthesis
 src/gui_assert/media

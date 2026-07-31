@@ -409,6 +409,182 @@ proc textInRegion*(a: VideoAnalysis, frame: int, x, y, w, h: int,
   return false
 
 # ---------------------------------------------------------------------------
+# Pure token-efficient agent index (VU5)
+# ---------------------------------------------------------------------------
+#
+# The "video → document + retrieval" pattern (DrVideo/VideoAgent): rather than
+# feeding many frames to an agent, we emit a compact hierarchical *index* the
+# agent explores as text, pulling only 1–3 frames on demand. `buildIndex` emits
+# three levels — a summary, a per-state segment timeline (each carrying a
+# `textDiffVsPrev`), and a flat searchable text index (one row per OCR word) —
+# and `findInIndex` "greps the video" over that flat index. All pure: no
+# subprocess, no filesystem.
+
+const
+  diffAddPrefix = "+ "
+  diffDelPrefix = "− "   # U+2212 MINUS SIGN + space
+  diffMaxLines = 40           # cap the diff so a wholesale rewrite stays compact
+  diffMaxLineLen = 160        # trim individual very long lines
+
+proc nonEmptyStrippedLines(text: string): seq[string] =
+  ## Split into lines, strip each, drop empties. Order preserved.
+  result = @[]
+  for l in text.splitLines:
+    let s = l.strip()
+    if s.len > 0:
+      result.add(s)
+
+proc firstNonEmptyLine(text: string): string =
+  ## The first non-blank, stripped line of `text` (the "title" of a state), or
+  ## the empty string when there is none.
+  for l in text.splitLines:
+    let s = l.strip()
+    if s.len > 0:
+      return s
+  return ""
+
+proc clampDiffLine(s: string): string =
+  if s.len > diffMaxLineLen: s[0 ..< diffMaxLineLen] & "…" else: s
+
+proc textDiff*(prevText, curText: string): string =
+  ## Compact line-level diff of two reading-order texts. Lines present in `cur`
+  ## but not `prev` are prefixed `"+ "`; lines present in `prev` but not `cur`
+  ## are prefixed `"− "` (U+2212). Added lines are listed before removed lines,
+  ## each group in its source order and de-duplicated. Comparison is on stripped
+  ## lines, so leading/trailing whitespace differences are ignored. Returns the
+  ## empty string when the two texts have identical (stripped) line sets. Very
+  ## long lines are trimmed and the total is capped for token-efficiency.
+  let prevLines = nonEmptyStrippedLines(prevText)
+  let curLines = nonEmptyStrippedLines(curText)
+  var prevSet = initHashSet[string]()
+  for s in prevLines: prevSet.incl(s)
+  var curSet = initHashSet[string]()
+  for s in curLines: curSet.incl(s)
+
+  var outLines: seq[string] = @[]
+  var emitted = initHashSet[string]()   # de-dup within each group
+  var count = 0
+
+  emitted.clear()
+  for s in curLines:
+    if count >= diffMaxLines: break
+    if s notin prevSet and s notin emitted:
+      emitted.incl(s)
+      outLines.add(diffAddPrefix & clampDiffLine(s))
+      inc count
+
+  emitted.clear()
+  for s in prevLines:
+    if count >= diffMaxLines: break
+    if s notin curSet and s notin emitted:
+      emitted.incl(s)
+      outLines.add(diffDelPrefix & clampDiffLine(s))
+      inc count
+
+  result = outLines.join("\n")
+
+proc bboxJson(b: array[4, int]): JsonNode =
+  ## `[x, y, w, h]` as a JSON array.
+  %*[b[0], b[1], b[2], b[3]]
+
+proc buildIndex*(a: VideoAnalysis): JsonNode =
+  ## Build the 3-level token-efficient agent index as a `JsonNode`:
+  ##
+  ## 1. `"summary"` — {video, durationS, width, height, frameCount, stateCount,
+  ##    windowTitles (distinct first-line/window titles seen), urls (distinct
+  ##    across all frames)}. Answers "what is this recording?" with no images.
+  ## 2. `"segments"` — one row per detected state: {id, start, end, changeScore,
+  ##    thumbnail (the keyframe imagePath), text, urls, textDiffVsPrev}. The
+  ##    diff vs the previous state is the highest-signal / lowest-token account
+  ##    of *what changed*.
+  ## 3. `"textIndex"` — a flat array, one entry per OCR word across every frame:
+  ##    {text, confidence, bbox, segmentId, timestamp}. `timestamp` is the
+  ##    entry's segment `start`. This is what `findInIndex` greps.
+  var windowTitles: seq[string] = @[]
+  var wtSeen = initHashSet[string]()
+  var urls: seq[string] = @[]
+  var urlSeen = initHashSet[string]()
+  for f in a.frames:
+    let title = firstNonEmptyLine(f.text)
+    if title.len > 0 and title notin wtSeen:
+      wtSeen.incl(title)
+      windowTitles.add(title)
+    for u in f.urls:
+      if u notin urlSeen:
+        urlSeen.incl(u)
+        urls.add(u)
+
+  result = newJObject()
+  result["summary"] = %*{
+    "video": a.info.path,
+    "durationS": a.info.durationS,
+    "width": a.info.width,
+    "height": a.info.height,
+    "frameCount": a.frames.len,
+    "stateCount": a.frames.len,
+    "windowTitles": windowTitles,
+    "urls": urls
+  }
+
+  let segments = newJArray()
+  var prevText = ""
+  for f in a.frames:
+    segments.add(%*{
+      "id": f.index,
+      "start": f.tStart,
+      "end": f.tEnd,
+      "changeScore": f.changeScore,
+      "thumbnail": f.imagePath,
+      "text": f.text,
+      "urls": f.urls,
+      "textDiffVsPrev": textDiff(prevText, f.text)
+    })
+    prevText = f.text
+  result["segments"] = segments
+
+  let textIndex = newJArray()
+  for f in a.frames:
+    for w in f.words:
+      textIndex.add(%*{
+        "text": w.text,
+        "confidence": w.confidence,
+        "bbox": bboxJson(w.bbox),
+        "segmentId": f.index,
+        "timestamp": f.tStart
+      })
+  result["textIndex"] = textIndex
+
+proc findInIndex*(index: JsonNode, query: string, regex = false): seq[JsonNode] =
+  ## "Grep the video": search the `"textIndex"` level of an index built by
+  ## `buildIndex`. When `regex` is false the match is a case-insensitive
+  ## substring test on each entry's `text`; when true, `query` is compiled as a
+  ## regular expression and matched anywhere in `text`. Returns one JSON object
+  ## per matching entry carrying {text, timestamp, segmentId, bbox, confidence}.
+  ## Returns an empty seq when nothing matches (or there is no text index).
+  result = @[]
+  if index.isNil or not index.hasKey("textIndex") or
+     index["textIndex"].kind != JArray:
+    return
+  var rx: Regex
+  let q = query.toLowerAscii
+  if regex:
+    rx = re(query)
+  for e in index["textIndex"]:
+    if not e.hasKey("text"): continue
+    let text = e["text"].getStr
+    let matched =
+      if regex: text.contains(rx)
+      else: text.toLowerAscii.contains(q)
+    if matched:
+      result.add(%*{
+        "text": text,
+        "timestamp": e["timestamp"],
+        "segmentId": e["segmentId"],
+        "bbox": e["bbox"],
+        "confidence": e["confidence"]
+      })
+
+# ---------------------------------------------------------------------------
 # Binary discovery (honors FFMPEG / FFPROBE, then FFMPEG_BIN / PATH)
 # ---------------------------------------------------------------------------
 
@@ -617,3 +793,72 @@ proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
     kf.text = wordsToReadingOrderText(kf.words)
     kf.urls = extractUrls(kf.text)
     result.frames.add(kf)
+
+# ---------------------------------------------------------------------------
+# Effectful frame emission for the CLI (VU5)
+# ---------------------------------------------------------------------------
+
+proc extractFrameTo*(path: string, t: float, outPng: string) =
+  ## Emit exactly ONE full-resolution PNG at timestamp `t` from `path` to
+  ## `outPng`, using the pure `buildExtractFrameArgv` and the resolved ffmpeg
+  ## binary. Raises `VideoAnalysisError` on failure or if no PNG is produced.
+  if not fileExists(path):
+    raise newException(VideoAnalysisError, "Video not found: " & path)
+  extractKeyframe(resolveFfmpeg(), path, t, outPng)
+
+proc buildContactSheetArgv*(inPattern: string, cols, rows: int,
+                            outPng: string): seq[string] =
+  ## ffmpeg argv (no leading binary token) that tiles the image sequence
+  ## `inPattern` (e.g. `dir/%05d.png`, numbered from 1) into a single
+  ## `cols` x `rows` grid PNG at `outPng`.
+  @[
+    "-hide_banner",
+    "-loglevel", "error",
+    "-y",
+    "-start_number", "1",
+    "-i", inPattern,
+    "-vf", "tile=" & $cols & "x" & $rows,
+    "-frames:v", "1",
+    outPng
+  ]
+
+proc contactSheet*(path: string, outPng: string, cols = 0) =
+  ## Analyze `path`, then tile its per-state keyframes into one contact-sheet
+  ## PNG at `outPng`. `cols` selects the grid width (default: up to 4). The
+  ## keyframes are copied into a fresh temp dir as a numbered sequence and tiled
+  ## with ffmpeg's `tile` filter. Raises `VideoAnalysisError` on failure.
+  let a = analyzeVideo(path)
+  let n = a.frames.len
+  if n == 0:
+    raise newException(VideoAnalysisError,
+      "No keyframes to tile for " & path)
+  let ncols = if cols > 0: cols else: min(n, 4)
+  let nrows = (n + ncols - 1) div ncols
+
+  let ffmpegBin = resolveFfmpeg()
+  let tmpDir = createTempDir("gui_assert_cs_", "")
+  try:
+    for i, f in a.frames:
+      copyFile(f.imagePath, tmpDir / (align($(i + 1), 5, '0') & ".png"))
+    let argv = buildContactSheetArgv(tmpDir / "%05d.png", ncols, nrows, outPng)
+    let env = sanitizedEnv(ffmpegBin)
+    let p = startProcess(
+      command = ffmpegBin,
+      args = argv,
+      env = env,
+      options = {poStdErrToStdOut}
+    )
+    let output = p.outputStream().readAll()
+    let code = p.waitForExit()
+    p.close()
+    if code != 0:
+      raise newException(VideoAnalysisError,
+        "ffmpeg contact-sheet tiling failed (" & $code & "): " & output)
+    if not (fileExists(outPng) and getFileSize(outPng) > 0):
+      raise newException(VideoAnalysisError,
+        "ffmpeg produced no contact sheet at " & outPng)
+  finally:
+    try:
+      removeDir(tmpDir)
+    except OSError:
+      discard

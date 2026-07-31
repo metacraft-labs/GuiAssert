@@ -19,6 +19,12 @@ test:
 test-pacing:
     nim c -r --hints:off tests/tpacing.nim
 
+# Build + run the gui-assert-vision CLI's `analyze` on VIDEO, writing the
+# 3-level index.json + digest.md + keyframes into OUT (default: vision-out).
+analyze VIDEO OUT="vision-out":
+    nim c --hints:off -o:src/gui_assert_vision src/gui_assert_vision.nim
+    ./src/gui_assert_vision analyze {{VIDEO}} --out {{OUT}}
+
 # Required by the workspace's pre-commit hook (`just lint`).  Add real
 # linters here as they come online (e.g. `nim check`).
 lint:
