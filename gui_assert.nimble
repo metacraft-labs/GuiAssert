@@ -23,5 +23,6 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tvideo_analysis.nim"
   exec "nim c -r --hints:off tests/tchange_detect.nim"
   exec "nim c -r --hints:off tests/tvision_windows.nim"
+  exec "nim c -r --hints:off tests/tlayout_tree.nim"
   exec "nim c -r --hints:off tests/tvision_cli.nim"
   exec "nim c -r --hints:off tests/tocr_vision.nim"

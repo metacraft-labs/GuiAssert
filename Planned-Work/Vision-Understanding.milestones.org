@@ -292,8 +292,9 @@
 
 ** VU10: Classical layout tree (morphology + Hough/LSD + MSER + projections)
    :PROPERTIES:
-   :status: planned
+   :status: completed
    :depends_on: VU4
+   :status_note: Pure-CV layout primitives added to src/gui_assert/vision_windows.nim (no OS APIs): binary Mask type + morphClose/morphOpen (dilate/erode with a k×k square element) wired into detectWindowRects via an OPT-IN morphCloseK param (default 0 → VU4 path byte-for-byte unchanged); detectAxisLines (deterministic Hough-lite: RLE of strong per-row vertical / per-column horizontal gradient runs ≥ minRun, near-parallel duplicate edges merged); rowProfile/colProfile foreground projection profiles; Region tree via buildRegionTree (≥90% containment → immediate-smallest-container parent, deterministic reading-order). MSER text-region detector intentionally SKIPPED (optional/stretch; parameter-sensitive/non-deterministic, and OCR word bboxes + projections + axis lines already recover the structural value — see code note). Tests: tests/tlayout_tree.nim (6/6 green): test_hough_titlebar_synthetic, test_projection_profiles, test_morph_close_bridges_gap, test_region_tree_nesting, test_region_tree_deep_nesting, test_vu4_two_windows_unchanged (regression: default AND morphCloseK=5 both keep the two separated windows at exactly 2). Full re-run green: tlayout_tree (6), tvision_windows (3), tvideo_analysis (11), tchange_detect (5), tvision_cli (5), tocr_vision (5).
    :END:
 
 *** Deliverables
