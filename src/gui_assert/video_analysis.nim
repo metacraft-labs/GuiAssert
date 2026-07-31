@@ -757,12 +757,21 @@ proc extractKeyframe(ffmpegBin, path: string, t: float, outPng: string) =
       formatFloat(t, ffDecimal, precision = 3) & " on " & path)
 
 proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
-                   ssimThreshold = 0.12): VideoAnalysis =
+                   ssimThreshold = 0.12,
+                   ocrPsms: seq[int] = @[6, 11],
+                   ocrOpts = initOcrOptions(upscale = 2.0,
+                                            invert = oiAuto)): VideoAnalysis =
   ## Full VU2 pipeline: probe `path`, segment it into distinct visual states
   ## (`segmentByChange`), then for each state extract ONE full-resolution
   ## keyframe at the state's temporal midpoint, OCR it, and assemble the
   ## timeline. Each `Keyframe` gets `words` (raw OCR), `text`
   ## (`wordsToReadingOrderText`) and `urls` (`extractUrls` over that text).
+  ##
+  ## VU9: the keyframe OCR now runs via `runOcrMultiPsm(ocrPsms, ocrOpts)` —
+  ## by default a block (`--psm 6`) AND sparse (`--psm 11`) pass over a 2x
+  ## Lanczos-upscaled, auto-inverted (dark-mode aware) keyframe, so small
+  ## and/or light-on-dark window headings that a single block pass drops are
+  ## surfaced into the index/digest. Word bboxes stay in original pixel space.
   ##
   ## Keyframe PNGs are written into a fresh temp directory that is *not*
   ## removed; the caller can read/relocate them via each frame's `imagePath`.
@@ -789,7 +798,7 @@ proc analyzeVideo*(path: string, sampleFps = 2.0, scaleW = 320,
     kf.tEnd = seg.tEnd
     kf.changeScore = seg.changeScore
     kf.imagePath = outPng
-    kf.words = runOcr(outPng)
+    kf.words = runOcrMultiPsm(outPng, ocrPsms, ocrOpts)
     kf.text = wordsToReadingOrderText(kf.words)
     kf.urls = extractUrls(kf.text)
     result.frames.add(kf)

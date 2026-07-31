@@ -14,6 +14,7 @@ tests/tpacing
 tests/tvideo_analysis
 tests/tvision_windows
 tests/tvision_cli
+tests/tocr_vision
 src/gui_assert_vision
 vision-out/
 tests/ttalking_head
