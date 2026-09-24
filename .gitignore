@@ -30,3 +30,6 @@ tests/temotive
 tests/tdiscovery
 tests/tartifact_project
 tests/tartifact_pipeline
+
+# Repro development environment cache
+.repro/
