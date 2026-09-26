@@ -7,6 +7,7 @@ srcDir        = "src"
 requires "nim >= 2.0.0"
 
 task test, "Run tests":
+  exec "nim c -r --hints:off tests/tnimcache_is_worktree_local.nim"
   exec "nim c -r --hints:off tests/tparser.nim"
   exec "nim c -r --hints:off tests/tdriver_browser.nim"
   exec "nim c -r --hints:off tests/tdriver_vscode.nim"
