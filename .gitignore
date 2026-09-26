@@ -33,6 +33,7 @@ tests/temotive
 tests/tdiscovery
 tests/tartifact_project
 tests/tartifact_pipeline
+tests/tnimcache_is_worktree_local
 
 # Repro development environment cache
 .repro/
