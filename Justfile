@@ -3,8 +3,7 @@
 # `just test`   - run the default test suite (excludes the OCR-dependent
 #                 tgui_assert flake, which needs a healthy tesseract
 #                 install).
-# `just lint`   - placeholder; required by the workspace pre-commit
-#                 hook.  Add real linters here as they come online.
+# `just lint`   - check the public library and shipping vision CLI entrypoints.
 
 default: test
 
@@ -25,7 +24,7 @@ analyze VIDEO OUT="vision-out":
     nim c --hints:off -o:src/gui_assert_vision src/gui_assert_vision.nim
     ./src/gui_assert_vision analyze {{VIDEO}} --out {{OUT}}
 
-# Required by the workspace's pre-commit hook (`just lint`).  Add real
-# linters here as they come online (e.g. `nim check`).
+# Check both public library and shipping vision CLI entrypoints with the owning compiler.
 lint:
-    @echo "[lint] no linters configured yet for GuiAssert."
+    nim check src/gui_assert.nim
+    nim check src/gui_assert_vision.nim

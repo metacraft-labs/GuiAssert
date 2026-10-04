@@ -101,7 +101,7 @@ Available plugins (sibling repos):
 Plugin authors: see
 `src/gui_assert/talking_head/stock_avatar.nim` and
 `../GuiAssert-SadTalker/src/gui_assert_sadtalker.nim` for the
-canonical shape.  Use `cacheKeyFor` + `applyCache` from
+canonical shape. Use `cacheKeyFor` + `applyCache` from
 `gui_assert/talking_head/core` to avoid re-implementing the cache.
 
 ## Design References

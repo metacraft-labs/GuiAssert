@@ -14,7 +14,7 @@ GuiAssert's GUI-understanding work splits into two independent capability sets;
    read their titles/bounds, focus/activate/resize, click and type — using the
    host's OS/accessibility APIs (macOS Accessibility/`CGWindowList`, Windows
    UIAutomation/`EnumWindows`, Linux EWMH/`wmctrl`, Appium/WebDriver). This set
-   already *partially exists* (`window_layout.nim`, `appium.nim`, `input.nim`)
+   already _partially exists_ (`window_layout.nim`, `appium.nim`, `input.nim`)
    and is what drives the substrate recordings. It is **out of scope here.**
 
 2. **Pure computer-vision analysis (this initiative).** Answer the same kinds of
@@ -23,33 +23,33 @@ GuiAssert's GUI-understanding work splits into two independent capability sets;
    screen streamed from a remote/VM/kiosk session, a single-surface app that
    draws its own widgets (games, canvas/WebGL, custom GPU UIs), or footage from a
    machine we cannot introspect. Everything below uses only decoded frame pixels
-   + OCR; it never calls an OS window API.
+   and OCR; it never calls an OS window API.
 
 ## Problem
 
 For the pure-CV case, GuiAssert cannot yet turn a screenshot or a recorded
 video into a **structured, queryable, assertable** description. Today an agent
-(or a test) confronted with `linux-session.mp4` — a *recording*, where no live
+(or a test) confronted with `linux-session.mp4` — a _recording_, where no live
 OS query is possible — has no programmatic way to answer:
 
 - "How many top-level windows are visible, and what is each one's text?"
 - "At what timestamps did the on-screen content change?"
-- "Did a window titled *CodeTracer Browser Replay* ever appear?"
+- "Did a window titled _CodeTracer Browser Replay_ ever appear?"
 - "Was the URL `127.0.0.1:8080/docs` shown at any point?"
 
 The low-level primitives already exist and are tested:
 
-| Primitive | Module | What it gives |
-|---|---|---|
-| Word-level OCR w/ pixel bboxes | `ocr.runOcr` → `seq[OcrWord]` | text + `[x,y,w,h]` + confidence + line/block |
-| Grayscale decode (ffmpeg) | `image_math.decodeGray` → `GrayImage` | raw 8-bit buffer of known size |
-| Global SSIM | `image_math.computeSsim(a,b)` | frame-to-frame similarity in [-1,1] |
-| ffmpeg/tesseract resolution | `media.resolveFfmpegBinary`, `ocr.resolveTesseractBinary` | pinned-binary discovery |
+| Primitive                      | Module                                                    | What it gives                                |
+| ------------------------------ | --------------------------------------------------------- | -------------------------------------------- |
+| Word-level OCR w/ pixel bboxes | `ocr.runOcr` → `seq[OcrWord]`                             | text + `[x,y,w,h]` + confidence + line/block |
+| Grayscale decode (ffmpeg)      | `image_math.decodeGray` → `GrayImage`                     | raw 8-bit buffer of known size               |
+| Global SSIM                    | `image_math.computeSsim(a,b)`                             | frame-to-frame similarity in [-1,1]          |
+| ffmpeg/tesseract resolution    | `media.resolveFfmpegBinary`, `ocr.resolveTesseractBinary` | pinned-binary discovery                      |
 
-**Missing:** the *video-level* layer that segments a recording by visual change,
-OCRs representative frames, and assembles a timeline; the *window-enumeration*
-layer that answers "how many windows + their text"; a *query/assertion* API over
-both; a *CLI* the agent can run on any video; and *reproducible* tool pinning
+**Missing:** the _video-level_ layer that segments a recording by visual change,
+OCRs representative frames, and assembles a timeline; the _window-enumeration_
+layer that answers "how many windows + their text"; a _query/assertion_ API over
+both; a _CLI_ the agent can run on any video; and _reproducible_ tool pinning
 (GuiAssert has no flake — it borrows ffmpeg/tesseract from the consuming repo).
 
 ## Design
@@ -124,9 +124,9 @@ pull individual frames **only on demand**. GuiAssert adopts this directly. The
    "what is this recording?" with no frames.
 2. **Segment timeline**: one row per stable UI state —
    `{id, start, end, thumbnail, activeWindow, regionTree, text (reading order),
-   urls, textDiffVsPrev}`. The **text-diff vs the previous state** ("+ dialog
+urls, textDiffVsPrev}`. The **text-diff vs the previous state** ("+ dialog
    'Delete file?'", "− toolbar", "addr A→B") is the highest-signal / lowest-token
-   description of *what changed*.
+   description of _what changed_.
 3. **Searchable text/element index**: every OCR'd string + detected region as
    `{text, confidence, bbox, segmentId, timestamp}` so an agent can **grep the
    video** — locate the exact timestamps where a string/URL/window appears, then
@@ -164,7 +164,7 @@ repo's devShell supplies them.
 
 Per workspace policy: mock as little as possible. Parser/geometry procs are
 pure and tested against inline fixtures. Pipeline procs are tested against
-**real** ffmpeg + tesseract using fixtures *generated at test time* (ffmpeg
+**real** ffmpeg + tesseract using fixtures _generated at test time_ (ffmpeg
 `drawtext` frames + a 2-state fixture video), so OCR/SSIM run against genuine
 binaries with no committed media blobs and no stubbed subprocesses.
 
@@ -175,7 +175,7 @@ detectors; Tesseract vs PaddleOCR/RapidOCR/Apple Vision; Set-of-Mark) informed
 these decisions. Full sources in the initiative notes.
 
 - **Agent token-efficiency (highest leverage).** The winning pattern is
-  *video→document + retrieval*: emit a compact textual index and pull frames
+  _video→document + retrieval_: emit a compact textual index and pull frames
   only on demand (DrVideo). We adopt the 3-level index + `find`/`extract-frame`/
   `contact-sheet` above. This — not ML — is our top priority (VU5).
 - **Change detection.** Global SSIM is dominated by large unchanged regions and
@@ -195,6 +195,6 @@ these decisions. Full sources in the initiative notes.
 - **Layout/window detection.** Beyond Otsu+CC (VU4), add pure-CV **morphological
   close/open → Hough/LSD line detection** (title bars/toolbars/borders) **→ MSER**
   text regions **→ projection profiles → contour-hierarchy region tree** (VU10).
-  This recovers most of OmniParser's *structural* value without ML; semantic
+  This recovers most of OmniParser's _structural_ value without ML; semantic
   element labels ("Save button") remain ML-only and are an optional backend
   (VU11) — OCR text near a region is a cheap proxy.

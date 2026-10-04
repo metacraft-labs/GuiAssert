@@ -21,25 +21,25 @@
   `-d:with<Provider>` compile gate.
 
 ** Plugin contract
-   The contract is `GuiAssert/src/gui_assert/talking_head/core.nim`:
+    The contract is `GuiAssert/src/gui_assert/talking_head/core.nim`:
 
-   - `TalkingHeadProvider` value-type with `name`, `isAvailable`, `generate`.
-   - `TalkingHeadRegistry` for runtime dispatch by string name.
-   - `cacheKeyFor(avatar, narration, providerName, device)` — stable hash.
-   - `applyCache(cacheDir, key, outputMp4, generator)` — generic memoisation.
-   - `optsFromMetadata(meta, scriptDir)` — translates YAML
-     `metadata.talking_head:` blocks into `TalkingHeadOpts`.
+    - `TalkingHeadProvider` value-type with `name`, `isAvailable`, `generate`.
+    - `TalkingHeadRegistry` for runtime dispatch by string name.
+    - `cacheKeyFor(avatar, narration, providerName, device)` — stable hash.
+    - `applyCache(cacheDir, key, outputMp4, generator)` — generic memoisation.
+    - `optsFromMetadata(meta, scriptDir)` — translates YAML
+      `metadata.talking_head:` blocks into `TalkingHeadOpts`.
 
-   Each plugin exports a `register<Plugin>(reg: TalkingHeadRegistry)` proc
-   plus a constructor `<plugin>Provider(): TalkingHeadProvider`.
+    Each plugin exports a `register<Plugin>(reg: TalkingHeadRegistry)` proc
+    plus a constructor `<plugin>Provider(): TalkingHeadProvider`.
 
 * Milestones
 
 ** M0: SadTalker restore + first combined sample
-   :PROPERTIES:
-   :status: implemented
-   :depends_on:
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on:
+    :END:
 
 *** Deliverables
     - [x] Re-run =GuiAssert-SadTalker/scripts/install.sh= so the
@@ -96,10 +96,10 @@
       Python version supported by the patched SadTalker stack.
 
 ** M1: GuiAssert-Wav2Lip plugin
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M0
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M0
+    :END:
 
 *** Deliverables
     - [X] Create =/Users/zahary/metacraft/GuiAssert-Wav2Lip/= with:
@@ -167,10 +167,10 @@
       missing.
 
 ** M2: GuiAssert-MuseTalk plugin
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M1
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M1
+    :END:
 
 *** Deliverables
     - [x] Create =/Users/zahary/metacraft/GuiAssert-MuseTalk/= with
@@ -238,10 +238,10 @@
       earlier revisions has been deleted upstream and now 404s.
 
 ** M3: GuiAssert-Did plugin (commercial)
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M2
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M2
+    :END:
 
 *** Deliverables
     - [X] Create =/Users/zahary/metacraft/GuiAssert-Did/= (no python
@@ -314,10 +314,10 @@
       =ffmpeg= and committed so the tests are self-contained.
 
 ** M4: GuiAssert-HeyGen plugin (commercial)
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M3
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M3
+    :END:
 
 *** Deliverables
     - [X] Create =/Users/zahary/metacraft/GuiAssert-HeyGen/=.
@@ -402,10 +402,10 @@
       =HttpClient= via the =withFreshClient= template.
 
 ** M5: GuiAssert-Synthesia plugin (commercial)
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M4
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M4
+    :END:
 
 *** Deliverables
     - [X] Create =/Users/zahary/metacraft/GuiAssert-Synthesia/=.
@@ -510,10 +510,10 @@
       =HttpClient= via the =withFreshClient= template.
 
 ** M6: GuiAssert-Tavus plugin (commercial)
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M5
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M5
+    :END:
 
 *** Deliverables
     - [X] Create =/Users/zahary/metacraft/GuiAssert-Tavus/=.
@@ -627,10 +627,10 @@
       fresh =HttpClient= via the =withFreshClient= template.
 
 ** M7: GuiAssert-ElevenLabs plugin (TTS, optional pair)
-   :PROPERTIES:
-   :status: implemented
-   :depends_on: M6
-   :END:
+    :PROPERTIES:
+    :status: implemented
+    :depends_on: M6
+    :END:
 
 *** Deliverables
     - [x] Create =/Users/zahary/metacraft/GuiAssert-ElevenLabs/=.
@@ -767,24 +767,24 @@
 
 * Common deliverables per plugin
 
-   Each plugin repo MUST contain:
-   - =README.md= (public-safe, no internal references)
-   - =LICENSE= (MIT, matches GuiAssert)
-   - =.gitignore= (.venv, model-weight extensions, build artefacts)
-   - =flake.nix= (dev-shell deps; never bundles heavyweight ML wheels)
-   - =Justfile= (minimum =lint= and =test= recipes so workspace hooks pass)
-   - =gui_assert_<plugin>.nimble= (requires =gui_assert >= 0.1.0=)
-   - =src/gui_assert_<plugin>.nim= (provider contract impl)
-   - =tests/t<plugin>.nim= (pure + gated live tests)
-   - Documentation of cost / setup steps in README
-   - For local providers: =scripts/install.sh= + =scripts/verify-install.sh=
-   - Status update in this org file as the milestone completes
+    Each plugin repo MUST contain:
+    - =README.md= (public-safe, no internal references)
+    - =LICENSE= (MIT, matches GuiAssert)
+    - =.gitignore= (.venv, model-weight extensions, build artefacts)
+    - =flake.nix= (dev-shell deps; never bundles heavyweight ML wheels)
+    - =Justfile= (minimum =lint= and =test= recipes so workspace hooks pass)
+    - =gui_assert_<plugin>.nimble= (requires =gui_assert >= 0.1.0=)
+    - =src/gui_assert_<plugin>.nim= (provider contract impl)
+    - =tests/t<plugin>.nim= (pure + gated live tests)
+    - Documentation of cost / setup steps in README
+    - For local providers: =scripts/install.sh= + =scripts/verify-install.sh=
+    - Status update in this org file as the milestone completes
 
 * Naming & visibility
 
-   All =GuiAssert-*= plugin repos are *public*. Commit messages must
-   stay user-facing — no CodeTracer or codetracer-marketing
-   references.
+    All =GuiAssert-*= plugin repos are *public*. Commit messages must
+    stay user-facing — no CodeTracer or codetracer-marketing
+    references.
 
-   codetracer-marketing is *private* — its commit messages can be
-   richer about internal context.
+    codetracer-marketing is *private* — its commit messages can be
+    richer about internal context.

@@ -33,21 +33,35 @@
         in
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              # nim ships the `nim` compiler; nimble is packaged separately.
-              nim
-              nimble
-              just
-              # Plain `ffmpeg` (NOT ffmpeg-full): the default nixpkgs build ships
-              # libx264 + freetype/fontconfig (so `drawtext` works) which the
-              # vision tests require, while avoiding the ffmpeg-full/kvazaar
-              # ctest failure that breaks `nix develop` on aarch64-darwin.
-              ffmpeg
-              # tesseract 5.x with the default (English-included) traineddata.
-              tesseract
-              # libpcre for Nim's std/re module, should any suite pull it in.
-              pcre
-            ] ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.espeak-ng pkgs.xvfb-run pkgs.xorg.xdpyinfo ];
+            packages =
+              with pkgs;
+              [
+                # nim ships the `nim` compiler; nimble is packaged separately.
+                nim
+                nimble
+                just
+                prek
+                uv
+                python3
+                editorconfig-checker
+                nixfmt-rfc-style
+                opentofu
+                prettier
+                # Plain `ffmpeg` (NOT ffmpeg-full): the default nixpkgs build ships
+                # libx264 + freetype/fontconfig (so `drawtext` works) which the
+                # vision tests require, while avoiding the ffmpeg-full/kvazaar
+                # ctest failure that breaks `nix develop` on aarch64-darwin.
+                ffmpeg
+                # tesseract 5.x with the default (English-included) traineddata.
+                tesseract
+                # libpcre for Nim's std/re module, should any suite pull it in.
+                pcre
+              ]
+              ++ lib.optionals pkgs.stdenv.isLinux [
+                pkgs.espeak-ng
+                pkgs.xvfb-run
+                pkgs.xorg.xdpyinfo
+              ];
 
             shellHook = ''
               # Canonicalize TMPDIR to its physical path. On macOS /tmp is a

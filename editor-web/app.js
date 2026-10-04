@@ -61,8 +61,10 @@
     history: { past: [], future: [], limit: 100 },
     renderState: { scriptPath: "", projectDir: "", stages: [] },
     renderOptions: {
-      captions: true, audioMode: "head",
-      localHeadModel: "sadtalker", commercialProvider: "heygen",
+      captions: true,
+      audioMode: "head",
+      localHeadModel: "sadtalker",
+      commercialProvider: "heygen",
     },
     bannerDismissed: false,
   };
@@ -120,12 +122,14 @@
   // which only the renderer knows about; for aspect-sync we treat them as
   // the full source extent.
   function effectiveCrop(kf) {
-    const w = kf.src_crop.w > 0
-      ? kf.src_crop.w
-      : Math.max(state.sourceDims.w - kf.src_crop.x, 1);
-    const h = kf.src_crop.h > 0
-      ? kf.src_crop.h
-      : Math.max(state.sourceDims.h - kf.src_crop.y, 1);
+    const w =
+      kf.src_crop.w > 0
+        ? kf.src_crop.w
+        : Math.max(state.sourceDims.w - kf.src_crop.x, 1);
+    const h =
+      kf.src_crop.h > 0
+        ? kf.src_crop.h
+        : Math.max(state.sourceDims.h - kf.src_crop.y, 1);
     return { w, h };
   }
 
@@ -185,7 +189,9 @@
     return `/api/preview-file?path=${encodeURIComponent(absPath)}`;
   }
 
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
   function fmtNum(v) {
     if (typeof v !== "number") return String(v);
     if (!Number.isFinite(v)) return "NaN";
@@ -201,14 +207,20 @@
     const aspect = vw / vh;
     const stageAspect = stage.width / stage.height;
     let w, h;
-    if (stageAspect > aspect) { h = stage.height; w = h * aspect; }
-    else                       { w = stage.width;  h = w / aspect; }
+    if (stageAspect > aspect) {
+      h = stage.height;
+      w = h * aspect;
+    } else {
+      w = stage.width;
+      h = w / aspect;
+    }
     return {
       left: stage.left + (stage.width - w) / 2,
-      top:  stage.top  + (stage.height - h) / 2,
+      top: stage.top + (stage.height - h) / 2,
       width: w,
       height: h,
-      vw, vh,
+      vw,
+      vh,
     };
   }
 
@@ -221,11 +233,11 @@
     const stage = stageEl.getBoundingClientRect();
     svgEl.setAttribute("viewBox", `0 0 ${stage.width} ${stage.height}`);
     svgEl.dataset.boxLeft = (box.left - stage.left).toFixed(2);
-    svgEl.dataset.boxTop  = (box.top  - stage.top ).toFixed(2);
-    svgEl.dataset.boxW    = box.width.toFixed(2);
-    svgEl.dataset.boxH    = box.height.toFixed(2);
-    svgEl.dataset.vw      = box.vw;
-    svgEl.dataset.vh      = box.vh;
+    svgEl.dataset.boxTop = (box.top - stage.top).toFixed(2);
+    svgEl.dataset.boxW = box.width.toFixed(2);
+    svgEl.dataset.boxH = box.height.toFixed(2);
+    svgEl.dataset.vw = box.vw;
+    svgEl.dataset.vh = box.vh;
   }
 
   function pxToSrc(svgEl, px, py) {
@@ -289,10 +301,10 @@
     // Resize handles at the 4 corners.
     const HS = 7;
     const corners = [
-      ["nw", x,         y],
-      ["ne", x + w,     y],
-      ["sw", x,         y + h],
-      ["se", x + w,     y + h],
+      ["nw", x, y],
+      ["ne", x + w, y],
+      ["sw", x, y + h],
+      ["se", x + w, y + h],
     ];
     const handles = [];
     for (const [name, cx, cy] of corners) {
@@ -310,7 +322,8 @@
     let drag = null;
     const onDown = (e) => {
       const target = e.target;
-      const isHandle = target.classList && target.classList.contains("rect-handle");
+      const isHandle =
+        target.classList && target.classList.contains("rect-handle");
       const isBody = target === r;
       if (!isHandle && !isBody) return;
       e.preventDefault();
@@ -318,7 +331,8 @@
       recordUndo();
       drag = {
         kind: isHandle ? target.dataset.handle : "move",
-        startX: e.clientX, startY: e.clientY,
+        startX: e.clientX,
+        startY: e.clientY,
         origRect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
         stage: stageRect,
         isResize: isHandle,
@@ -330,19 +344,40 @@
       if (!drag) return;
       const dxPx = e.clientX - drag.startX;
       const dyPx = e.clientY - drag.startY;
-      const scaleX = vw / bw, scaleY = vh / bh;
+      const scaleX = vw / bw,
+        scaleY = vh / bh;
       const dx = dxPx * scaleX;
       const dy = dyPx * scaleY;
       const orig = drag.origRect;
-      let nx = orig.x, ny = orig.y;
+      let nx = orig.x,
+        ny = orig.y;
       let nw = orig.w > 0 ? orig.w : vw - orig.x;
       let nh = orig.h > 0 ? orig.h : vh - orig.y;
       switch (drag.kind) {
-        case "move": nx += dx; ny += dy; break;
-        case "nw":   nx += dx; ny += dy; nw -= dx; nh -= dy; break;
-        case "ne":              ny += dy; nw += dx; nh -= dy; break;
-        case "sw":   nx += dx;            nw -= dx; nh += dy; break;
-        case "se":                        nw += dx; nh += dy; break;
+        case "move":
+          nx += dx;
+          ny += dy;
+          break;
+        case "nw":
+          nx += dx;
+          ny += dy;
+          nw -= dx;
+          nh -= dy;
+          break;
+        case "ne":
+          ny += dy;
+          nw += dx;
+          nh -= dy;
+          break;
+        case "sw":
+          nx += dx;
+          nw -= dx;
+          nh += dy;
+          break;
+        case "se":
+          nw += dx;
+          nh += dy;
+          break;
       }
       nw = Math.max(8, nw);
       nh = Math.max(8, nh);
@@ -353,7 +388,8 @@
         const aspect = (orig.w > 0 ? orig.w : 1) / (orig.h > 0 ? orig.h : 1);
         const scaleW = nw / Math.max(1, orig.w);
         const scaleH = nh / Math.max(1, orig.h);
-        const scale = Math.abs(scaleW - 1) >= Math.abs(scaleH - 1) ? scaleW : scaleH;
+        const scale =
+          Math.abs(scaleW - 1) >= Math.abs(scaleH - 1) ? scaleW : scaleH;
         nw = Math.max(8, (orig.w > 0 ? orig.w : 1) * scale);
         nh = nw / aspect;
         // If the handle is anchored on the top or left edge, the
@@ -378,7 +414,10 @@
       }
       const target = state.track.keyframes[state.selectedKf];
       const t = kind === "src" ? target.src_crop : target.dst_rect;
-      t.x = nx; t.y = ny; t.w = nw; t.h = nh;
+      t.x = nx;
+      t.y = ny;
+      t.w = nw;
+      t.h = nh;
       // Propagate the new aspect to the other rectangle so the image
       // isn't stretched in the composite.
       syncAspect(target, kind);
@@ -423,22 +462,26 @@
     }
     const kf = state.track.keyframes[state.selectedKf];
     const fields = [
-      { key: "time",            label: "time (s)",   step: 0.05 },
-      { key: "src_crop.x",      label: "src x",      step: 4 },
-      { key: "src_crop.y",      label: "src y",      step: 4 },
-      { key: "src_crop.w",      label: "src w",      step: 4 },
-      { key: "src_crop.h",      label: "src h",      step: 4 },
-      { key: "dst_rect.x",      label: "dst x",      step: 4 },
-      { key: "dst_rect.y",      label: "dst y",      step: 4 },
-      { key: "dst_rect.w",      label: "dst w",      step: 4 },
-      { key: "dst_rect.h",      label: "dst h",      step: 4 },
-      { key: "key_method",      label: "key method", select: ["chroma", "color", "luma"] },
-      { key: "key_color",       label: "key color",  text: true },
-      { key: "key_similarity",  label: "similarity", step: 0.01 },
-      { key: "key_blend",       label: "blend",      step: 0.01 },
-      { key: "luma_threshold",  label: "luma thr",   step: 0.01 },
-      { key: "luma_tolerance",  label: "luma tol",   step: 0.01 },
-      { key: "despill",         label: "despill",    bool: true },
+      { key: "time", label: "time (s)", step: 0.05 },
+      { key: "src_crop.x", label: "src x", step: 4 },
+      { key: "src_crop.y", label: "src y", step: 4 },
+      { key: "src_crop.w", label: "src w", step: 4 },
+      { key: "src_crop.h", label: "src h", step: 4 },
+      { key: "dst_rect.x", label: "dst x", step: 4 },
+      { key: "dst_rect.y", label: "dst y", step: 4 },
+      { key: "dst_rect.w", label: "dst w", step: 4 },
+      { key: "dst_rect.h", label: "dst h", step: 4 },
+      {
+        key: "key_method",
+        label: "key method",
+        select: ["chroma", "color", "luma"],
+      },
+      { key: "key_color", label: "key color", text: true },
+      { key: "key_similarity", label: "similarity", step: 0.01 },
+      { key: "key_blend", label: "blend", step: 0.01 },
+      { key: "luma_threshold", label: "luma thr", step: 0.01 },
+      { key: "luma_tolerance", label: "luma tol", step: 0.01 },
+      { key: "despill", label: "despill", bool: true },
     ];
     for (const f of fields) {
       const wrap = document.createElement("div");
@@ -452,7 +495,8 @@
         inp = document.createElement("select");
         for (const v of f.select) {
           const o = document.createElement("option");
-          o.value = v; o.textContent = v;
+          o.value = v;
+          o.textContent = v;
           if (v === cur) o.selected = true;
           inp.appendChild(o);
         }
@@ -472,7 +516,11 @@
       }
       inp.addEventListener("change", () => {
         recordUndo();
-        const v = f.bool ? inp.checked : (f.select || f.text ? inp.value : parseFloat(inp.value));
+        const v = f.bool
+          ? inp.checked
+          : f.select || f.text
+            ? inp.value
+            : parseFloat(inp.value);
         writePath(kf, f.key, v);
         // Aspect-sync if the user changed a rect dimension.
         if (f.key.startsWith("src_crop.")) syncAspect(kf, "src");
@@ -486,7 +534,8 @@
     const actions = document.createElement("div");
     actions.className = "kf-actions";
     const dup = document.createElement("button");
-    dup.className = "kf-btn"; dup.textContent = "duplicate";
+    dup.className = "kf-btn";
+    dup.textContent = "duplicate";
     dup.onclick = () => {
       recordUndo();
       const clone = JSON.parse(JSON.stringify(kf));
@@ -497,12 +546,16 @@
       saveTrack();
     };
     const del = document.createElement("button");
-    del.className = "kf-btn danger"; del.textContent = "delete";
+    del.className = "kf-btn danger";
+    del.textContent = "delete";
     del.onclick = () => {
       if (state.track.keyframes.length <= 1) return;
       recordUndo();
       state.track.keyframes.splice(state.selectedKf, 1);
-      state.selectedKf = Math.min(state.selectedKf, state.track.keyframes.length - 1);
+      state.selectedKf = Math.min(
+        state.selectedKf,
+        state.track.keyframes.length - 1,
+      );
       rerenderEverything();
       saveTrack();
     };
@@ -517,7 +570,7 @@
   function writePath(obj, path, value) {
     const parts = path.split(".");
     const last = parts.pop();
-    const parent = parts.reduce((o, k) => o[k] = o[k] || {}, obj);
+    const parent = parts.reduce((o, k) => (o[k] = o[k] || {}), obj);
     parent[last] = value;
   }
 
@@ -532,7 +585,7 @@
     for (let s = 0; s <= duration; s += 1) {
       const tick = document.createElement("div");
       tick.className = "ruler-tick";
-      tick.style.left = (s * scale + 90) + "px"; // +90 for label gutter
+      tick.style.left = s * scale + 90 + "px"; // +90 for label gutter
       tick.textContent = `${s}s`;
       KF_RULER.appendChild(tick);
     }
@@ -540,7 +593,7 @@
       const kf = state.track.keyframes[i];
       const d = document.createElement("div");
       d.className = "kf-diamond" + (i === state.selectedKf ? " active" : "");
-      d.style.left = (clamp(kf.time, 0, duration) * scale) + "px";
+      d.style.left = clamp(kf.time, 0, duration) * scale + "px";
       d.title = `t = ${kf.time.toFixed(2)}s`;
       d.onmousedown = (e) => startKfDrag(e, i, scale, duration);
       KF_TRACK.appendChild(d);
@@ -557,12 +610,11 @@
     const origT = state.track.keyframes[index].time;
     const onMove = (ev) => {
       const dt = (ev.clientX - startX) / scale;
-      state.track.keyframes[index].time =
-        clamp(origT + dt, 0, duration);
+      state.track.keyframes[index].time = clamp(origT + dt, 0, duration);
       state.track.keyframes.sort((a, b) => a.time - b.time);
       // re-find the dragged kf after sort
       state.selectedKf = state.track.keyframes.findIndex(
-        (k) => k === state.track.keyframes[state.selectedKf]
+        (k) => k === state.track.keyframes[state.selectedKf],
       );
       renderTimeline();
       updateInspector();
@@ -585,15 +637,21 @@
     const t = clamp(x / scale, 0, duration);
     recordUndo();
     // Clone the last active keyframe geometry so the new one is editable.
-    const tmpl = state.track.keyframes[
-      Math.max(0, state.selectedKf >= 0 ? state.selectedKf : state.track.keyframes.length - 1)
-    ] || defaultKf();
+    const tmpl =
+      state.track.keyframes[
+        Math.max(
+          0,
+          state.selectedKf >= 0
+            ? state.selectedKf
+            : state.track.keyframes.length - 1,
+        )
+      ] || defaultKf();
     const fresh = JSON.parse(JSON.stringify(tmpl));
     fresh.time = t;
     state.track.keyframes.push(fresh);
     state.track.keyframes.sort((a, b) => a.time - b.time);
     state.selectedKf = state.track.keyframes.findIndex(
-      (k) => Math.abs(k.time - t) < 1e-6
+      (k) => Math.abs(k.time - t) < 1e-6,
     );
     rerenderEverything();
     saveTrack();
@@ -607,7 +665,7 @@
       key_method: "chroma",
       key_color: "0x00ff00",
       key_similarity: 0.18,
-      key_blend: 0.10,
+      key_blend: 0.1,
       luma_threshold: 0.9,
       luma_tolerance: 0.05,
       despill: true,
@@ -662,7 +720,10 @@
     if (n <= 0) return "—";
     const units = ["B", "kB", "MB", "GB"];
     let i = 0;
-    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    while (n >= 1024 && i < units.length - 1) {
+      n /= 1024;
+      i++;
+    }
     return `${n.toFixed(n >= 10 ? 0 : 1)} ${units[i]}`;
   }
   function fmtMtime(seconds) {
@@ -702,8 +763,12 @@
     FOOTER_PROJECT.textContent = state.renderState.projectDir || "no project";
     // Banner: surface when automation stage isn't fresh.
     const auto = state.renderState.stages.find((s) => s.stage === "automation");
-    if (auto && (auto.status === "stale" || auto.status === "missing") &&
-        !state.bannerDismissed && state.renderState.scriptPath) {
+    if (
+      auto &&
+      (auto.status === "stale" || auto.status === "missing") &&
+      !state.bannerDismissed &&
+      state.renderState.scriptPath
+    ) {
       STALE_BANNER.classList.remove("hidden");
       STALE_MSG.textContent =
         auto.status === "missing"
@@ -738,7 +803,11 @@
       const t0 = performance.now();
       const r = await fetchJson(
         `/api/render?stage=${encodeURIComponent(stage)}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
       );
       const ms = Math.round(performance.now() - t0);
       setStatus("ready", ms);
@@ -799,10 +868,8 @@
     const track = await fetchJson("/api/avatar-track");
     state.track = track;
     state.selectedKf = state.track.keyframes.length > 0 ? 0 : -1;
-    state.duration = Math.max(
-      ...state.track.keyframes.map((k) => k.time),
-      8
-    ) + 2;
+    state.duration =
+      Math.max(...state.track.keyframes.map((k) => k.time), 8) + 2;
 
     const activeSrc = state.sources.find((s) => s.path === track.source_video);
     if (activeSrc) {
@@ -835,7 +902,9 @@
     // Render manager — initial fetch + wire option controls.
     try {
       state.renderOptions = await fetchJson("/api/render-options");
-    } catch (e) { /* in-memory script — fine */ }
+    } catch (e) {
+      /* in-memory script — fine */
+    }
     syncOptionsControls();
     await refreshRenderState();
 
@@ -870,7 +939,7 @@
     });
     STALE_RENDER.addEventListener("click", () => {
       const btn = document.querySelector(
-        '#render-stages-body button[data-stage="automation"]'
+        '#render-stages-body button[data-stage="automation"]',
       );
       if (btn) renderStage("automation", btn);
     });
