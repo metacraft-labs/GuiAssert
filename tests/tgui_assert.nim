@@ -125,7 +125,10 @@ timeline:
     let script = parseScriptYaml(yaml)
     check script.timeline.len == 3
 
-    var driver = newPtyDriver(["/bin/cat"])
+    # Use the real cat supplied by the declared development environment.
+    let cat = findExe("cat", followSymlinks = false)
+    doAssert cat.len > 0 and fileExists(cat), "cat is required for the real PTY echo control"
+    var driver = newPtyDriver([cat])
     defer: closeDriver(driver)
 
     let events = playScriptOnPty(driver, script)

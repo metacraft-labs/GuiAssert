@@ -9,7 +9,7 @@
 ## A second suite, gated behind `-d:appiumLive`, talks to a real Appium
 ## server at `$APPIUM_URL` (or `http://127.0.0.1:4723` by default).
 
-import std/[json, net, options, os, strutils, unittest]
+import std/[atomics, json, nativesockets, net, options, os, strutils, unittest]
 import ../src/gui_assert/appium
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ type
     sock: Socket
     port: int
     requests: seq[Recorded]
-    stopping: bool
+    stopping: Atomic[bool]
 
 var mockState {.threadvar.}: ptr MockState
 
@@ -132,8 +132,16 @@ proc handleClient(state: ptr MockState, client: Socket) =
   client.close()
 
 proc mockServerThread(state: ptr MockState) {.thread.} =
-  while not state[].stopping:
+  while not state[].stopping.load():
     try:
+      # Poll only the owned listener so a failed wake connection still permits
+      # cleanup. This does not bound or shorten any protocol assertion.
+      var readable = @[state[].sock.getFd()]
+      let ready = selectRead(readable, timeout = 100)
+      if ready < 0:
+        raiseOSError(osLastError())
+      if ready == 0 or state[].stopping.load():
+        continue
       var client: Socket
       state[].sock.accept(client)
       handleClient(state, client)
@@ -154,15 +162,21 @@ proc startMockServer(state: ptr MockState): Thread[ptr MockState] =
   state[].sock.bindAddr(Port(port), "127.0.0.1")
   state[].sock.listen()
   state[].port = port
-  state[].stopping = false
+  state[].stopping.store(false)
   state[].requests = @[]
   createThread(result, mockServerThread, state)
 
 proc stopMockServer(state: ptr MockState, th: var Thread[ptr MockState]) =
-  state[].stopping = true
-  try: state[].sock.close() except CatchableError: discard
-  # The accept call will fail with OSError and the thread exits.
-  joinThread(th)
+  # Wake the owned listener before joining; a cross-thread close does not
+  # reliably interrupt accept. The polling guard also covers wake failure.
+  state[].stopping.store(true)
+  let wake = newSocket()
+  try:
+    wake.connect("127.0.0.1", Port(state[].port), timeout = 1000)
+  finally:
+    wake.close()
+    joinThread(th)
+    state[].sock.close()
 
 suite "appium HTTP wire protocol against mock server":
 
