@@ -47,7 +47,7 @@
               tesseract
               # libpcre for Nim's std/re module, should any suite pull it in.
               pcre
-            ] ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.espeak-ng ];
+            ] ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.espeak-ng pkgs.xvfb-run pkgs.xorg.xdpyinfo ];
 
             shellHook = ''
               # Canonicalize TMPDIR to its physical path. On macOS /tmp is a

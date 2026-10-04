@@ -10,10 +10,10 @@ default: test
 
 # Run every default unit test against the local nim toolchain.
 test:
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline; do \
+    @test_status=0; for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline; do \
       echo "===== $f ====="; \
-      nim c -r --hints:off tests/$f.nim; \
-    done
+      if bash scripts/run-test-in-display.sh nim c -r --hints:off tests/$f.nim; then :; else test_status=1; fi; \
+    done; exit "$test_status"
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:
