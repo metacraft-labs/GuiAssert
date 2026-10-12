@@ -10,11 +10,28 @@
 ##   * `detectLayoutOverflow` — reports OCR words that cross supplied
 ##     region boundaries.
 ##
-## The harness is deliberately simple: a frame is identified by an on-disk
-## image path. Callers (the visual review agent in M4, the timeline editor
-## in M5) point the harness at the latest-rendered frame and call into the
-## assertion helpers. A future revision is expected to expose live screen
-## capture as a frame source.
+## A frame is identified by an on-disk image path, and a harness owns a
+## `frameSource` closure that produces one. Callers (the visual review agent
+## in M4, the timeline editor in M5) point the harness at the latest-rendered
+## frame and call into the assertion helpers.
+##
+## **Live screen capture is now one of those frame sources** (macOS). The
+## promise this header used to carry — "a future revision is expected to expose
+## live screen capture as a frame source" — is kept by
+## `newLiveDisplayHarness` and `newLiveWindowHarness`, which build a harness
+## whose `frameSource` captures a fresh still on every call through
+## `gui_assert/screen_capture`. Because `waitForText` already re-invokes
+## `frameSource` on every poll, pointing a harness at a live source turns it
+## into a genuine wait-for-the-UI loop with no change to the assertion code.
+##
+## The path-based API is unchanged and remains the default. Every assertion
+## keeps its `frame: string` overload, so existing consumers
+## (`codetracer-marketing`) are unaffected; the new overloads simply omit the
+## frame and take it from the harness instead.
+##
+## `visualCompare` / `detectLayoutOverflow` previously ignored their `harness`
+## argument entirely ("reserved for future routing"). The frame-less overloads
+## are that routing.
 
 import std/[os, options, strutils, times]
 
@@ -27,6 +44,7 @@ import ./gui_assert/ocr
 import ./gui_assert/image_math
 import ./gui_assert/storyboard
 import ./gui_assert/capture
+import ./gui_assert/screen_capture
 import ./gui_assert/talking_head
 import ./gui_assert/emotive
 import ./gui_assert/window_layout
@@ -42,6 +60,7 @@ export ocr
 export image_math
 export storyboard
 export capture
+export screen_capture
 export talking_head
 export emotive
 export window_layout
@@ -56,6 +75,11 @@ type
     ## or by tests writing into a temp directory).
     frameSource*: proc(): string {.closure.}
     pollIntervalMs*: int
+    frameSourceLabel*: string
+      ## Human-readable description of where frames come from, e.g.
+      ## `path:/tmp/frame.png`, `live-display:0`, `live-window:iTerm`. Carried
+      ## so a failure report can say WHAT was captured instead of only that an
+      ## assertion failed. Purely descriptive; nothing dispatches on it.
 
 proc newGuiAssertHarness*(framePath: string,
                           pollIntervalMs: int = 100): GuiAssertHarness =
@@ -63,17 +87,88 @@ proc newGuiAssertHarness*(framePath: string,
   ## frame path. Use the closure-based form when the frame rotates.
   result = GuiAssertHarness(
     pollIntervalMs: pollIntervalMs,
-    frameSource: proc(): string {.closure.} = framePath
+    frameSource: proc(): string {.closure.} = framePath,
+    frameSourceLabel: "path:" & framePath
   )
 
 proc newGuiAssertHarnessFromSource*(
     source: proc(): string {.closure.},
-    pollIntervalMs: int = 100): GuiAssertHarness =
+    pollIntervalMs: int = 100,
+    label: string = "closure"): GuiAssertHarness =
   ## Construct a harness with a dynamic frame source.
   result = GuiAssertHarness(
     frameSource: source,
-    pollIntervalMs: pollIntervalMs
+    pollIntervalMs: pollIntervalMs,
+    frameSourceLabel: label
   )
+
+# ---------------------------------------------------------------------------
+# Live capture frame sources (macOS)
+# ---------------------------------------------------------------------------
+
+proc newLiveDisplayHarness*(displayIndex: int = 0,
+                            pollIntervalMs: int = 250,
+                            frameDir: string = "",
+                            captureTimeoutMs: int = 30_000):
+                            GuiAssertHarness =
+  ## A harness whose frames are **live full-display stills**, captured through
+  ## `gui_assert/screen_capture` (ScreenCaptureKit, inside the signed
+  ## `GuiAssertCapture.app` TCC subject).
+  ##
+  ## The default poll interval is 250 ms rather than the path-based 100 ms: a
+  ## real capture costs a process launch through `open`, and polling faster
+  ## than the capture takes only queues work.
+  ##
+  ## Raises `StillCaptureUnavailable` on a host that cannot capture at all, and
+  ## `StillCaptureDenied` (carrying `grantInstructions`) on the first capture
+  ## if the one-time macOS Screen Recording grant has not been given to the
+  ## bundle. It never degrades to a stale or blank frame.
+  result = newGuiAssertHarnessFromSource(
+    newDisplayFrameSource(frameDir, displayIndex, captureTimeoutMs),
+    pollIntervalMs,
+    "live-display:" & $displayIndex)
+
+proc newLiveWindowHarness*(query: WindowQuery,
+                           pollIntervalMs: int = 250,
+                           frameDir: string = "",
+                           captureTimeoutMs: int = 30_000):
+                           GuiAssertHarness =
+  ## A harness whose frames are **live stills of one window's own pixels**.
+  ##
+  ## Prefer this over `newLiveDisplayHarness` whenever the assertion is about a
+  ## specific application: a display still cropped to the window's bounds
+  ## captures whatever is stacked on top of it, so an overlapping window turns
+  ## a real regression into a passing assertion, or the reverse. See
+  ## `screen_capture`'s module header.
+  var label = "live-window:"
+  if query.windowId != 0: label &= "#" & $query.windowId
+  if query.owner.len > 0: label &= query.owner
+  if query.title.len > 0: label &= "/" & query.title
+  if query.titleContains.len > 0: label &= "/~" & query.titleContains
+  result = newGuiAssertHarnessFromSource(
+    newWindowFrameSource(query, frameDir, captureTimeoutMs),
+    pollIntervalMs,
+    label)
+
+proc currentFrame*(harness: GuiAssertHarness): string =
+  ## Pull one frame from the harness's source and return its path, raising when
+  ## the source yields nothing usable.
+  ##
+  ## For a live harness this performs a capture; for a path-based one it just
+  ## returns the configured path. Either way the file is asserted to exist, so
+  ## a caller never silently asserts against a frame that was never written.
+  if harness.isNil:
+    raise newException(ValueError, "GuiAssertHarness is nil")
+  if harness.frameSource.isNil:
+    raise newException(ValueError, "GuiAssertHarness has no frameSource")
+  result = harness.frameSource()
+  if result.len == 0:
+    raise newException(OcrError,
+      "frame source (" & harness.frameSourceLabel & ") returned no path")
+  if not fileExists(result):
+    raise newException(OcrError,
+      "frame source (" & harness.frameSourceLabel & ") returned " & result &
+      " but no file exists there")
 
 # ---------------------------------------------------------------------------
 # OCR-driven assertions
@@ -136,6 +231,20 @@ proc visualCompareScore*(harness: GuiAssertHarness, frame: string,
   discard harness
   result = ssimFromPaths(frame, golden)
 
+proc visualCompare*(harness: GuiAssertHarness, golden: string,
+                    tolerance: float = 0.98): bool =
+  ## Frame-less overload: take the frame from the harness's own source (a live
+  ## capture for a live harness) and compare it against `golden`.
+  ##
+  ## This is the "future routing" the three-argument form's doc comment
+  ## reserved the `harness` parameter for. The three-argument form is
+  ## unchanged.
+  result = visualCompare(harness, harness.currentFrame(), golden, tolerance)
+
+proc visualCompareScore*(harness: GuiAssertHarness, golden: string): float =
+  ## Frame-less `visualCompareScore`: scores the harness's current frame.
+  result = ssimFromPaths(harness.currentFrame(), golden)
+
 # ---------------------------------------------------------------------------
 # Layout overflow detection
 # ---------------------------------------------------------------------------
@@ -177,3 +286,9 @@ proc detectLayoutOverflow*(harness: GuiAssertHarness, frame: string,
       if rectsIntersect(w.bbox, region) and not rectContains(region, w.bbox):
         return true
   return false
+
+proc detectLayoutOverflow*(harness: GuiAssertHarness,
+                           regions: seq[array[4, int]]): bool =
+  ## Frame-less overload: run the overflow check against the harness's own
+  ## current frame (a live capture for a live harness).
+  result = detectLayoutOverflow(harness, harness.currentFrame(), regions)

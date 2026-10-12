@@ -16,10 +16,11 @@
 ## `brew install tesseract` (macOS), `nix-env -iA nixpkgs.tesseract` (Nix
 ## hosts), or distro packages on Linux.
 
-import std/[os, osproc, strtabs, strutils, streams, math, tempfiles, times]
+import std/[os, osproc, strtabs, strutils, streams, math, tempfiles]
 
 import ./media
 import ./image_math
+import ./swift_helper
 
 type
   OcrError* = object of CatchableError
@@ -429,16 +430,6 @@ proc parsePixelTsv(output: string): seq[OcrWord] =
 
 # --- Apple Vision (macOS) --------------------------------------------------
 
-proc resolveSwiftc(): string =
-  ## Locate `swiftc`. Honors `SWIFTC`, then `$PATH`, then the standard Xcode
-  ## command-line-tools location. Returns "" when unavailable.
-  let envBin = getEnv("SWIFTC")
-  if envBin.len > 0:
-    return (if fileExists(envBin): envBin else: "")
-  result = findExe("swiftc")
-  if result.len == 0 and fileExists("/usr/bin/swiftc"):
-    result = "/usr/bin/swiftc"
-
 proc appleVisionHelperSource(): string =
   ## Path to the bundled Swift helper source. Honors
   ## `GUIASSERT_VISION_HELPER_SRC`; otherwise resolves relative to this module.
@@ -480,45 +471,15 @@ proc resolveAppleVisionHelper*(): string =
       raise newException(OcrBackendUnavailable,
         "Apple Vision helper source not found: " & src &
         " (set GUIASSERT_VISION_HELPER_SRC or GUIASSERT_VISION_HELPER).")
-    let swiftc = resolveSwiftc()
-    if swiftc.len == 0:
-      raise newException(OcrBackendUnavailable,
-        "swiftc not found (set SWIFTC or install the Xcode command line tools).")
-    let cacheDir = getTempDir() / "gui_assert_vision_helper"
+    # The swiftc lookup, the SDKROOT / DEVELOPER_DIR sanitization and the
+    # mtime-keyed recompile all live in `swift_helper` now, because the
+    # ScreenCaptureKit still-capture helper needs exactly the same treatment.
+    # `SwiftHelperError` is remapped so this proc's contract is unchanged: it
+    # raises `OcrBackendUnavailable`, never `OcrError`.
     try:
-      createDir(cacheDir)
-    except OSError as e:
-      raise newException(OcrBackendUnavailable,
-        "cannot create Apple Vision helper cache dir " & cacheDir & ": " & e.msg)
-    let bin = cacheDir / "vision_ocr"
-    var needCompile = true
-    if fileExists(bin):
-      try:
-        if getLastModificationTime(bin) >= getLastModificationTime(src):
-          needCompile = false
-      except OSError:
-        discard
-    if needCompile:
-      # Sanitize the environment for swiftc: a nix profile often exports
-      # SDKROOT / DEVELOPER_DIR pointing at a nix-provided Apple SDK whose Swift
-      # version does not match the system /usr/bin/swiftc, which makes the
-      # compile fail ("no such module 'SwiftShims'"). Dropping them lets the
-      # system compiler find its own matching bundled SDK. (No-op when unset.)
-      let cenv = newStringTable(modeCaseSensitive)
-      for k, v in envPairs():
-        if swiftc.startsWith("/usr/") and (k == "SDKROOT" or k == "DEVELOPER_DIR"):
-          continue
-        cenv[k] = v
-      let p = startProcess(command = swiftc, args = @["-O", src, "-o", bin],
-                           env = cenv, options = {poStdErrToStdOut})
-      let output = p.outputStream().readAll()
-      let code = p.waitForExit()
-      p.close()
-      if code != 0:
-        raise newException(OcrBackendUnavailable,
-          "swiftc failed to compile the Apple Vision helper (" & $code &
-          "):\n" & output)
-    return bin
+      return compileSwiftHelper("gui_assert_vision_helper", "vision_ocr", src)
+    except SwiftHelperError as e:
+      raise newException(OcrBackendUnavailable, e.msg)
 
 proc runAppleVision(imagePath: string, opts: OcrOptions): seq[OcrWord] =
   ## Run the macOS Apple Vision helper on `imagePath`. `opts` is accepted for API

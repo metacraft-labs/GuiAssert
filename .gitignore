@@ -33,6 +33,7 @@ tests/tdiscovery
 tests/tartifact_project
 tests/tartifact_pipeline
 tests/tnimcache_is_worktree_local
+tests/tscreen_capture
 
 # Repro development environment cache
 .repro/

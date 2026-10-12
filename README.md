@@ -104,6 +104,81 @@ Plugin authors: see
 canonical shape.  Use `cacheKeyFor` + `applyCache` from
 `gui_assert/talking_head/core` to avoid re-implementing the cache.
 
+## macOS still-frame and window-targeted capture
+
+`gui_assert/capture` records **video**. `gui_assert/screen_capture` produces
+**single frames** — which is what every assertion actually consumes — through
+ScreenCaptureKit:
+
+```nim
+import gui_assert
+
+# The positive control. Unprivileged: it works with no permission at all, and
+# if it comes back empty nothing else in this module can work either.
+for w in listWindows():
+  echo w.windowId, " ", w.ownerName, " ", w.bounds
+
+# A full-display still.
+discard captureDisplayStill("/tmp/screen.png")
+
+# One window's OWN pixels — not a crop of the screen, so an overlapping window
+# cannot corrupt the assertion.
+discard captureWindowStill("/tmp/editor.png", initWindowQuery(owner = "iTerm"))
+
+# Or drive the assertion harness straight off a live capture. `waitForText`
+# re-invokes the frame source on every poll, so this is a real wait loop.
+let harness = newLiveWindowHarness(initWindowQuery(owner = "iTerm"))
+doAssert harness.waitForText("fibonacci", timeoutMs = 5000)
+doAssert harness.visualCompare("tests/gui/snapshots/golden/editor.png")
+```
+
+The path-based API is unchanged: `newGuiAssertHarness(path)` and the
+three-argument `visualCompare` / `detectLayoutOverflow` behave exactly as
+before.
+
+### The one-time permission
+
+macOS gates screen capture behind TCC. GuiAssert does **not** ask you to grant
+it to your terminal — granting a terminal screen recording grants it to every
+process that terminal will ever run. Instead it builds and signs its own tiny
+bundle, `~/Library/Application Support/GuiAssert/GuiAssertCapture.app`, and
+runs the capture inside it:
+
+```sh
+nim c -d:captureLive -r --hints:off tests/tscreen_capture.nim
+```
+
+The first run builds and signs the bundle, then fails the capture tests with
+the exact click-path to grant it (`screen_capture.grantInstructions`). Grant it
+once in **System Settings > Privacy & Security > Screen & System Audio
+Recording** and the capture tests go green.
+
+The grant is recorded by TCC against the bundle's code-signing *designated
+requirement*. With a real signing identity — an Apple Development certificate
+from a free Apple ID is enough — that requirement is keyed on the bundle
+identifier and the signing certificate, not on the code bytes, so rebuilding
+the helper does **not** revoke the grant. `ensureCaptureApp` verifies this after
+every re-sign and refuses rather than letting a silently-dead grant look like a
+capture bug. An ad-hoc signature (`codesign -s -`) yields a `cdhash`-keyed
+requirement, which every rebuild invalidates; set
+`GUIASSERT_CAPTURE_SIGN_IDENTITY` to avoid that.
+
+Environment overrides: `GUIASSERT_CAPTURE_APP`, `GUIASSERT_CAPTURE_APP_DIR`,
+`GUIASSERT_CAPTURE_BUNDLE_ID`, `GUIASSERT_CAPTURE_SIGN_IDENTITY`,
+`GUIASSERT_CAPTURE_HELPER`, `GUIASSERT_CAPTURE_HELPER_SRC`, `SWIFTC`.
+
+Two things worth knowing before you debug a failure:
+
+- **Window titles are invisible until the grant exists.** macOS redacts
+  `kCGWindowName` for ungranted code, so `--title` / `titleContains` queries
+  cannot match before you grant. Match on `owner` instead. Every report carries
+  `titlesVisible` so a test can tell "no such window" from "I cannot read any
+  title".
+- **`target-not-found` and `denied` are different.** The helper attests the
+  target against the unprivileged window list before it calls ScreenCaptureKit,
+  so `StillCaptureTargetNotFound` and `StillCaptureDenied` are distinct
+  exceptions with distinct remedies.
+
 ## Design References
 
 - `codetracer-specs/Planned-Work/Video-Session-Capture.md`
