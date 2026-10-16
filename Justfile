@@ -20,6 +20,7 @@ test:
 # portal. Builds the C helpers under helpers/linux on first use.
 test-desktop-env:
     nim c -r --hints:off tests/tdesktop_env_targets.nim
+    nim c -r --hints:off tests/tdesktop_env_attach.nim
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:

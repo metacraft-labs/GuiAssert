@@ -83,11 +83,28 @@ type
       ## The environment an application started in this session needs
       ## (`WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`, the session bus …).
     spawned*: seq[Process]
+    attached*: bool
+      ## Attached to a session that was running before the target (the
+      ## developer's own): `stop` leaves its compositor and bus alone.
+    allowConfigure*: bool
+      ## Attached targets refuse `configure` unless this is set: a test
+      ## must not rewrite the developer's desktop settings silently.
+    changedSettings*: seq[(string, string)]
+      ## (setting, previous value) for every `configure` of an attached
+      ## target, restored by `stop`, most recent first.
 
 proc envError*(t: TargetEnvironment; operation, msg: string): ref EnvError =
   result = newException(EnvError, "[" & t.name & "] " & operation & ": " & msg)
   result.target = t.name
   result.operation = operation
+
+proc guardConfigure*(t: TargetEnvironment; setting: string) =
+  ## Refuse `configure` on an attached target that was not allowed to.
+  if t.attached and not t.allowConfigure:
+    raise t.envError("configure " & setting,
+      "refused: this target is attached to a running session, and changing " &
+      "its desktop settings was not allowed (allowConfigure = true allows it, " &
+      "and `stop` restores the previous values)")
 
 proc center*(r: Rect): (int, int) = (r.x + r.w div 2, r.y + r.h div 2)
 proc contains*(r: Rect; p: (int, int)): bool =

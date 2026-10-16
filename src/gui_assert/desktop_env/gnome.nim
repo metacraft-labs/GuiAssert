@@ -56,6 +56,23 @@ proc newGnomeTarget*(width = 1920; height = 1080): GnomeTarget =
   GnomeTarget(name: "gnome", width: width, height: height,
               sessionEnv: newStringTable(modeCaseSensitive))
 
+proc attachGnomeTarget*(allowConfigure = false): GnomeTarget =
+  ## A target for the GNOME session this process runs in. Nothing is
+  ## started, and `stop` leaves the shell alone (it removes the virtual
+  ## devices it made). `configure` is refused unless `allowConfigure`, and
+  ## what it changes `stop` restores.
+  ##
+  ## It needs GNOME Shell's unsafe mode, which opens `Eval` — the same path
+  ## the headless target drives. A running session keeps it off, and the
+  ## target never turns it on: the developer does, for the session, in
+  ## Looking Glass (Alt+F2, `lg`, then `global.context.unsafe_mode = true`).
+  ## Without it, `start` fails by name and says so. Window readback has no
+  ## other route on a real session: `org.gnome.Shell.Introspect` answers
+  ## only GNOME's own portal backends outside unsafe mode, and gives no
+  ## window positions in any mode.
+  GnomeTarget(name: "gnome", attached: true, allowConfigure: allowConfigure,
+              sessionEnv: newStringTable(modeCaseSensitive))
+
 proc requirePath(t: GnomeTarget; name: string): string =
   result = getEnv(name)
   if result.len == 0 or not fileExists(result):
@@ -84,8 +101,44 @@ proc eval*(t: GnomeTarget; js: string): JsonNode =
     raise t.envError("eval", reply["error"].getStr)
   reply{"value"}
 
+proc createDevices(t: GnomeTarget) =
+  ## The virtual pointer and keyboard, primed (see the module comment).
+  discard t.eval("(() => { const seat = Clutter.get_default_backend().get_default_seat(); " &
+    "global._gaPointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE); " &
+    "global._gaKeyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE); " &
+    "const now = GLib.get_monotonic_time(); " &
+    "global._gaPointer.notify_absolute_motion(now, 1, 1); " &
+    "global._gaPointer.notify_absolute_motion(now + 1000, 1, 1); return 1; })()")
+
+proc startAttached(t: GnomeTarget) =
+  for k in ["WAYLAND_DISPLAY", "DBUS_SESSION_BUS_ADDRESS"]:
+    if getEnv(k).len == 0:
+      raise t.envError("start", "cannot attach: " & k & " is not set " &
+                       "(run inside the GNOME session)")
+  t.bus = attachedSessionBus()
+  for k, v in t.bus.env: t.sessionEnv[k] = v
+  # Eval's results are written here, by the shell, which runs as this user.
+  t.runtimeDir = createTempDir("guienv-attach-", "", "/tmp")
+  t.started = true
+  var size: JsonNode
+  try:
+    size = t.eval("global.display.get_size()")
+  except EnvError:
+    t.started = false
+    removeDir(t.runtimeDir)
+    raise t.envError("start", "cannot attach: GNOME Shell's Eval is closed. " &
+      "Unsafe mode is off in this session; turn it on for the session in " &
+      "Looking Glass (Alt+F2, `lg`, `global.context.unsafe_mode = true`) " &
+      "and attach again")
+  t.width = size[0].getInt
+  t.height = size[1].getInt
+  t.createDevices()
+
 method start*(t: GnomeTarget) =
   if t.started: return
+  if t.attached:
+    t.startAttached()
+    return
   let shellExe = t.requirePath("GUI_ASSERT_GNOME_SHELL")
   let schemaDirs = getEnv("GUI_ASSERT_GNOME_SCHEMA_DATA_DIRS")
   # Short, under /tmp: sockets live here (see the sway target).
@@ -164,16 +217,24 @@ method start*(t: GnomeTarget) =
     raise t.envError("start", "the portals: " & e.msg)
   for k, v in t.bus.env: t.sessionEnv[k] = v
   t.started = true
-  # The virtual devices, primed (see the module comment).
-  discard t.eval("(() => { const seat = Clutter.get_default_backend().get_default_seat(); " &
-    "global._gaPointer = seat.create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE); " &
-    "global._gaKeyboard = seat.create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE); " &
-    "const now = GLib.get_monotonic_time(); " &
-    "global._gaPointer.notify_absolute_motion(now, 1, 1); " &
-    "global._gaPointer.notify_absolute_motion(now + 1000, 1, 1); return 1; })()")
+  t.createDevices()
+
+proc restoreSettings(t: GnomeTarget)
 
 method stop*(t: GnomeTarget) =
   t.stopSpawned()
+  t.restoreSettings()
+  if t.attached:
+    if t.started:
+      # The devices are the shell's; dropping the last reference removes
+      # them from the developer's seat.
+      try: discard t.eval("(global._gaPointer = null, global._gaKeyboard = null, 1)")
+      except EnvError: discard
+    t.started = false
+    if t.runtimeDir.len > 0:
+      try: removeDir(t.runtimeDir)
+      except OSError: discard
+    return
   t.bus.stop()
   if t.shell != nil:
     if t.shell.running:
@@ -339,11 +400,26 @@ method factNames*(t: GnomeTarget): seq[string] =
   for k in t.facts.keys: result.add k
   result.add @["buttonLayout", "doubleClickTitlebar"]
 
+proc settingKey(t: GnomeTarget; setting: string): string =
+  case setting
+  of "buttonLayout": "button-layout"
+  of "doubleClickTitlebar": "action-double-click-titlebar"
+  else: raise t.envError("configure " & setting, "unknown setting")
+
+proc restoreSettings(t: GnomeTarget) =
+  for (setting, previous) in t.changedSettings:
+    try: discard t.bus.gsettings("set", "org.gnome.desktop.wm.preferences",
+                                 t.settingKey(setting), previous)
+    except OSError, EnvError: discard
+  t.changedSettings.setLen 0
+
 method configure*(t: GnomeTarget; setting, value: string) =
-  let key = case setting
-    of "buttonLayout": "button-layout"
-    of "doubleClickTitlebar": "action-double-click-titlebar"
-    else: raise t.envError("configure " & setting, "unknown setting")
+  let key = t.settingKey(setting)
+  t.guardConfigure(setting)
+  if t.attached:
+    let previous = try: t.bus.gsettings("get", "org.gnome.desktop.wm.preferences", key)
+                   except OSError as e: raise t.envError("configure " & setting, e.msg)
+    t.changedSettings.insert((setting, previous), 0)
   try: discard t.bus.gsettings("set", "org.gnome.desktop.wm.preferences", key, value)
   except OSError as e: raise t.envError("configure " & setting, e.msg)
   t.waitUntil("the settings portal serving " & setting & "=" & value, proc(): bool =

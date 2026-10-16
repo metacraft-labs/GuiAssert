@@ -74,8 +74,53 @@ proc expectLine(t: SwayTarget; p: Process; operation: string) =
   if line != "ok":
     raise t.envError(operation, line)
 
+proc attachSwayTarget*(allowConfigure = false): SwayTarget =
+  ## A target for the sway session this process runs in (`SWAYSOCK`,
+  ## `WAYLAND_DISPLAY`): nothing is started but the pointer device, and
+  ## `stop` leaves sway alone. `configure` is refused unless
+  ## `allowConfigure`, and what it changes `stop` restores.
+  SwayTarget(name: "sway", attached: true, allowConfigure: allowConfigure,
+             sessionEnv: newStringTable(modeCaseSensitive))
+
+proc outputExtent(t: SwayTarget): (int, int) =
+  ## The layout's extent over the active outputs: what absolute pointer
+  ## positions are measured against.
+  let outputs = parseJson(t.swaymsg("-t", "get_outputs", "-r"))
+  for o in outputs:
+    if o{"active"}.getBool:
+      let r = o["rect"]
+      result = (max(result[0], r["x"].getInt + r["width"].getInt),
+                max(result[1], r["y"].getInt + r["height"].getInt))
+
+proc startPointer(t: SwayTarget) =
+  try:
+    t.pointer = startProcess(helper("virtual_pointer"),
+                             args = @[$t.width, $t.height], options = {})
+  except OSError as e:
+    raise t.envError("start", "the pointer helper: " & e.msg)
+  var line: string
+  if not t.pointer.outputStream.readLine(line) or line != "ready":
+    raise t.envError("start", "the pointer helper did not start: " & line)
+
+proc startAttached(t: SwayTarget) =
+  for k in ["SWAYSOCK", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"]:
+    if getEnv(k).len == 0:
+      raise t.envError("start", "cannot attach: " & k & " is not set " &
+                       "(run inside the sway session)")
+  t.swaySock = getEnv("SWAYSOCK")
+  t.bus = attachedSessionBus()
+  for k, v in t.bus.env: t.sessionEnv[k] = v
+  (t.width, t.height) = t.outputExtent()
+  if t.width == 0:
+    raise t.envError("start", "cannot attach: sway reports no active output")
+  t.startPointer()
+  t.started = true
+
 method start*(t: SwayTarget) =
   if t.started: return
+  if t.attached:
+    t.startAttached()
+    return
   # Under /tmp, not $TMPDIR: sway's IPC socket
   # (`<runtime>/sway-ipc.<uid>.<pid>.sock`) must fit `sun_path` (108 bytes),
   # and a nix-shell TMPDIR plus a temp-dir name can exceed it — sway then
@@ -126,18 +171,14 @@ method start*(t: SwayTarget) =
   except OSError as e:
     raise t.envError("start", "the session bus: " & e.msg)
   for k, v in t.bus.env: t.sessionEnv[k] = v
-  try:
-    t.pointer = startProcess(helper("virtual_pointer"),
-                             args = @[$t.width, $t.height], options = {})
-  except OSError as e:
-    raise t.envError("start", "the pointer helper: " & e.msg)
-  var line: string
-  if not t.pointer.outputStream.readLine(line) or line != "ready":
-    raise t.envError("start", "the pointer helper did not start: " & line)
+  t.startPointer()
   t.started = true
+
+proc restoreSettings(t: SwayTarget)
 
 method stop*(t: SwayTarget) =
   t.stopSpawned()
+  t.restoreSettings()
   if t.pointer != nil:
     try:
       t.pointer.inputStream.writeLine("quit")
@@ -146,6 +187,9 @@ method stop*(t: SwayTarget) =
     except IOError, OSError: discard
     t.pointer.close()
     t.pointer = nil
+  if t.attached:
+    t.started = false
+    return
   t.bus.stop()
   if t.sway != nil:
     if t.sway.running:
@@ -302,11 +346,26 @@ method factNames*(t: SwayTarget): seq[string] =
   for k in t.facts.keys: result.add k
   result.add @["buttonLayout", "doubleClickTitlebar"]
 
+proc settingKey(t: TargetEnvironment; setting: string): string =
+  case setting
+  of "buttonLayout": "button-layout"
+  of "doubleClickTitlebar": "action-double-click-titlebar"
+  else: raise t.envError("configure " & setting, "unknown setting")
+
+proc restoreSettings(t: SwayTarget) =
+  for (setting, previous) in t.changedSettings:
+    try: discard t.bus.gsettings("set", "org.gnome.desktop.wm.preferences",
+                                 t.settingKey(setting), previous)
+    except OSError, EnvError: discard
+  t.changedSettings.setLen 0
+
 method configure*(t: SwayTarget; setting, value: string) =
-  let key = case setting
-    of "buttonLayout": "button-layout"
-    of "doubleClickTitlebar": "action-double-click-titlebar"
-    else: raise t.envError("configure " & setting, "unknown setting")
+  let key = t.settingKey(setting)
+  t.guardConfigure(setting)
+  if t.attached:
+    let previous = try: t.bus.gsettings("get", "org.gnome.desktop.wm.preferences", key)
+                   except OSError as e: raise t.envError("configure " & setting, e.msg)
+    t.changedSettings.insert((setting, previous), 0)
   try: discard t.bus.gsettings("set", "org.gnome.desktop.wm.preferences", key, value)
   except OSError as e: raise t.envError("configure " & setting, e.msg)
   # The portal re-reads the keyfile on change; wait until it serves the

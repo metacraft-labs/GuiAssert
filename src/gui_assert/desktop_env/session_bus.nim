@@ -141,6 +141,18 @@ proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef) =
                          output.strip())
     sleep(100)
 
+proc attachedSessionBus*(): SessionBus =
+  ## The session this process already belongs to — the developer's own, or
+  ## one a target started — for a target that attaches instead of starting
+  ## one. Nothing is started, and `stop` stops nothing.
+  result.env = newStringTable(modeCaseSensitive)
+  for k in ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY",
+            "SWAYSOCK", "GSETTINGS_BACKEND", "GSETTINGS_SCHEMA_DIR",
+            "XDG_CONFIG_HOME", "XDG_DATA_DIRS", "XDG_CURRENT_DESKTOP",
+            "XDG_DESKTOP_PORTAL_DIR"]:
+    if existsEnv(k): result.env[k] = getEnv(k)
+  result.started = true
+
 proc stop*(bus: var SessionBus) =
   for p in bus.processes:
     try:

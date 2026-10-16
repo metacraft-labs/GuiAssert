@@ -103,6 +103,14 @@ Backends:
   screenshot API. GNOME draws no window decorations, so this is the target
   where an application must draw its own.
 
+**Attaching** to a session that is already running, such as the
+developer's own, is `attachSwayTarget()` / `attachGnomeTarget()`. Nothing is
+started, `stop` leaves the session alone, and `configure` is refused unless
+`allowConfigure = true`, in which case `stop` restores what it changed. The
+GNOME target needs GNOME Shell's unsafe mode, which only the developer can
+turn on (Looking Glass: `global.context.unsafe_mode = true`). Without it the
+target refuses to attach and says so.
+
 The same scenario runs on every target: `tests/tdesktop_env_targets.nim`
 runs one suite on each (`GUIENV_TARGETS=sway,gnome`).
 

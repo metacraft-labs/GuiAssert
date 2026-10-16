@@ -40,3 +40,4 @@ tests/tscreen_capture
 build/linux-helpers/
 tests/tdesktop_env
 tests/tdesktop_env_targets
+tests/tdesktop_env_attach
