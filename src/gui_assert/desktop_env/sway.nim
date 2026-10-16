@@ -177,16 +177,30 @@ method pointerButton*(t: SwayTarget; button: PointerButton; pressed: bool) =
 method settleGrab*(t: SwayTarget; at: (int, int)) =
   ## Sway applies a floating window's interactive resize from a pointer
   ## motion that arrives while the window still owes it a commit only on the
-  ## NEXT pointer event. A drag that ends on such a motion leaves the window
-  ## one step short. Measured on sway 1.11 with a GPUI window, tracing every
-  ## configure it was sent: for a 40px drag in ten 4px steps, sway's
-  ## configures stopped at +36px and the release's final configure repeated
-  ## +36px; one more motion at the same point produced the +40px configure.
-  ## So the last position is sent again once the window has had time to
-  ## commit.
-  sleep(50)
-  t.pointerMove(at[0], at[1])
-  sleep(50)
+  ## NEXT pointer event. A drag that ends on such motions leaves the window
+  ## short. Measured on sway 1.11 with a GPUI window, tracing every configure
+  ## it was sent: for a 40px drag in ten 4px steps, sway's configures stopped
+  ## at +36px; under load, at +28px; one more motion at the same point
+  ## produced the next configure.
+  ##
+  ## So the last position is sent again until the windows sway reports stop
+  ## changing between two repeats — as many repeats as the client needs to
+  ## catch up, which a fixed count cannot know. Bounded at 40 repeats (4 s).
+  proc snapshot(): seq[Rect] =
+    for w in t.windows(): result.add w.rect
+  var last = snapshot()
+  var unchanged = 0
+  for _ in 1 .. 40:
+    sleep(50)
+    t.pointerMove(at[0], at[1])
+    sleep(50)
+    let now = snapshot()
+    if now == last:
+      inc unchanged
+      if unchanged == 2: return
+    else:
+      unchanged = 0
+    last = now
 
 method wheel*(t: SwayTarget; notches: int) =
   t.pointerCommand("wheel " & $notches, "wheel")
