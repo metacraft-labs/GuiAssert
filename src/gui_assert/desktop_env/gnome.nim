@@ -255,9 +255,14 @@ proc requireStarted(t: GnomeTarget; operation: string) =
   if not t.started: raise t.envError(operation, "the target is not started")
 
 method windows*(t: GnomeTarget): seq[EnvWindow] =
+  ## The normal windows that have been shown. Mutter knows a window before it
+  ## is first shown, with a 0x0 frame (measured: an Electron window created
+  ## hidden); sway lists a window only once it is mapped, and so does this.
+  ## A minimized window keeps its frame and is listed.
   t.requireStarted("windows")
   let list = t.eval("global.get_window_actors().map(a => a.meta_window)" &
-    ".filter(w => w.get_window_type() === Meta.WindowType.NORMAL).map(w => { " &
+    ".filter(w => w.get_window_type() === Meta.WindowType.NORMAL && " &
+    "w.get_frame_rect().width > 0).map(w => { " &
     "const r = w.get_frame_rect(); return {appId: w.get_wm_class() || '', " &
     "title: w.get_title() || '', pid: w.get_pid(), x: r.x, y: r.y, w: r.width, " &
     "h: r.height, maximized: w.is_maximized ? w.is_maximized() : w.get_maximized() === 3, " &
