@@ -37,3 +37,6 @@ tests/tscreen_capture
 
 # Repro development environment cache
 .repro/
+build/linux-helpers/
+tests/tdesktop_env
+tests/tdesktop_env_sway

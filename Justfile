@@ -10,10 +10,16 @@ default: test
 
 # Run every default unit test against the local nim toolchain.
 test:
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim; \
     done
+
+# The desktop-environment targets against REAL compositors (Linux, inside
+# `nix develop`): a private headless sway, its session bus and settings
+# portal. Builds the C helpers under helpers/linux on first use.
+test-desktop-env:
+    nim c -r --hints:off tests/tdesktop_env_sway.nim
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:

@@ -61,6 +61,48 @@ nim c -r --hints:off tests/tgui_assert.nim
 
 Or via `nimble test`.
 
+## Desktop-environment targets
+
+`gui_assert/desktop_env` drives a GUI application inside a real desktop
+session and checks what the COMPOSITOR reports, not what the application
+says about itself. A *target* starts the session, runs the application,
+injects pointer and key input, reads windows back, captures frames, changes
+desktop settings, and answers *facts*: typed questions about what the desktop
+supports and prefers, each marked as measured, declared or configured. A
+scenario is written once and computes its expectations from the facts.
+
+```nim
+import gui_assert/desktop_env, gui_assert/desktop_env/sway
+
+let t = newSwayTarget(floatingAppIds = @["my-app"])
+t.start()
+defer: t.stop()
+discard t.spawn(@["./my-app"])
+let w = t.waitWindow("my-app")
+t.drag(w.rect.center, w.rect.center + (100, 0))
+if t.boolFact("window.canMaximize"): discard   # …expect a maximize button to act
+```
+
+Backends:
+
+- **Headless sway** (`desktop_env/sway`, Linux). A private sway, with its own
+  runtime directory and session bus. The settings portal serves GSettings from
+  a private keyfile, so `configure("buttonLayout", …)` reaches the application
+  the way a desktop's setting would. Input goes through a virtual pointer
+  device (`helpers/linux/virtual_pointer.c`) and `wtype`, frames are captured
+  with `grim`, and windows are read back through sway's IPC. Facts are
+  measured with `helpers/linux/wm_probe.c`, which opens a real window and
+  reports what sway grants it.
+
+Every failure to prepare the environment raises `EnvError`, naming the target
+and the operation. It is never a skip. Run the backend suite inside
+`nix develop` (the flake pins sway, the portal stack and the helpers' build
+tools):
+
+```sh
+nix develop -c just test-desktop-env
+```
+
 ## Talking-head plugins
 
 GuiAssert ships a small built-in talking-head provider called
