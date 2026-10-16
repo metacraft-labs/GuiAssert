@@ -118,6 +118,13 @@ method pointerButton*(t: TargetEnvironment; button: PointerButton;
 method wheel*(t: TargetEnvironment; notches: int) {.base.} =
   raise t.envError("wheel", "not implemented by this backend")
 
+method settleGrab*(t: TargetEnvironment; at: (int, int)) {.base.} =
+  ## Called by `drag` just before it releases: whatever this compositor
+  ## needs for a grab (an interactive move or resize) to apply the drag's
+  ## last motion. Nothing, by default; a backend whose compositor holds the
+  ## last motion back says so here (see the sway target).
+  discard
+
 method keys*(t: TargetEnvironment; chord: string) {.base.} =
   ## Press and release a key chord: `"ctrl+shift+t"`, `"Escape"`, `"a"`.
   raise t.envError("keys", "not implemented by this backend")
@@ -230,14 +237,30 @@ proc doubleClick*(t: TargetEnvironment; p: (int, int)) =
   t.click(p)
 
 proc drag*(t: TargetEnvironment; src, dst: (int, int); steps = 12;
-           stepMs = 16; button = pbLeft) =
+           stepMs = 16; button = pbLeft; pressHoldMs = 0;
+           releaseHoldMs = 0) =
   ## Press at `src`, move to `dst` in `steps` increments, release there.
+  ##
+  ## `pressHoldMs` waits after the press and `releaseHoldMs` before the
+  ## release. A drag the APPLICATION turns into a compositor grab (an
+  ## interactive move or resize it requests in its press handler) needs
+  ## both: motion sent before the compositor has the request goes to the
+  ## application and is lost to the grab. Measured on sway 1.11 with a GPUI
+  ## window: a 40px resize drag without holds grew the window by 16-28px.
+  ##
+  ## Before the release the target settles the grab (`settleGrab`): a
+  ## compositor may hold a grab's last motion back until a later pointer
+  ## event, which a real pointer always produces and a synthetic drag does
+  ## not.
   t.pointerMove(src[0], src[1])
   t.press(button)
+  if pressHoldMs > 0: sleep(pressHoldMs)
   for i in 1 .. steps:
     t.pointerMove(src[0] + (dst[0] - src[0]) * i div steps,
                   src[1] + (dst[1] - src[1]) * i div steps)
     sleep(stepMs)
+  t.settleGrab(dst)
+  if releaseHoldMs > 0: sleep(releaseHoldMs)
   t.release(button)
 
 proc captureSettled*(t: TargetEnvironment; region: Rect; agree = 3;
