@@ -47,13 +47,15 @@ proc childEnv(bus: SessionBus): StringTableRef =
   for k, v in envPairs(): result[k] = v
   for k, v in bus.env: result[k] = v
 
-proc launch(bus: var SessionBus; exe: string; args: seq[string]; log: string) =
+proc launch*(bus: var SessionBus; exe: string; args: seq[string]; log: string) =
+  ## Start a long-running member of the session; `stop` ends it.
   let p = startProcess("/bin/sh", args = @["-c",
     "exec " & quoteShellCommand(@[exe] & args) & " >" & quoteShell(log) & " 2>&1"],
     env = bus.childEnv, options = {})
   bus.processes.add p
 
-proc call(bus: SessionBus; args: seq[string]): (string, int) =
+proc call*(bus: SessionBus; args: seq[string]): (string, int) =
+  ## Run a command as a client of this session (its bus, its settings).
   let p = startProcess(args[0], args = args[1 .. ^1], env = bus.childEnv,
                        options = {poUsePath, poStdErrToStdOut})
   let output = p.outputStream.readAll()
@@ -73,12 +75,17 @@ proc gsettings*(bus: SessionBus; args: varargs[string]): string =
     raise newException(OSError, "gsettings " & args.join(" ") & ": " & output.strip())
   output.strip()
 
+proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef)
+
 proc startSessionBus*(runtimeDir, desktopName: string;
-                      displayEnv: StringTableRef): SessionBus =
-  ## Start the bus and the portal stack. `displayEnv` is the compositor's
-  ## (`WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`); the GTK backend is a GTK
-  ## program and needs a display. Raises `OSError` naming what failed.
-  let portal = requireEnvPath("GUI_ASSERT_XDG_DESKTOP_PORTAL")
+                      displayEnv: StringTableRef; withPortals = true;
+                      extraEnv: openArray[(string, string)] = []): SessionBus =
+  ## Start the bus and, with `withPortals`, the portal stack. `displayEnv`
+  ## is the compositor's (`WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR`); the GTK
+  ## backend is a GTK program and needs a display, so a compositor that
+  ## itself needs the bus (GNOME Shell) starts the bus first and the portals
+  ## (`startPortals`) once it is up. `extraEnv` is laid over the session's
+  ## environment. Raises `OSError` naming what failed.
   let portalGtk = requireEnvPath("GUI_ASSERT_XDG_DESKTOP_PORTAL_GTK")
   let schemas = requireEnvPath("GUI_ASSERT_GSETTINGS_SCHEMAS")
   result.runtimeDir = runtimeDir
@@ -102,6 +109,7 @@ proc startSessionBus*(runtimeDir, desktopName: string;
   # GIO must not reach for the host's gvfs or dconf.
   result.env["GIO_USE_VFS"] = "local"
   result.env["GTK_USE_PORTAL"] = "0"
+  for (k, v) in extraEnv: result.env[k] = v
 
   result.launch(findExe("dbus-daemon"), @["--session", "--nofork",
                 "--address=unix:path=" & busSocket], runtimeDir / "dbus.log")
@@ -111,18 +119,27 @@ proc startSessionBus*(runtimeDir, desktopName: string;
       raise newException(OSError, "the private session bus did not start: " &
                          readFile(runtimeDir / "dbus.log"))
     sleep(20)
-  result.launch(portalGtk, @["--replace"], runtimeDir / "portal-gtk.log")
-  result.launch(portal, @["--replace"], runtimeDir / "portal.log")
-  # Ready when the frontend answers a Settings read.
+  result.started = true
+  if withPortals: result.startPortals(displayEnv)
+
+proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef) =
+  ## The portal stack, on a bus `startSessionBus` started: the GTK backend
+  ## (it implements Settings over GSettings) and the frontend, which is told
+  ## to prefer it. Ready when the frontend answers a Settings read.
+  let portal = requireEnvPath("GUI_ASSERT_XDG_DESKTOP_PORTAL")
+  let portalGtk = requireEnvPath("GUI_ASSERT_XDG_DESKTOP_PORTAL_GTK")
+  for k, v in displayEnv: bus.env[k] = v
+  bus.launch(portalGtk, @["--replace"], bus.runtimeDir / "portal-gtk.log")
+  bus.launch(portal, @["--replace"], bus.runtimeDir / "portal.log")
+  let deadline = epochTime() + 15
   while true:
-    let (output, code) = result.readSetting("org.gnome.desktop.wm.preferences",
-                                            "button-layout")
+    let (output, code) = bus.readSetting("org.gnome.desktop.wm.preferences",
+                                         "button-layout")
     if code == 0: break
-    if epochTime() > deadline + 10:
+    if epochTime() > deadline:
       raise newException(OSError, "the settings portal did not answer: " &
                          output.strip())
     sleep(100)
-  result.started = true
 
 proc stop*(bus: var SessionBus) =
   for p in bus.processes:

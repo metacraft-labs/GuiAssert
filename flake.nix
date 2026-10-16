@@ -53,6 +53,10 @@
             xdg-desktop-portal-gtk
             glib
             gsettings-desktop-schemas
+            # The headless GNOME target: GNOME Shell (with its Mutter) and the
+            # GNOME portal backend, as a real GNOME session runs them.
+            gnome-shell
+            xdg-desktop-portal-gnome
           ];
         in
         {
@@ -105,6 +109,11 @@
               export GUI_ASSERT_XDG_DESKTOP_PORTAL="${pkgs.xdg-desktop-portal}/libexec/xdg-desktop-portal"
               export GUI_ASSERT_XDG_DESKTOP_PORTAL_GTK="${pkgs.xdg-desktop-portal-gtk}/libexec/xdg-desktop-portal-gtk"
               export GUI_ASSERT_GSETTINGS_SCHEMAS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas"
+              export GUI_ASSERT_GNOME_SHELL="${pkgs.gnome-shell}/bin/gnome-shell"
+              export GUI_ASSERT_XDG_DESKTOP_PORTAL_GNOME="${pkgs.xdg-desktop-portal-gnome}/libexec/xdg-desktop-portal-gnome"
+              # Where GLib finds the GNOME session's settings schemas (each
+              # package's compiled schemas live under its own data dir).
+              export GUI_ASSERT_GNOME_SCHEMA_DATA_DIRS="${pkgs.gnome-shell}/share/gsettings-schemas/${pkgs.gnome-shell.name}:${pkgs.mutter}/share/gsettings-schemas/${pkgs.mutter.name}:${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}"
             '' + ''
 
               echo "GuiAssert dev shell (pinned nixpkgs nixos-25.11)"

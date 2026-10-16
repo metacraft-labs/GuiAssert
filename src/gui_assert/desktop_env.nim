@@ -25,7 +25,8 @@
 ## naming the target and the operation. It is never a skip and never a
 ## vacuous pass.
 ##
-## Backends: `gui_assert/desktop_env/sway` (headless sway).
+## Backends: `gui_assert/desktop_env/sway` (headless sway) and
+## `gui_assert/desktop_env/gnome` (headless GNOME Shell).
 
 import std/[os, osproc, strtabs, strutils, times]
 
@@ -117,6 +118,19 @@ method pointerButton*(t: TargetEnvironment; button: PointerButton;
 
 method wheel*(t: TargetEnvironment; notches: int) {.base.} =
   raise t.envError("wheel", "not implemented by this backend")
+
+method placeWindow*(t: TargetEnvironment; w: EnvWindow; x, y: int) {.base.} =
+  ## Move a window to (x, y) the way the desktop's own window management
+  ## would — for arranging a scenario, not for testing a move.
+  raise t.envError("placeWindow", "not implemented by this backend")
+
+method setFullscreen*(t: TargetEnvironment; w: EnvWindow; on: bool) {.base.} =
+  ## Put a window into fullscreen, or take it out, from the desktop's side.
+  raise t.envError("setFullscreen", "not implemented by this backend")
+
+method focusWindow*(t: TargetEnvironment; w: EnvWindow) {.base.} =
+  ## Give a window the keyboard focus, from the desktop's side.
+  raise t.envError("focusWindow", "not implemented by this backend")
 
 method settleGrab*(t: TargetEnvironment; at: (int, int)) {.base.} =
   ## Called by `drag` just before it releases: whatever this compositor

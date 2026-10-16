@@ -39,4 +39,4 @@ tests/tscreen_capture
 .repro/
 build/linux-helpers/
 tests/tdesktop_env
-tests/tdesktop_env_sway
+tests/tdesktop_env_targets

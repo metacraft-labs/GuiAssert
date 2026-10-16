@@ -17,7 +17,7 @@
 ## Sway IPC: https://man.archlinux.org/man/sway-ipc.7
 
 import std/[json, os, osproc, streams, strtabs, strutils, tables, tempfiles, times]
-import ../desktop_env, ./helpers, ./session_bus
+import ../desktop_env, ./helpers, ./session_bus, ./wayland_probe
 
 type
   SwayTarget* = ref object of TargetEnvironment
@@ -202,6 +202,15 @@ method settleGrab*(t: SwayTarget; at: (int, int)) =
       unchanged = 0
     last = now
 
+method placeWindow*(t: SwayTarget; w: EnvWindow; x, y: int) =
+  t.command("[pid=" & $w.pid & "] move position " & $x & " " & $y)
+
+method setFullscreen*(t: SwayTarget; w: EnvWindow; on: bool) =
+  t.command("[pid=" & $w.pid & "] fullscreen " & (if on: "enable" else: "disable"))
+
+method focusWindow*(t: SwayTarget; w: EnvWindow) =
+  t.command("[pid=" & $w.pid & "] focus")
+
 method wheel*(t: SwayTarget; notches: int) =
   t.pointerCommand("wheel " & $notches, "wheel")
 
@@ -261,47 +270,14 @@ method windows*(t: SwayTarget): seq[EnvWindow] =
 # Facts
 # ---------------------------------------------------------------------------
 
-proc probe(t: SwayTarget; args: varargs[string]): JsonNode =
-  let (output, code) = execCmdEx(quoteShellCommand(@[helper("wm_probe")] & @args))
-  if code != 0: raise t.envError("probe " & args.join(" "), output.strip())
-  try: parseJson(output.strip().splitLines()[^1])
-  except JsonParsingError, IndexDefect:
-    raise t.envError("probe " & args.join(" "), "unreadable output: " & output)
-
 proc measureFacts(t: SwayTarget) =
   if t.probed: return
-  let chosen = t.probe()
-  let asked = t.probe("client")
-  let askedFloating = t.probe("client", "fixed")
-  let mapped = t.probe("map")
-  proc put(name, value: string; prov: FactProvenance; detail: string) =
-    t.facts[name] = Fact(name: name, value: value, provenance: prov, detail: detail)
-  put("decorations.default", chosen["decoration_mode"].getStr, fpMeasured,
-      "the mode a window that asks for none is granted")
-  let honoured =
-    if asked["decoration_mode"].getStr == "client": "always"
-    elif askedFloating["decoration_mode"].getStr == "client": "floating-only"
-    else: "never"
-  put("decorations.honoursClientRequest", honoured, fpMeasured,
-      "client-side requested by a tiled and by a floating window")
-  var caps: seq[string]
-  for c in chosen["capabilities"]: caps.add c.getStr
-  let reported = chosen["capabilities_reported"].getBool
-  put("window.capabilities", caps.join(","), fpMeasured,
-      if reported: "xdg_toplevel.wm_capabilities" else: "not reported: all assumed")
-  proc advertised(c: string): string = $(not reported or c in caps)
-  put("window.canMinimize", advertised("minimize"), fpMeasured,
-      "advertised by wm_capabilities; a client cannot observe the minimized state")
-  put("window.hasWindowMenu", advertised("window_menu"), fpMeasured,
-      "advertised by wm_capabilities")
-  put("window.canMaximize", $mapped["maximize_honoured"].getBool, fpMeasured,
-      "a mapped floating window asked to maximize")
-  put("window.canFullscreen", $mapped["fullscreen_honoured"].getBool, fpMeasured,
-      "a mapped floating window asked to go fullscreen")
-  put("window.floatingByDefault", "false", fpDeclared,
+  measureWaylandFacts(t, t.facts)
+  proc put(name, value: string; detail: string) =
+    t.facts[name] = Fact(name: name, value: value, provenance: fpDeclared, detail: detail)
+  put("window.floatingByDefault", "false",
       "sway tiles a window unless a rule or a fixed size floats it")
-  put("window.reportsMinimized", "false", fpDeclared,
-      "sway has no minimized state to report")
+  put("window.reportsMinimized", "false", "sway has no minimized state to report")
   t.probed = true
 
 proc settingFact(t: SwayTarget; name, key: string): Fact =

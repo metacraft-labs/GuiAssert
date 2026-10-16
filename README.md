@@ -74,7 +74,7 @@ scenario is written once and computes its expectations from the facts.
 ```nim
 import gui_assert/desktop_env, gui_assert/desktop_env/sway
 
-let t = newSwayTarget(floatingAppIds = @["my-app"])
+let t = newSwayTarget(floatingAppIds = @["my-app"])   # or newGnomeTarget()
 t.start()
 defer: t.stop()
 discard t.spawn(@["./my-app"])
@@ -93,6 +93,18 @@ Backends:
   with `grim`, and windows are read back through sway's IPC. Facts are
   measured with `helpers/linux/wm_probe.c`, which opens a real window and
   reports what sway grants it.
+
+- **Headless GNOME** (`desktop_env/gnome`, Linux). A private
+  `gnome-shell --headless --unsafe-mode` (GNOME Shell with its Mutter), with
+  its own runtime directory, session bus and settings, and the settings
+  portal. Input goes through Clutter virtual devices inside the shell, the
+  mechanism Mutter's remote desktop uses. Windows are read back from Mutter's
+  own window list, positions included, and frames come from the shell's
+  screenshot API. GNOME draws no window decorations, so this is the target
+  where an application must draw its own.
+
+The same scenario runs on every target: `tests/tdesktop_env_targets.nim`
+runs one suite on each (`GUIENV_TARGETS=sway,gnome`).
 
 Every failure to prepare the environment raises `EnvError`, naming the target
 and the operation. It is never a skip. Run the backend suite inside
