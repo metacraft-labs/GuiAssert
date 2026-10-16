@@ -113,6 +113,18 @@ for name in getEnv("GUIENV_TARGETS", "sway,gnome").split(','):
       # The probe fills its buffer with 0x80 grey.
       check img.pixel(160, 100) == (0x80'u8, 0x80'u8, 0x80'u8)
 
+    test "a region partly off the output is captured at the size asked, off-screen black":
+      let p = t.holdWindow()
+      let w = t.byPid(p.processID)
+      t.placeWindow(w, 1280 - 100, 300)
+      t.waitUntil("placed half off the output", proc(): bool =
+        t.byPid(p.processID).rect.x == 1180)
+      let r = t.byPid(p.processID).rect
+      let img = t.captureSettled(r)
+      check (img.width, img.height) == (r.w, r.h)
+      check img.pixel(50, 100) == (0x80'u8, 0x80'u8, 0x80'u8)   # on screen
+      check img.pixel(r.w - 10, 100) == (0'u8, 0'u8, 0'u8)      # past the edge
+
     test "fullscreen from the desktop's side":
       let p = t.holdWindow()
       let w = t.byPid(p.processID)

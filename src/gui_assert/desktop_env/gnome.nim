@@ -345,8 +345,33 @@ method keys*(t: GnomeTarget; chord: string) =
 method typeText*(t: GnomeTarget; text: string) =
   for ch in text: t.keys($ch)
 
+proc captureOnScreen(t: GnomeTarget; region: Rect): RgbImage
+
 method capture*(t: GnomeTarget; region: Rect): RgbImage =
+  ## The region as on screen, the size asked for: the part outside the
+  ## monitor is black. `ScreenshotArea` refuses a region that is not wholly
+  ## on the monitor ("Invalid params" — measured, for a 1900x1400 window on a
+  ## 1600x1000 monitor), where `grim` on sway composites what is there, so
+  ## the on-screen part is captured and placed.
   t.requireStarted("capture")
+  let x0 = max(region.x, 0)
+  let y0 = max(region.y, 0)
+  let x1 = min(region.x + region.w, t.width)
+  let y1 = min(region.y + region.h, t.height)
+  if x1 <= x0 or y1 <= y0:
+    raise t.envError("capture", "the region " & $region & " is not on the monitor")
+  if (x0, y0, x1, y1) == (region.x, region.y, region.x + region.w, region.y + region.h):
+    return t.captureOnScreen(region)
+  let part = t.captureOnScreen(Rect(x: x0, y: y0, w: x1 - x0, h: y1 - y0))
+  result = RgbImage(width: region.w, height: region.h,
+                    data: newSeq[uint8](region.w * region.h * 3))
+  for row in 0 ..< part.height:
+    let src = row * part.width * 3
+    let dst = ((y0 - region.y + row) * region.w + (x0 - region.x)) * 3
+    for i in 0 ..< part.width * 3:
+      result.data[dst + i] = part.data[src + i]
+
+proc captureOnScreen(t: GnomeTarget; region: Rect): RgbImage =
   inc t.evalSeq
   let png = t.runtimeDir / ("shot-" & $t.evalSeq & ".png")
   let (output, code) = t.bus.call(@["gdbus", "call", "--session",
