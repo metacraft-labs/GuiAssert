@@ -192,7 +192,14 @@ method wheel*(t: SwayTarget; notches: int) =
   t.pointerCommand("wheel " & $notches, "wheel")
 
 proc wtype(t: SwayTarget; args: seq[string]; operation: string) =
-  let (output, code) = execCmdEx(quoteShellCommand(@["wtype"] & args))
+  ## Every `wtype` call creates a new virtual keyboard, and a client is sent
+  ## that keyboard's keymap only once it appears: keys sent at once can
+  ## arrive before the keymap and be dropped. Measured with a GPUI window on
+  ## this target: an unprimed `wtype v` reached nothing. So a shift tap goes
+  ## first, and the keys follow 400 ms later (the priming isonim-gpui's and
+  ## CodeTracer's window lanes established).
+  let primed = @["-M", "shift", "-m", "shift", "-s", "400"] & args
+  let (output, code) = execCmdEx(quoteShellCommand(@["wtype"] & primed))
   if code != 0: raise t.envError(operation, output.strip())
 
 method keys*(t: SwayTarget; chord: string) =

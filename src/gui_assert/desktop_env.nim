@@ -252,8 +252,11 @@ proc drag*(t: TargetEnvironment; src, dst: (int, int); steps = 12;
   ## compositor may hold a grab's last motion back until a later pointer
   ## event, which a real pointer always produces and a synthetic drag does
   ## not.
-  t.pointerMove(src[0], src[1])
-  t.press(button)
+  ## `pressHoldMs < 0` continues a press already made: no move to `src`
+  ## and no press.
+  if pressHoldMs >= 0:
+    t.pointerMove(src[0], src[1])
+    t.press(button)
   if pressHoldMs > 0: sleep(pressHoldMs)
   for i in 1 .. steps:
     t.pointerMove(src[0] + (dst[0] - src[0]) * i div steps,
