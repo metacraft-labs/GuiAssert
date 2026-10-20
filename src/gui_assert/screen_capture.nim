@@ -121,6 +121,12 @@
 import std/[algorithm, os, osproc, streams, strutils, tempfiles, times]
 
 import ./swift_helper
+import ./core/geometry
+
+# This module stays at its path. Its pure code is the macOS helper's own
+# report and window-list format, which belongs to the macOS capture backend
+# rather than the platform-neutral core; the bridges at the end of the file
+# convert its rectangles to `gui_assert/core/geometry.Rect`.
 
 # ---------------------------------------------------------------------------
 # Types
@@ -909,3 +915,15 @@ proc newWindowFrameSource*(q: WindowQuery, dir = "",
     inc tick
     discard captureWindowStill(path, query, timeoutMs)
     return path
+
+# ---------------------------------------------------------------------------
+# Bridges to the pure core
+# ---------------------------------------------------------------------------
+
+proc boundsRect*(w: WindowInfo): Rect =
+  ## The window's bounds as a core `Rect` (desktop points, top-left origin).
+  rect(w.bounds)
+
+proc windowBoundsRect*(rep: StillCaptureReport): Rect =
+  ## The captured window's bounds from a report, as a core `Rect`.
+  rect(rep.windowBounds)

@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS0 completed (spec + contract reviewed and committed). NEXT: GS1 (CI workflows for Linux/macOS plus a non-required Windows job; core/ opt-in module split with legacy shims and the purity test), then GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary. GS3 part A (consumer spec, contract review) is in progress on companion/linux; its contract change requests C1–C17 are recorded under GS0's Outstanding Tasks for folding into the spec before GS2 freezes contract 1.0.
+  :next_steps: GS1 implemented on macOS (core/ split, shims, purity and PNG tests, CI workflow written and actionlint-clean) and independently verified on macOS; its Linux and Windows CI legs have not run yet (they run on the first pull request into dev). NEXT: GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary. GS3 part A (consumer spec, contract review) is in progress on companion/linux; its contract change requests C1–C17 are recorded under GS0's Outstanding Tasks for folding into the spec before GS2 freezes contract 1.0.
   :last_updated: 2026-10-20
   :current_milestone: GS1
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec and contract complete.
@@ -54,7 +54,7 @@
   | Milestone | Owner           | Status                         | macOS   | Linux   | Windows |
   |-----------+-----------------+--------------------------------+---------+---------+---------|
   | GS0       | substrate/macos | completed                      | —       | —       | —       |
-  | GS1       | substrate/macos | planned                        | planned | planned | planned |
+  | GS1       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS2       | substrate/macos | planned                        | —       | —       | —       |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | planned                        | —       | —       | —       |
@@ -244,15 +244,16 @@
 
 ** GS1: GuiAssert CI and the core/opt-in module split
    :PROPERTIES:
-   :status: planned
+   :status: partially_completed
+   :status_note: Implemented 2026-10-20 from origin/agents at 8e8df7ea; every GS1 test green on macOS (aarch64-darwin, nix develop). Linux and Windows have not been run on this host: the CI workflow that runs them triggers only on pull requests into dev/stable. Independently reviewed and re-run on macOS 2026-10-20 (review strengthened the global-state check and the PNG filter coverage).
    :depends_on: GS0
    :owner: substrate/macos
-   :platform_status: macos=planned linux=planned windows=planned
+   :platform_status: macos=completed linux=planned windows=planned
    :complexity: large
    :END:
 
 *** Deliverables
-    - [ ] =.github/workflows/ci.yml=: triggers =push= to =[dev, stable]= and
+    - [X] =.github/workflows/ci.yml=: triggers =push= to =[dev, stable]= and
       =pull_request= into =[dev, stable]= only (no workflow runs on =agents=
       or =agents-to-dev-*=). The three Nix-capable matrix legs
       =[self-hosted, linux, x64]=, =[self-hosted, linux, arm64]= and
@@ -262,57 +263,135 @@
       =nix develop --command just test= and
       =nix develop --command just test-core=; names derived from a leg use
       =join(matrix.runner, '-')=; every job sets =timeout-minutes=.
-    - [ ] A Windows job on =[self-hosted, windows, x64, dev-env-ready]=
+      (actionlint 1.7.12 clean; every =just= recipe it runs passes locally
+      on macOS. Logs are uploaded with 1-day retention and mirrored to the
+      in-house S3 store, non-blocking.)
+    - [X] A Windows job on =[self-hosted, windows, x64, dev-env-ready]=
       (=dev-env-ready= justified in a one-line comment, per the runner-label
       policy), building and running the core and contract suites with a
       non-Nix toolchain; =continue-on-error: true= and not a required check,
       because Windows capacity is scarce and the job may queue. The omitted
       =[self-hosted, windows, arm64]= leg is recorded as a documented
       exception in a workflow comment (owner =later/windows=, follow-up GS11).
-    - [ ] =src/gui_assert/core/= with =geometry=, =image=, =png= (pure
+      (Toolchain: =ci/windows/provision-toolchain.ps1= downloads Nim 2.2.4,
+      WinLibs GCC 16.1.0 and ffmpeg 7.1.1, each SHA-256-pinned (hashes
+      measured 2026-10-20); =ci/windows/run-core-suite.ps1= runs
+      =tests/core_suite.txt=, the list =just test-core= runs. The contract
+      suite does not exist yet; GS2 adds it to this job. Not run on Windows
+      yet: both scripts parse under PowerShell 7.6, and the suite script
+      runs green under pwsh on macOS.)
+    - [X] =src/gui_assert/core/= with =geometry=, =image=, =png= (pure
       decode/encode, inflate/deflate), =ssim=, =hashing=, =segmentation=,
       =vision_windows=, =ocr_types=, =tree_types=, =desktop_types=,
       =interfaces= (=contract= lands in GS2).
-    - [ ] The existing modules (=image_math=, =ocr=, =vision_windows=,
+    - [X] The existing modules (=image_math=, =ocr=, =vision_windows=,
       =video_analysis=, =screen_capture=, =capture=, =input=) keep their
       import paths as re-exporting shims over =core/= plus their effectful
       remainder; =decodeGray= moves behind =backends/media/ffmpeg.nim=.
-    - [ ] =src/gui_assert/backends/= skeleton with the per-module directories
+      (=screen_capture=, =capture= and =input= had no platform-neutral pure
+      part to move: their pure code is the macOS helper's report format, the
+      recorders' argv builders and the AppleScript builders, which spec §3.1
+      places in the backends filled by GS5 and GS8. They stay whole at their
+      paths and gained bridges to =core/geometry= instead; see Deviations.)
+    - [X] =src/gui_assert/backends/= skeleton with the per-module directories
       of spec §3.1 (backends are filled in GS5–GS11).
-    - [ ] Justfile: =test-core= (core unit + purity), keep =test= green;
+    - [X] Justfile: =test-core= (core unit + purity), keep =test= green;
       nimble =test= task and =.gitignore= updated for new test binaries.
-    - [ ] Reword the =capture.nim= module header so it describes GuiAssert's
+    - [X] Reword the =capture.nim= module header so it describes GuiAssert's
       own design and names no other project's implementation as its source.
 
 *** Verification
+    All results below: macOS 26 (aarch64-darwin), inside =nix develop=, on
+    the working tree based on origin/agents at 8e8df7ea, 2026-10-20. Linux and
+    Windows have not run yet.
     - test_name: test_core_imports_only_stdlib_allowlist
       file: tests/tcore_purity.nim
       description: The import graph of every core/ module (nim genDepend) contains only core/ modules and the stdlib allowlist of spec §3.2.
-      status: pending
-      falsifying_mutation: Adding `import std/osproc` to core/ssim.nim turns the test red.
+      status: passing (macOS)
+      falsifying_mutation: Adding `import std/osproc` to core/ssim.nim turns the test red. Tried 2026-10-20: red ("ssim.nim -> std/osproc"). A built-in control runs the same analysis on gui_assert/image_math and must report its std/osproc edge and media.nim, so an analysis that sees no edges cannot pass.
     - test_name: test_core_binary_links_no_platform_libraries
       file: tests/tcore_purity.nim
       description: A program importing all of core/ links nothing beyond the C runtime (otool -L on macOS, ldd on Linux).
-      status: pending
+      status: passing (macOS: otool -L reports only /usr/lib/libSystem.B.dylib)
       negative_control: The same probe on a program importing backends/capture/macos_sck reports the frameworks it links, so the probe can see a link.
+      negative_control_as_built: macos_sck lands in GS5, so the control is a program importing gui_assert/input (which links ApplicationServices and CoreFoundation for CGEvent); on Linux a program calling into libstdc++, on Windows one calling user32. GS5 should switch the macOS control to macos_sck. Linux reads NEEDED with readelf -d (then objdump -p, then ldd); Windows uses objdump -p from the pinned MinGW toolchain.
+      falsifying_mutation: Adding `{.passL: "-framework CoreFoundation".}` to core/geometry.nim turns it red. Tried 2026-10-20: red (extra CoreFoundation link).
     - test_name: test_png_roundtrip_gray_rgb_rgba
       file: tests/tcore_png.nim
       description: Encode then decode reproduces gray, RGB and RGBA buffers bit-exactly.
-      status: pending
+      status: passing (macOS)
+      falsifying_mutation: Corrupting the deflate match-distance bits turns it red (tried 2026-10-20).
     - test_name: test_png_decode_matches_ffmpeg_decode
       file: tests/tcore_png.nim
       description: For PNGs written by ffmpeg, the pure decoder's gray buffer equals ffmpeg's gray decode; a PNG with a corrupted CRC is rejected, not half-decoded.
-      status: pending
+      status: passing (macOS, pinned ffmpeg 8.0 arm64; also passing against the x86_64 ffmpeg 8.0 of the same nixpkgs under Rosetta, which exercises the x86 SIMD paths)
+      as_built: ffmpeg writes the pattern as gray, rgb24, rgba, pal8, ya8 and monob; every format's pixels equal ffmpeg's own rgba decode (gray, rgb24 and rgba also once per row filter ffmpeg can force with -pred: none, sub, up, avg, paeth, mixed), and the gray buffer equals ffmpeg's gray decode (backends/media/ffmpeg.decodeGray) for all but pal8. A PNG holding all 2^24 colours checks the colour-to-gray conversion exhaustively (core/image.rgbToGray follows libswscale's fixed-point steps). pal8 is excluded from the gray equality only: ffmpeg rounds each palette entry to an 8-bit studio-range luma before expanding it, which can differ by one level; its pixels are still compared exactly. Also rejected: a damaged IHDR CRC, a truncated file, a non-PNG, and 16-bit samples.
+      falsifying_mutation: Replacing rgbToGray with plain full-range BT.601 rounding, or ignoring a chunk CRC mismatch, turns it red (both tried 2026-10-20). So do a wrong Paeth tie-break (`pb < pc`) and a rounding Average unfilter in the decoder (both tried in review, 2026-10-20).
     - test_name: test_legacy_import_paths_still_compile
       file: tests/tcore_shims.nim
       description: Every pre-split public module still compiles and its public procs keep their signatures.
-      status: pending
+      status: passing (macOS)
+      as_built: compares each split module's public API against a frozen nim jsondoc record of the pre-split sources (tests/fixtures/legacy_api/, recorded at 8e8df7ea): same heads and type definitions, and on macOS no raises/tags beyond the old ones. Every old name must be declared through the old import path, a probe importing every module of src/gui_assert/ (and desktop_env/) must build, and gui_assert_vision must build. A control test requires a changed signature to be reported.
+      falsifying_mutation: Adding a defaulted parameter to computeSsim, dropping the decodeGray re-export from image_math, or hiding OcrWord from ocr's re-export each turns it red (tried 2026-10-20).
     - test_name: nix develop --command just test
       description: The existing default suite stays green after the split.
-      status: pending
+      status: passing (macOS; 189 OK, 0 FAILED; baseline before the split was 174 OK)
     - test_name: nix develop --command just test-core
       description: The new core suite runs green on Linux and macOS.
-      status: pending
+      status: passing on macOS (17 OK); Linux pending its first CI run
+    - test_name: test_core_sources_use_no_ffi_or_global_state
+      file: tests/tcore_purity.nim
+      description: (Added in GS1.) The core sources contain no FFI or linking pragma and no environment access (control: a scan of gui_assert/input), and the syntax tree of every core module, as the compiler's parser builds it, holds no module-level var (also inside a top-level when or block) and no {.global.} variable (control: a fixture holding one of each) (spec §3.2).
+      status: passing (macOS)
+      falsifying_mutation: A top-level `var` in core/hashing.nim turns it red (tried 2026-10-20). So does a `var` nested in a top-level `when true:` block, which the first, line-based version of the check missed (found and fixed in review, tried 2026-10-20).
+    - test_name: test_core_builds_for_js_backend
+      file: tests/tcore_purity.nim
+      description: (Added in GS1.) All of core/ compiles for the JS target (spec §3.2).
+      status: passing (macOS)
+    - test_name: nix develop --command nim c -r --hints:off tests/tcore_types.nim
+      description: (Added in GS1.) Unit tests for geometry and the desktop/image mapping, image conversions, segmentation, OCR reading order, the tree path grammar and element filter, and the desktop type helpers.
+      status: passing (macOS)
+    - test_name: test_zlib_roundtrip_edge_cases
+      file: tests/tcore_png.nim
+      description: (Added in GS1.) zlib edge cases (empty, long runs, 32 KiB distances, bound and Adler-32 checks, CRC-32/Adler-32 check values).
+      status: passing (macOS)
+    - test_name: test_png_encode_is_read_by_ffmpeg
+      file: tests/tcore_png.nim
+      description: (Added in GS1.) ffmpeg reads the encoder's output back to the exact bytes.
+      status: passing (macOS)
+    - test_name: nix shell nixpkgs#actionlint nixpkgs#shellcheck -c actionlint .github/workflows/ci.yml
+      description: The workflow is valid (actionlint 1.7.12 with shellcheck 0.11.0).
+      status: passing 2026-10-20
+
+*** Deviations
+    - The macOS link-probe negative control uses gui_assert/input rather than
+      backends/capture/macos_sck, which does not exist until GS5.
+    - screen_capture, capture and input keep their code at their paths and
+      gain bridges to core/geometry (=boundsRect=, =windowBoundsRect=,
+      =toRect=, =toCaptureRegion=, =mouseMove(Point)=, =mouseClick(Point)=)
+      instead of re-exporting moved code: none of their pure code is
+      platform-neutral (helper report format, recorder argv, AppleScript and
+      macOS key codes). It moves into backends/ in GS5 (capture) and GS8
+      (input). They do not re-export core/geometry, because consumers that
+      import both input and pacing would then see two `Point` types.
+    - image_math re-exports only GrayImage and ImageMathError from
+      core/image (not RgbImage), because desktop_env also exports an
+      `RgbImage`.
+    - The Windows job runs the core suite only; the contract suite is added
+      by GS2. It runs it through ci/windows/run-core-suite.ps1, because the
+      Justfile recipes need a POSIX shell.
+    - `just test` now stops at the first failing test file. Before, its loop
+      exited with the status of the last file only, so an earlier failure
+      could leave the recipe green.
+
+*** Outstanding Tasks
+    - [X] Independent verification of this implementation (commits on green).
+    - [ ] First CI run of the Linux x64 and arm64 legs and the Windows job
+      (on the first pull request into dev); record the results above. The
+      exhaustive gray check of test_png_decode_matches_ffmpeg_decode is the
+      one most likely to differ per architecture; it passed against the x86_64
+      ffmpeg under Rosetta, not yet on a native x86_64 Linux host.
+    - [ ] GS5: switch the macOS link-probe control to backends/capture/macos_sck.
 
 *** Modules to Study & Entry Points
     - =src/gui_assert/image_math.nim= (=decodeGray=, =computeSsim=, =tiledSsim=, =dctHash=, =edgeChangeRatio=) — pure maths except the ffmpeg decode.

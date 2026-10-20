@@ -1,7 +1,8 @@
 ## GuiAssert Media Composition Pipeline
 ##
 ## Builds the ffmpeg invocation that stitches together:
-##   * a raw screencast video produced by `ah desktop record` (M1),
+##   * a raw screencast video (for example one recorded with
+##     `gui_assert/capture`),
 ##   * a narration WAV produced by the speech synthesizer (this milestone),
 ##   * a "talking head" avatar video clipped into a circle and parked in the
 ##     bottom-right corner,

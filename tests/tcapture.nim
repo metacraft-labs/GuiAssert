@@ -4,8 +4,8 @@
 ##
 ##   nim c -r --hints:off tests/tcapture.nim
 ##
-## Live macOS background capture (mirrors agent-harbor's
-## `verify_macos_background_capture`):
+## Live macOS background capture (records the screen in the background for
+## a few seconds and checks the resulting file):
 ##
 ##   nim c -d:captureLive -r --hints:off tests/tcapture.nim
 ##
@@ -24,8 +24,8 @@ when defined(macosx) and defined(captureLive):
 
 # ---------------------------------------------------------------------------
 # Sample stderr output from `ffmpeg -f avfoundation -list_devices true -i ""`.
-# Copied from agent-harbor's capture.rs test fixture so the two
-# implementations stay byte-identical.
+# A representative device listing, so the parser is tested against the
+# exact format ffmpeg prints.
 # ---------------------------------------------------------------------------
 
 const FFMPEG_AVFOUNDATION_SAMPLE = """

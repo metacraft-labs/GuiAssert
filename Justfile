@@ -1,18 +1,31 @@
 # GuiAssert
 #
-# `just test`   - run the default test suite (excludes the OCR-dependent
-#                 tgui_assert flake, which needs a healthy tesseract
-#                 install).
-# `just lint`   - placeholder; required by the workspace pre-commit
-#                 hook.  Add real linters here as they come online.
+# `just test`      - run the default test suite (excludes the OCR-dependent
+#                    tgui_assert flake, which needs a healthy tesseract
+#                    install). Includes the core unit tests and the legacy
+#                    import-path check.
+# `just test-core` - the pure core's unit tests and its purity checks
+#                    (import allowlist, no FFI, links only the C runtime).
+#                    The list lives in tests/core_suite.txt so the Windows CI
+#                    job, which has no `just` recipe shell, runs the same one.
+# `just lint`      - placeholder; required by the workspace pre-commit
+#                    hook.  Add real linters here as they come online.
 
 default: test
 
 # Run every default unit test against the local nim toolchain.
 test:
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_png tcore_shims; do \
       echo "===== $f ====="; \
-      nim c -r --hints:off tests/$f.nim; \
+      nim c -r --hints:off tests/$f.nim || exit 1; \
+    done
+
+# The pure core: unit tests plus the purity rule of the desktop-substrate
+# spec (§3.2). Runs on every host; no TCC grant, display or network needed.
+test-core:
+    @for f in $(grep -v '^#' tests/core_suite.txt); do \
+      echo "===== $f ====="; \
+      nim c -r --hints:off tests/$f.nim || exit 1; \
     done
 
 # The desktop-environment targets against REAL compositors (Linux, inside

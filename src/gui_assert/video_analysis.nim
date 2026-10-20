@@ -15,23 +15,31 @@
 ## tEnd)` time range (derived from the frame index / sample fps) and a
 ## `changeScore` (how different the entering frame was from its predecessor).
 ##
-## As in the rest of GuiAssert, the *pure* argv-builders and the segmentation
-## core (`buildProbeArgv`, `parseProbeJson`, `buildSampleFramesArgv`,
-## `buildExtractFrameArgv`, `segmentBoundaries`) are separated from the
-## *effectful* procs (`probeVideo`, `segmentByChange`) so the former are unit
-## testable without a subprocess and the latter are integration tested against
-## real ffmpeg.
+## As in the rest of GuiAssert, the *pure* argv-builders (`buildProbeArgv`,
+## `parseProbeJson`, `buildSampleFramesArgv`, `buildExtractFrameArgv`) are
+## separated from the *effectful* procs (`probeVideo`, `segmentByChange`) so
+## the former are unit testable without a subprocess and the latter are
+## integration tested against real ffmpeg. The segmentation core itself
+## (`segmentBoundaries`, `frameSimilarity`, `segmentsFromSeries`) is part of
+## the pure core, `gui_assert/core/segmentation`, re-exported here.
 ##
 ## The `Keyframe.words`/`text`/`urls` fields are declared here (so the full
 ## timeline shape is stable) but are only *populated* by VU2's OCR pass; VU1
 ## fills in the segmentation fields only.
 
 import std/[json, os, osproc, streams, strtabs, strutils, algorithm,
-            tempfiles, re, sets, tables]
+            tempfiles, re, sets]
 
 import ./media
 import ./image_math
 import ./ocr
+import ./core/segmentation
+
+# The pure segmentation core and reading-order reconstruction moved to
+# `gui_assert/core/`; re-exported so `import gui_assert/video_analysis` keeps
+# offering them under their historical names.
+export segmentation
+export ocr.wordsToReadingOrderText
 
 type
   VideoAnalysisError* = object of CatchableError
@@ -148,19 +156,9 @@ proc parseProbeJson*(jsonText: string): VideoInfo =
 # Pure segmentation core
 # ---------------------------------------------------------------------------
 
-proc segmentBoundaries*(ssims: seq[float], threshold: float): seq[int] =
-  ## Given `ssims`, where `ssims[i]` is the SSIM between frame `i` and frame
-  ## `i+1`, return the frame indices at which a *new* segment begins.
-  ##
-  ## Frame 0 is always an implicit segment start, so the result always begins
-  ## with `0`. A boundary is recorded at frame `i+1` when
-  ## `1.0 - ssims[i] > threshold` (i.e. frame `i+1` differs enough from frame
-  ## `i` to count as a new state). Consecutive sub-threshold frames therefore
-  ## collapse into one segment.
-  result = @[0]
-  for i in 0 ..< ssims.len:
-    if (1.0 - ssims[i]) > threshold:
-      result.add(i + 1)
+# `segmentBoundaries` (and the frame-series helpers `frameSimilarity`,
+# `segmentsFromSeries`, `segmentFrames`) live in the pure core,
+# `gui_assert/core/segmentation`, and are re-exported above.
 
 # ---------------------------------------------------------------------------
 # Pure OCR post-processing: URL extraction + reading-order reconstruction
@@ -217,42 +215,8 @@ proc extractUrls*(text: string): seq[string] =
       seen.incl(u)
       result.add(u)
 
-proc wordsToReadingOrderText*(words: seq[OcrWord]): string =
-  ## Reconstruct human reading-order text from unordered OCR words. Words are
-  ## grouped by `(blockNum, lineNum)`; the resulting lines are ordered by their
-  ## top-y (the minimum `bbox[1]` in the group), and words within a line by
-  ## their left-x (`bbox[0]`). Lines are joined with `"\n"`, words with a
-  ## single space.
-  var groups = initOrderedTable[(int, int), seq[OcrWord]]()
-  for w in words:
-    let key = (w.blockNum, w.lineNum)
-    if key notin groups:
-      groups[key] = @[]
-    groups[key].add(w)
-
-  type Line = tuple[topY: int, minX: int, text: string]
-  var lines: seq[Line] = @[]
-  for key, ws in groups:
-    var ordered = ws
-    ordered.sort(proc(a, b: OcrWord): int = cmp(a.bbox[0], b.bbox[0]))
-    var topY = high(int)
-    var minX = high(int)
-    var pieces: seq[string] = @[]
-    for w in ordered:
-      if w.bbox[1] < topY: topY = w.bbox[1]
-      if w.bbox[0] < minX: minX = w.bbox[0]
-      pieces.add(w.text)
-    lines.add((topY: topY, minX: minX, text: pieces.join(" ")))
-
-  # Order lines top-to-bottom, tie-break left-to-right.
-  lines.sort(proc(a, b: Line): int =
-    result = cmp(a.topY, b.topY)
-    if result == 0: result = cmp(a.minX, b.minX))
-
-  var outLines: seq[string] = @[]
-  for ln in lines:
-    outLines.add(ln.text)
-  result = outLines.join("\n")
+# `wordsToReadingOrderText` lives in `gui_assert/core/ocr_types` and is
+# re-exported above.
 
 # ---------------------------------------------------------------------------
 # Pure serialization: JSON + markdown digest
@@ -765,24 +729,14 @@ proc segmentByChange*(path: string, sampleFps = 2.0, scaleW = 320,
     var prev = decodeGray(frameFiles[0])
     for i in 1 ..< frameFiles.len:
       let cur = decodeGray(frameFiles[i])
-      if useLocal:
-        series.add(tiledSsim(prev, cur, gridX, gridY).minLocal)
-      else:
-        series.add(computeSsim(prev, cur))
+      series.add(frameSimilarity(prev, cur, useLocal, gridX, gridY))
       prev = cur
 
-    let numFrames = frameFiles.len
     let threshold = if useLocal: localThreshold else: ssimThreshold
-    let boundaries = segmentBoundaries(series, threshold)
-
-    result = @[]
-    for si in 0 ..< boundaries.len:
-      let b = boundaries[si]
-      let nb = if si + 1 < boundaries.len: boundaries[si + 1] else: numFrames
-      let tStart = float(b) / sampleFps
-      let tEnd = float(nb) / sampleFps
-      let score = if b == 0: 1.0 else: 1.0 - series[b - 1]
-      result.add((tStart, tEnd, score))
+    try:
+      result = segmentsFromSeries(series, frameFiles.len, sampleFps, threshold)
+    except SegmentationError as e:
+      raise newException(VideoAnalysisError, e.msg & " (sampling " & path & ")")
   finally:
     try:
       removeDir(tmpDir)

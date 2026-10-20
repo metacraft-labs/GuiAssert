@@ -1,10 +1,11 @@
 ## GuiAssert Cross-Platform Screen Capture
 ##
-## A pure-Nim subprocess wrapper around the host's preferred screen-capture
-## backend. This module mirrors the agent-harbor Rust implementation at
-## `agent-harbor/crates/ah-cli/src/use_cmd/desktop/capture.rs` so that
-## GuiAssert-consuming projects (e.g. codetracer-marketing) do not need the
-## `ah` CLI as a runtime dependency.
+## Screen recording to MP4 through the host's preferred screen recorder, run
+## as a subprocess. The module picks a recorder per operating system (or the
+## one the caller names), builds its command line, starts it, and stops it
+## gracefully so the container is finalised. A program that needs screen
+## video links nothing beyond the Nim standard library and needs only the
+## recorder binary on the host.
 ##
 ## Backends:
 ##
@@ -37,6 +38,13 @@ when defined(posix):
   import std/posix
 
 import ./media
+import ./core/geometry
+
+# This module stays at its path. Its pure code (the per-backend ffmpeg and
+# wf-recorder argv builders, the device-list parser) is specific to those
+# recorders and belongs with the capture backends rather than the
+# platform-neutral core; `toRect` / `toCaptureRegion` below convert between
+# its `CaptureRegion` and `gui_assert/core/geometry.Rect`.
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -590,3 +598,18 @@ proc stopRecording*(h: CaptureHandle): string {.discardable.} =
   discard gracefulStop(h.process, h.usesStdinQ, h.backend)
   validateOutput(h.outputPath, h.backend)
   return h.outputPath
+
+# ---------------------------------------------------------------------------
+# Bridges to the pure core
+# ---------------------------------------------------------------------------
+
+proc toRect*(r: CaptureRegion): Rect =
+  ## The region as a core `Rect`.
+  rect(r.x, r.y, r.width, r.height)
+
+proc toCaptureRegion*(r: Rect): CaptureRegion =
+  ## A core `Rect` as a capture region. Raises `ValueError` for an empty
+  ## rectangle, which no recorder can capture.
+  if r.isEmpty:
+    raise newException(ValueError, "cannot capture the empty region " & $r)
+  CaptureRegion(x: r.x, y: r.y, width: r.width, height: r.height)
