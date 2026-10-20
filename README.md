@@ -243,6 +243,10 @@ Two things worth knowing before you debug a failure:
 
 ## Design References
 
+- `Planned-Work/Desktop-Substrate.md` (with `Desktop-Substrate.milestones.org`):
+  GuiAssert as a desktop substrate — the pure core and opt-in backends, the
+  `guiassert` CLI / `serve` JSON contract, and off-screen sessions.
+- `Planned-Work/Vision-Understanding.md` (with `Vision-Understanding.milestones.org`)
 - `codetracer-specs/Planned-Work/Video-Session-Capture.md`
 - `codetracer-specs/Planned-Work/Video-Session-Capture.milestones.org`
 - `codetracer-specs/Planned-Work/GuiAssert-Library.md`

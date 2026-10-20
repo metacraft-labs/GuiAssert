@@ -1,0 +1,903 @@
+#+TITLE: GuiAssert Desktop Substrate Milestones
+
+* Document
+  :PROPERTIES:
+  :next_steps: GS0 completed (spec + contract reviewed and committed). NEXT: GS1 (CI workflows for Linux/macOS plus a non-required Windows job; core/ opt-in module split with legacy shims and the purity test), then GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary.
+  :last_updated: 2026-10-20
+  :current_milestone: GS1
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec and contract complete.
+  :END:
+
+* Introduction
+  :PROPERTIES:
+  :initiative_goals: A dependency-free GuiAssert core (image maths, SSIM, video segmentation, pixel window detection, the OCR interface) plus opt-in capture, OCR, accessibility-tree, input and off-screen-session backends for macOS, Linux and Windows; a `guiassert` CLI and `guiassert serve` daemon with a frozen JSON contract and a deterministic fixture backend; Agent Harbor switched onto it platform by platform once parity is measured, and its duplicated native code removed only after parity holds everywhere.
+  :related_specs: [[file:Desktop-Substrate.md][Desktop Substrate spec]], [[file:Vision-Understanding.md][Vision Understanding spec]], [[file:../src/gui_assert/desktop_env.nim][desktop_env targets]], [[file:../src/gui_assert/screen_capture.nim][macOS still capture]]
+  :END:
+
+  Design, contract and rationale live in [[file:Desktop-Substrate.md]]. This
+  file tracks execution, and it is the coordination point between two
+  campaigns: this one (GuiAssert itself, macOS backends) and the companion
+  campaign that owns every Agent Harbor change and the Linux backends. Both
+  campaigns pull this file from =origin/agents= before starting a milestone and
+  push their status updates to it.
+
+  Milestones are implemented one at a time: an implementation agent (no
+  commits) followed by an independent verification agent that runs the tests,
+  rejects weak or skipped tests, and commits only on green.
+
+  *Owner tags* (the =:owner:= property):
+  - =substrate/macos= — this campaign, on its macOS development host (holds the
+    TCC grants for live macOS evidence).
+  - =companion/linux= — the companion campaign, on the organization's
+    bare-metal Linux CI host; owns Agent Harbor's spec, backend crate,
+    switch-over and removal, and may claim any Linux deliverable here.
+  - =later/windows= — unowned until a Windows host is available; Windows
+    deliverables run on the CI Windows class or that host.
+
+  *Per-platform milestones.* GS5–GS8 each carry macOS, Linux and Windows
+  deliverables. Their =:platform_status:= property records each platform
+  separately (for example
+  =macos=completed linux=planned windows=planned=), and the milestone =:status:= is
+  =partially_completed= until all three are =completed=. A later milestone that
+  needs only one platform's part names it in =:platform_prereqs:= (for example
+  =GS5=macos=) and may start once those entries read =completed=, without
+  waiting for the other platforms.
+
+  *TCC.* Live macOS tests need Screen Recording / Accessibility grants for the
+  signed GuiAssert helper bundle. When a grant is missing the implementing agent
+  records =<milestone> BLOCKED: TCC <permission> for <binary>= in the
+  milestone's Outstanding Tasks and continues with work that does not need it.
+
+  *Status board* (implementation agents update this table, the Document
+  properties and the milestone's own =:status:= / =:platform_status:= together):
+
+  | Milestone | Owner           | Status                         | macOS   | Linux   | Windows |
+  |-----------+-----------------+--------------------------------+---------+---------+---------|
+  | GS0       | substrate/macos | completed                      | —       | —       | —       |
+  | GS1       | substrate/macos | planned                        | planned | planned | planned |
+  | GS2       | substrate/macos | planned                        | —       | —       | —       |
+  | GS3       | companion/linux | planned                        | —       | —       | —       |
+  | GS4       | substrate/macos | planned                        | —       | —       | —       |
+  | GS5       | split           | planned                        | planned | planned | planned |
+  | GS6       | split           | planned                        | planned | planned | planned |
+  | GS7       | split           | planned                        | planned | planned | planned |
+  | GS8       | split           | planned                        | planned | planned | planned |
+  | GS9       | substrate/macos | planned                        | planned | —       | —       |
+  | GS10      | companion/linux | planned                        | —       | planned | —       |
+  | GS11      | later/windows   | planned                        | —       | —       | planned |
+  | GS12      | substrate/macos | planned                        | planned | —       | —       |
+  | GS13      | companion/linux | planned                        | —       | planned | —       |
+  | GS14      | later/windows   | planned                        | —       | —       | planned |
+  | GS15      | companion/linux | planned                        | planned | planned | planned |
+  | GS16      | companion/linux | planned                        | —       | —       | —       |
+
+* Milestones
+
+** GS0: Specs and contract
+   :PROPERTIES:
+   :status: completed
+   :status_note: Written and independently reviewed 2026-10-20 from origin/agents at 455daa14. No code.
+   :depends_on:
+   :owner: substrate/macos
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - [X] =Planned-Work/Desktop-Substrate.md=: module layout and the opt-in
+      mechanism (pure core, opt-in backends, compile-time defines, runtime
+      selection), platform backends per OS, coordinates, the off-screen
+      session model, the CLI contract (every verb, arguments, =data= schema,
+      envelope, exit codes 0–8, kinds and reasons, serialization rules,
+      reject-don't-drop, =--state-dir=, contract versioning), the =serve=
+      NDJSON protocol (transports, framing, ids, events, ordering,
+      cancellation, shutdown), the test strategy (fixture backend, TCC-gated
+      tests), CI, and what stays in Agent Harbor.
+    - [X] This milestone file, GS0–GS16.
+    - [X] README pointer to the planned-work specs.
+
+*** Verification
+    - test_name: git diff --check origin/agents -- Planned-Work README.md
+      description: The spec, the milestone file and the README change carry no whitespace errors.
+      status: passing 2026-10-20 at base 455daa14
+
+*** Key Source Files
+    - Planned-Work/Desktop-Substrate.md - the specification and contract
+    - Planned-Work/Desktop-Substrate.milestones.org - this execution ledger
+
+*** Outstanding Tasks
+    - [X] Independent review of the spec and this file (2026-10-20): fixed the
+      =wait= / global =--timeout-ms= flag clash, made the error object's
+      optional keys always-present-or-null, added the =request= not-found
+      reason, the =png-sequence= recording format, =--fixture-scenario=, the
+      =serve= flags, =media= in =version=, the full Nix runner matrix and
+      =push: [dev, stable]= in GS1, and the missing per-backend live tests in
+      GS5, GS8, GS10 and GS11.
+    - [ ] The companion campaign reads spec §7–§8 before GS3 and records any
+      contract change it needs here before GS2 freezes it.
+    - [ ] That the contract written here is the contract implemented is checked
+      by =test_every_documented_verb_is_implemented=, which lands in GS2.
+
+** GS1: GuiAssert CI and the core/opt-in module split
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS0
+   :owner: substrate/macos
+   :platform_status: macos=planned linux=planned windows=planned
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - [ ] =.github/workflows/ci.yml=: triggers =push= to =[dev, stable]= and
+      =pull_request= into =[dev, stable]= only (no workflow runs on =agents=
+      or =agents-to-dev-*=). The three Nix-capable matrix legs
+      =[self-hosted, linux, x64]=, =[self-hosted, linux, arm64]= and
+      =[self-hosted, macos, arm64]= use
+      =metacraft-labs/devops-modules/.github/setup-nix@dev= (not
+      =cachix/install-nix-action=) and run =nix develop --command just lint=,
+      =nix develop --command just test= and
+      =nix develop --command just test-core=; names derived from a leg use
+      =join(matrix.runner, '-')=; every job sets =timeout-minutes=.
+    - [ ] A Windows job on =[self-hosted, windows, x64, dev-env-ready]=
+      (=dev-env-ready= justified in a one-line comment, per the runner-label
+      policy), building and running the core and contract suites with a
+      non-Nix toolchain; =continue-on-error: true= and not a required check,
+      because Windows capacity is scarce and the job may queue. The omitted
+      =[self-hosted, windows, arm64]= leg is recorded as a documented
+      exception in a workflow comment (owner =later/windows=, follow-up GS11).
+    - [ ] =src/gui_assert/core/= with =geometry=, =image=, =png= (pure
+      decode/encode, inflate/deflate), =ssim=, =hashing=, =segmentation=,
+      =vision_windows=, =ocr_types=, =tree_types=, =desktop_types=,
+      =interfaces= (=contract= lands in GS2).
+    - [ ] The existing modules (=image_math=, =ocr=, =vision_windows=,
+      =video_analysis=, =screen_capture=, =capture=, =input=) keep their
+      import paths as re-exporting shims over =core/= plus their effectful
+      remainder; =decodeGray= moves behind =backends/media/ffmpeg.nim=.
+    - [ ] =src/gui_assert/backends/= skeleton with the per-module directories
+      of spec §3.1 (backends are filled in GS5–GS11).
+    - [ ] Justfile: =test-core= (core unit + purity), keep =test= green;
+      nimble =test= task and =.gitignore= updated for new test binaries.
+    - [ ] Reword the =capture.nim= module header so it describes GuiAssert's
+      own design and names no other project's implementation as its source.
+
+*** Verification
+    - test_name: test_core_imports_only_stdlib_allowlist
+      file: tests/tcore_purity.nim
+      description: The import graph of every core/ module (nim genDepend) contains only core/ modules and the stdlib allowlist of spec §3.2.
+      status: pending
+      falsifying_mutation: Adding `import std/osproc` to core/ssim.nim turns the test red.
+    - test_name: test_core_binary_links_no_platform_libraries
+      file: tests/tcore_purity.nim
+      description: A program importing all of core/ links nothing beyond the C runtime (otool -L on macOS, ldd on Linux).
+      status: pending
+      negative_control: The same probe on a program importing backends/capture/macos_sck reports the frameworks it links, so the probe can see a link.
+    - test_name: test_png_roundtrip_gray_rgb_rgba
+      file: tests/tcore_png.nim
+      description: Encode then decode reproduces gray, RGB and RGBA buffers bit-exactly.
+      status: pending
+    - test_name: test_png_decode_matches_ffmpeg_decode
+      file: tests/tcore_png.nim
+      description: For PNGs written by ffmpeg, the pure decoder's gray buffer equals ffmpeg's gray decode; a PNG with a corrupted CRC is rejected, not half-decoded.
+      status: pending
+    - test_name: test_legacy_import_paths_still_compile
+      file: tests/tcore_shims.nim
+      description: Every pre-split public module still compiles and its public procs keep their signatures.
+      status: pending
+    - test_name: nix develop --command just test
+      description: The existing default suite stays green after the split.
+      status: pending
+    - test_name: nix develop --command just test-core
+      description: The new core suite runs green on Linux and macOS.
+      status: pending
+
+*** Modules to Study & Entry Points
+    - =src/gui_assert/image_math.nim= (=decodeGray=, =computeSsim=, =tiledSsim=, =dctHash=, =edgeChangeRatio=) — pure maths except the ffmpeg decode.
+    - =src/gui_assert/vision_windows.nim= (=detectWindowRects=, =buildRegionTree=) — pure part vs =detectWindows= (ffmpeg + tesseract).
+    - =src/gui_assert/video_analysis.nim= (=segmentBoundaries=) — the pure segmentation core.
+    - =src/gui_assert/ocr.nim= (=OcrWord=, =wordsToReadingOrderText= in video_analysis) — types that move to core.
+    - =config.nims= — the per-checkout nimcache; new tests must not pass =--skipParentCfg=.
+    - =metacraft-dev-guidelines/policies/ci-workflow-standards.md= — "No CI on agents", "Choosing runs-on labels", "Nix-Based Projects".
+
+** GS2: guiassert CLI, serve skeleton, fixture backend, contract tests
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS1
+   :owner: substrate/macos
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - [ ] =src/gui_assert/core/contract.nim=: envelope, exit codes, kinds,
+      reasons, and the single =toJson= / strict =fromJson= of every object in
+      spec §7.5.
+    - [ ] =src/guiassert.nim= and =src/gui_assert/cli/= (=args=, =verbs=,
+      =registry=, =state=, =serve=): every verb of spec §7.5 parsed and
+      dispatched; verbs whose platform backend is not yet implemented answer
+      exit 4 / =not-implemented=.
+    - [ ] Fixture backends for every module (=backends/*/fixture.nim=), the
+      built-in =fixture-form= scenario, strict scenario parsing, cross-
+      invocation state under =<state-dir>/fixture/=, and the failure-injection
+      variables of spec §9.2.
+    - [ ] =guiassert serve= over =--stdio= and =--listen unix:<path>=: ready
+      line, =run= / =hello= / =cancel= / =shutdown=, events with =seq=,
+      per-session ordering, deadlines, owner-lifetime sessions.
+    - [ ] Builds: =just build-cli= (=build/bin/guiassert=,
+      =build/bin/guiassert-fixture= with =-d:guiassertMinimal=), flake
+      packages =guiassert= and =guiassert-fixture=, =just test-contract=.
+
+*** Verification
+    - test_name: test_envelope_success_is_one_line_with_ok_verb_data
+      file: tests/contract/tcli_envelope.nim
+      description: Every successful verb prints exactly one compact JSON line with ok/verb/data and exits 0; stderr is ignored.
+      status: pending
+    - test_name: test_envelope_failure_carries_code_kind_message_and_matching_exit
+      file: tests/contract/tcli_envelope.nim
+      description: For each injected failure the envelope's code equals the exit code and the kind matches the frozen table.
+      status: pending
+    - test_name: test_fixture_failure_injection_maps_every_exit_code
+      file: tests/contract/tcli_envelope.nim
+      description: GUIASSERT_FIXTURE_FAIL drives exits 1 through 8, each with its kind and reason.
+      status: pending
+    - test_name: test_unknown_verb_and_unknown_flag_are_bad_args
+      file: tests/contract/tcli_envelope.nim
+      description: An unknown verb, an unknown flag and an unknown backend name all exit 2 with the documented reason.
+      status: pending
+    - test_name: test_reject_dont_drop_unsupported_option_is_exit_4
+      file: tests/contract/tcli_envelope.nim
+      description: A known option the selected backend cannot honour (e.g. --own-pixels on a crop-only fixture configuration, --lifetime owner from the CLI) exits 4 / unsupported-option instead of being ignored.
+      status: pending
+    - test_name: test_every_documented_verb_is_implemented
+      file: tests/contract/tcontract_schema.nim
+      description: The verb table parsed from Planned-Work/Desktop-Substrate.md equals the CLI registry.
+      status: pending
+    - test_name: test_fixture_emits_every_documented_data_key
+      file: tests/contract/tcontract_schema.nim
+      description: For every verb, the fixture's data object contains every key the spec documents, with the documented JSON type.
+      status: pending
+    - test_name: test_state_dir_precedence_flag_env_default
+      file: tests/contract/tcli_state.nim
+      description: --state-dir beats GUIASSERT_STATE_DIR beats the platform default; records are mode 0600.
+      status: pending
+    - test_name: test_backend_selection_precedence
+      file: tests/contract/tcli_state.nim
+      description: Module flag beats --backend beats module env beats GUIASSERT_BACKEND beats session and platform default; no fallback from an explicit selection.
+      status: pending
+    - test_name: test_fixture_state_persists_across_invocations
+      file: tests/contract/tcli_state.nim
+      description: Separate processes: type into the fixture text field, click Submit, then tree and ocr both show the status label.
+      status: pending
+      negative_control: Without the click, neither tree nor ocr contains the status label.
+    - test_name: test_session_lifecycle_start_list_info_stop_via_fixture
+      file: tests/contract/tcli_state.nim
+      description: session-start/list/info/stop round-trip through the state directory; stopping host is bad-args; a session whose host pid died reports state error.
+      status: pending
+    - test_name: test_wait_condition_not_met_exits_7_with_attempts
+      file: tests/contract/tcli_envelope.nim
+      description: wait --wait-ms on a fixture condition that never holds exits 7 / condition-not-met with details.attempts > 0; --timeout-ms not larger than --wait-ms is bad-args / conflicting-arguments.
+      status: pending
+      negative_control: The same wait on a condition the fixture satisfies exits 0 with matched true.
+    - test_name: test_invalid_name_is_bad_args_never_sanitized
+      file: tests/contract/tcli_state.nim
+      description: session-start --name with a slash, a leading dot or 65 characters exits 2 / invalid-name and writes no record.
+      status: pending
+    - test_name: test_contract_flag_and_hello_reject_unknown_major
+      file: tests/contract/tserve_protocol.nim
+      description: --contract 2 on the CLI and hello with contract [2] over serve both answer exit 2 / contract-unsupported; --contract 1 and hello [1] are accepted.
+      status: pending
+    - test_name: test_sigterm_exits_8_with_envelope
+      file: tests/contract/tcli_envelope.nim
+      description: SIGTERM during a delayed fixture verb yields one envelope with code 8 / signal.
+      status: pending
+    - test_name: test_serve_ready_line_then_results_by_id
+      file: tests/contract/tserve_protocol.nim
+      description: The daemon writes the ready line first, and every request gets exactly one result with its id.
+      status: pending
+    - test_name: test_serve_cli_byte_parity_for_every_verb
+      file: tests/contract/tserve_protocol.nim
+      description: For every verb, the serve result envelope is byte-identical to the CLI stdout line for the same argv and state, and the exit codes match.
+      status: pending
+    - test_name: test_serve_cancel_running_request_exits_8
+      file: tests/contract/tserve_protocol.nim
+      description: Cancelling a delayed request yields exit 8 / request; cancelling an unknown id is exit 3.
+      status: pending
+    - test_name: test_serve_timeout_exits_7
+      file: tests/contract/tserve_protocol.nim
+      description: timeoutMs shorter than the injected delay yields exit 7 / deadline.
+      status: pending
+    - test_name: test_serve_duplicate_inflight_id_is_protocol_error
+      file: tests/contract/tserve_protocol.nim
+      description: A second request with an in-flight id is a protocol-error and does not run; malformed lines and unknown keys keep the connection open.
+      status: pending
+    - test_name: test_serve_same_session_requests_run_in_order
+      file: tests/contract/tserve_protocol.nim
+      description: Input requests for one session execute in arrival order even when a later one is faster; requests for different sessions overlap.
+      status: pending
+    - test_name: test_serve_events_seq_has_no_gaps
+      file: tests/contract/tserve_protocol.nim
+      description: record and wait stream progress/poll events numbered from 0 without gaps, followed by one result.
+      status: pending
+    - test_name: test_serve_shutdown_on_stdin_eof_stops_owner_sessions
+      file: tests/contract/tserve_protocol.nim
+      description: EOF on stdin cancels in-flight requests, stops owner-lifetime sessions, leaves detached ones, writes the shutdown line and exits 0.
+      status: pending
+    - test_name: test_serve_socket_is_owner_only
+      file: tests/contract/tserve_protocol.nim
+      description: The unix socket is created 0600 in a 0700 directory and serves the same protocol as stdio.
+      status: pending
+    - test_name: nix develop --command just test-contract
+      description: The whole contract suite on Linux and macOS.
+      status: pending
+
+*** Modules to Study & Entry Points
+    - =src/gui_assert_vision.nim= (=parseVisionArgs=, =main=) — existing pure argv parser style.
+    - =src/gui_assert/talking_head/core.nim= — the object-of-procs plugin pattern the backend interfaces follow.
+    - Spec §7 and §8 are the authority; the tests above are written from them, not from the implementation.
+
+** GS3: Agent Harbor consumer spec and backend crate (companion)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: companion/linux
+   :complexity: large
+   :END:
+
+   All work in this milestone lands in Agent Harbor, not in GuiAssert. It is
+   listed here so both campaigns see one ordering.
+
+*** Deliverables
+    - [ ] Agent Harbor's consumer specification for the GuiAssert substrate,
+      in its computer-use specs: transports (CLI child process and the serve
+      daemon), verb mapping, exit-code-to-error mapping, configuration
+      variables, opt-in selection, and the parity gates GS12–GS14.
+    - [ ] A thin Rust backend crate that drives =guiassert= / =guiassert serve=
+      and parses the contract, carrying no capture, OCR, tree, input or
+      session logic of its own; opt-in, with the native paths remaining the
+      default.
+    - [ ] The flake input pinning a GuiAssert revision, with =guiassert= and
+      =guiassert-fixture= on the dev shell's =PATH=.
+
+*** Verification
+    - test_name: e2e_ah_drives_guiassert_fixture_over_cli
+      description: Every verb Agent Harbor uses, through the backend crate, against the real pinned guiassert-fixture binary, each verb a separate process.
+      status: pending
+    - test_name: e2e_ah_drives_guiassert_fixture_over_serve
+      description: The same scenario over guiassert serve, including cancellation and shutdown.
+      status: pending
+    - test_name: test_ah_maps_every_guiassert_exit_code
+      description: Exit codes 1–8 injected through the fixture map to the documented Agent Harbor errors; the binding never parses message text.
+      status: pending
+
+** GS4: Vision verbs in the CLI
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: substrate/macos
+   :complexity: small
+   :END:
+
+   Agent Harbor's use of these verbs belongs to the companion campaign.
+
+*** Deliverables
+    - [ ] =vision-compare=, =vision-segment= (=--frames= pure; video input via
+      the media backend) and =vision-windows= (=--ocr= optional) over the core
+      modules, with the payloads of spec §7.5.
+
+*** Verification
+    - test_name: test_vision_compare_identical_is_one_and_changed_is_lower
+      file: tests/contract/tvision_verbs.nim
+      description: Identical PNGs give ssim 1.0 and phashDistance 0; a frame with a drawn box gives a lower ssim and a lower minimum tile.
+      status: pending
+    - test_name: test_vision_compare_size_mismatch_is_bad_args
+      file: tests/contract/tvision_verbs.nim
+      description: Images of different sizes exit 2 rather than being resized silently.
+      status: pending
+    - test_name: test_vision_segment_two_state_frames_finds_one_boundary
+      file: tests/contract/tvision_verbs.nim
+      description: A PNG frame sequence with two states yields exactly two segments with the boundary at the switch.
+      status: pending
+    - test_name: test_vision_segment_video_without_media_backend_is_exit_4
+      file: tests/contract/tvision_verbs.nim
+      description: guiassert-fixture (no media backend) refuses video input with exit 4 / not-compiled-in, and accepts --frames.
+      status: pending
+    - test_name: test_vision_windows_two_window_frame
+      file: tests/contract/tvision_verbs.nim
+      description: A synthetic two-window frame yields exactly two windows at the expected rects; with --ocr each carries its own label.
+      status: pending
+
+** GS5: Capture backends
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: split
+   :platform_status: macos=planned linux=planned windows=planned
+   :requires: desktop.automation
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - macOS (=substrate/macos=)
+      - [ ] =backends/capture/macos_sck.nim=: =screenshot= of a display, a
+        window (own pixels) and a region; =record=, =record-start=,
+        =record-stop= through =SCStream=; output written via temp-and-rename.
+      - [ ] =backends/capture/macos_cgwindow.nim=: =displays=, =windows= with
+        =titlesVisible= and =title: null= when redacted.
+      - [ ] Missing Screen Recording grant is exit 6 / =tcc-screen-recording=
+        with the bundle identity and click-path in =remedy=.
+    - Linux (claimable by =companion/linux=)
+      - [ ] =linux_wlr.nim= (grim / wf-recorder; window capture reported as
+        =window-crop=; =--own-pixels= refused), =linux_gnome.nim=,
+        =linux_x11.nim=, =linux_portal_pipewire.nim=.
+    - Windows (=later/windows=)
+      - [ ] =windows_dxgi.nim=, =windows_wgc.nim=, =windows_gdi.nim=.
+
+*** Verification
+    - test_name: test_macos_windows_lists_fixture_app_window
+      file: tests/live/tcapture_macos.nim
+      description: The AppKit fixture's window appears in windows with its pid and bounds; the unprivileged positive control runs first.
+      status: pending
+    - test_name: test_macos_screenshot_window_own_pixels_matches_fixture_color
+      file: tests/live/tcapture_macos.nim
+      description: A window capture of the fixture (solid known colour) matches that colour even when another window overlaps it.
+      status: pending
+      negative_control: A display capture of the same area shows the overlapping window's colour.
+    - test_name: test_macos_record_start_stop_produces_decodable_mp4
+      file: tests/live/tcapture_macos.nim
+      description: record-start/record-stop produce an MP4 that decodes to the reported frame count and size.
+      status: pending
+    - test_name: test_macos_capture_without_grant_is_exit_6
+      file: tests/live/tcapture_macos.nim
+      description: The same capture from an identity without the grant exits 6 / tcc-screen-recording, never an empty success.
+      status: pending
+    - test_name: test_linux_wlr_screenshot_matches_wm_probe_window
+      file: tests/live/tcapture_linux.nim
+      description: In a private sway, a screenshot shows wm_probe's grey window at the compositor-reported rect; window capture reports window-crop.
+      status: pending
+    - test_name: test_linux_gnome_screenshot_in_private_gnome_shell
+      file: tests/live/tcapture_linux.nim
+      description: In a private headless GNOME Shell, a display screenshot shows wm_probe's window at the Shell-reported rect.
+      status: pending
+    - test_name: test_linux_x11_screenshot_in_xvfb
+      file: tests/live/tcapture_linux.nim
+      description: Xvfb display capture returns the expected size and the fixture window's pixels.
+      status: pending
+    - test_name: test_linux_portal_pipewire_record_decodes
+      file: tests/live/tcapture_linux.nim
+      description: A portal ScreenCast recording decodes to the reported frame count.
+      status: pending
+    - test_name: test_windows_dxgi_screenshot_shows_win32_fixture
+      file: tests/live/tcapture_windows.nim
+      description: Desktop Duplication captures the Win32 fixture's known colour at its reported bounds.
+      status: pending
+    - test_name: test_windows_wgc_window_own_pixels_under_overlap
+      file: tests/live/tcapture_windows.nim
+      description: Windows.Graphics.Capture of the Win32 fixture window returns its own colour while another window overlaps it.
+      status: pending
+      negative_control: A DXGI display capture of the same area shows the overlapping window's colour.
+    - test_name: test_windows_gdi_capture_on_created_desktop
+      file: tests/live/tcapture_windows.nim
+      description: GDI capture sees a window on a CreateDesktop desktop, where Desktop Duplication cannot.
+      status: pending
+    - test_name: just test-live-macos
+      description: The macOS live capture suite on a host holding the Screen Recording grant.
+      status: pending
+
+** GS6: OCR backends
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: split
+   :platform_status: macos=planned linux=planned windows=planned
+   :platform_prereqs: GS5=macos (capture-then-OCR on macOS only)
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - macOS (=substrate/macos=)
+      - [ ] =backends/ocr/apple_vision.nim= behind the =ocr= verb (confidence
+        normalized to 0–100); Tesseract-only knobs refused.
+      - [ ] =backends/ocr/tesseract.nim= (shared by every OS) behind the =ocr= verb.
+    - Linux (claimable by =companion/linux=)
+      - [ ] Tesseract default on Linux sessions, language packs from the flake.
+    - Windows (=later/windows=)
+      - [ ] =backends/ocr/windows_media.nim=.
+
+*** Verification
+    - test_name: test_apple_vision_ocr_reads_rendered_label_with_bbox
+      file: tests/live/tocr_macos.nim
+      description: A PNG with known text rendered at a known position is read with the right word and a bbox within tolerance.
+      status: pending
+    - test_name: test_ocr_unsupported_psm_on_apple_vision_is_exit_4
+      file: tests/contract/tocr_verbs.nim
+      description: --psm with the apple-vision backend exits 4 / unsupported-option.
+      status: pending
+    - test_name: test_tesseract_ocr_verb_reads_rendered_text
+      file: tests/live/tocr_tesseract.nim
+      description: The ocr verb with the pinned tesseract reads ffmpeg-rendered text, on Linux and macOS.
+      status: pending
+    - test_name: test_ocr_capture_then_read_maps_bbox_to_desktop
+      file: tests/live/tocr_macos.nim
+      description: ocr --window returns words whose bbox, mapped through origin and scale, lands on the fixture label's on-screen rect.
+      status: pending
+    - test_name: test_windows_media_ocr_reads_rendered_label
+      file: tests/live/tocr_windows.nim
+      description: Windows.Media.Ocr reads the rendered label with a bbox within tolerance.
+      status: pending
+
+** GS7: Accessibility tree backends
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: split
+   :platform_status: macos=planned linux=planned windows=planned
+   :requires: desktop.automation
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - macOS (=substrate/macos=)
+      - [ ] =backends/tree/macos_ax.nim=: =tree=, =find=, =element=,
+        =element-action=, =wait --element=, =apps=, =window-focus=,
+        =window-set-bounds=; normalized roles and states; stale paths detected.
+    - Linux (claimable by =companion/linux=)
+      - [ ] =backends/tree/linux_atspi.nim= on the session's own AT-SPI bus.
+    - Windows (=later/windows=)
+      - [ ] =backends/tree/windows_uia.nim=.
+    - Optional, any platform: =backends/tree/appium.nim= over the existing
+      WebDriver client.
+
+*** Verification
+    - test_name: test_macos_ax_tree_contains_fixture_form_names
+      file: tests/live/ttree_macos.nim
+      description: The AppKit fixture's tree contains every name of its golden list (field label, checkbox, Submit).
+      status: pending
+      vacuity_guard: The tree is non-empty and has the fixture's window as a child of its app node.
+    - test_name: test_macos_find_by_role_and_name
+      file: tests/live/ttree_macos.nim
+      description: find --role button --name Submit returns exactly one element with press among its actions.
+      status: pending
+    - test_name: test_macos_element_action_press_changes_status
+      file: tests/live/ttree_macos.nim
+      description: element-action press on Submit makes the status label appear in a re-read tree.
+      status: pending
+    - test_name: test_macos_tree_without_accessibility_grant_is_exit_6
+      file: tests/live/ttree_macos.nim
+      description: Without the Accessibility grant tree exits 6 / tcc-accessibility rather than returning an empty tree.
+      status: pending
+    - test_name: test_atspi_tree_of_gtk_fixture_in_private_sway
+      file: tests/live/ttree_linux.nim
+      description: The GTK fixture's tree in a private sway session contains its golden names.
+      status: pending
+    - test_name: test_atspi_find_filters_role_name_state
+      file: tests/live/ttree_linux.nim
+      description: find filters by role, name and state; an unknown filter key is bad-args.
+      status: pending
+    - test_name: test_uia_tree_of_win32_fixture
+      file: tests/live/ttree_windows.nim
+      description: The Win32 fixture's UIA tree contains its golden names.
+      status: pending
+
+** GS8: Input backends
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: split
+   :platform_status: macos=planned linux=planned windows=planned
+   :platform_prereqs: GS7=macos (effects are checked through the tree)
+   :requires: desktop.automation
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - macOS (=substrate/macos=)
+      - [ ] =backends/input/macos_cgevent.nim=: =move=, =click=, =drag=,
+        =scroll=, =type= (Unicode strings, =length= reported, text not
+        echoed), =key= over the fixed key table; =input.nim= becomes a shim.
+    - Linux (claimable by =companion/linux=)
+      - [ ] =linux_wlr_virtual.nim=, =linux_mutter.nim=, =linux_xtest.nim=,
+        =linux_uinput.nim= (device access refused as exit 6 / =uinput-access=).
+    - Windows (=later/windows=)
+      - [ ] =windows_sendinput.nim=; posted delivery on a non-input desktop
+        reported as =delivery: "posted"=.
+
+*** Verification
+    - test_name: test_macos_cgevent_click_presses_fixture_button
+      file: tests/live/tinput_macos.nim
+      description: click at the Submit button's bounds makes the status label appear in the AX tree and in a screenshot's OCR.
+      status: pending
+      negative_control: A click outside the button leaves the status absent.
+    - test_name: test_macos_type_reports_length_not_text
+      file: tests/live/tinput_macos.nim
+      description: type into the focused field sets its value; the envelope carries length and never the characters.
+      status: pending
+    - test_name: test_macos_drag_moves_slider_and_scroll_moves_list
+      file: tests/live/tinput_macos.nim
+      description: drag changes the fixture slider's value and scroll changes the list's visible first row.
+      status: pending
+    - test_name: test_macos_key_combo_reaches_fixture_shortcut
+      file: tests/live/tinput_macos.nim
+      description: key cmd+s triggers the fixture's Save menu shortcut (status label changes); an unknown key name is bad-args.
+      status: pending
+    - test_name: test_macos_input_without_accessibility_grant_is_exit_6
+      file: tests/live/tinput_macos.nim
+      description: click from an identity without the Accessibility grant exits 6 / tcc-accessibility, never a success that delivered nothing.
+      status: pending
+    - test_name: test_wlr_virtual_click_scroll_drag_roundtrip_in_sway
+      file: tests/live/tinput_linux.nim
+      description: In a private sway, click, scroll and drag reach the GTK fixture and are read back through AT-SPI.
+      status: pending
+    - test_name: test_xtest_type_into_xvfb_fixture
+      file: tests/live/tinput_linux.nim
+      description: XTest typing into an X11 fixture in Xvfb sets the field value.
+      status: pending
+    - test_name: test_mutter_virtual_input_click_in_private_gnome
+      file: tests/live/tinput_linux.nim
+      description: In a private headless GNOME Shell, click through Clutter virtual devices presses the GTK fixture's button, read back through AT-SPI.
+      status: pending
+    - test_name: test_uinput_without_device_access_is_exit_6
+      file: tests/live/tinput_linux.nim
+      description: linux-uinput without write access to /dev/uinput exits 6 / uinput-access with a remedy naming the device.
+      status: pending
+      negative_control: With access granted the same click is delivered and reported as injected.
+    - test_name: test_sendinput_click_win32_fixture
+      file: tests/live/tinput_windows.nim
+      description: SendInput click on the Win32 fixture's button changes its status label.
+      status: pending
+
+** GS9: macOS off-screen sessions
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: substrate/macos
+   :platform_prereqs: GS5=macos GS7=macos GS8=macos
+   :requires: os.macos desktop.automation
+   :complexity: large
+   :END:
+
+*** Deliverables
+    - [ ] =backends/session/macos_virtual_display.nim=: virtual display via
+      =CGVirtualDisplay=, windows of launched apps placed on it, capture and
+      input routed to it; =isolation= reported as pixels only.
+    - [ ] =backends/session/macos_isolated.nim=: dispatch of verbs into a
+      dedicated account's existing Aqua session through a per-invocation
+      LaunchAgent in its =gui/<uid>= domain running the signed helper; refusal
+      when the only session is the caller's own.
+    - [ ] A measurement of the private SkyLight session-creation API: whether
+      a session it creates has a usable =gui/<uid>= domain without console
+      login. The result (either way) is recorded under Implementation Details
+      and decides spec §12 question 1.
+    - [ ] Session host process, state records and reconciliation (spec §6.1)
+      for both kinds.
+
+*** Verification
+    - test_name: test_virtual_display_session_appears_in_displays
+      file: tests/live/tsession_macos.nim
+      description: session-start --kind virtual-display adds a display with virtual true and the requested size; session-stop removes it.
+      status: pending
+    - test_name: test_virtual_display_capture_shows_launched_fixture
+      file: tests/live/tsession_macos.nim
+      description: A fixture launched into the session is on the virtual display and in its capture, and not in a capture of the physical display.
+      status: pending
+      negative_control: The physical display's capture before and after launch is unchanged in the fixture's colour.
+    - test_name: test_virtual_display_reports_input_not_isolated
+      file: tests/live/tsession_macos.nim
+      description: The Session object reports isolation.input false and clipboard false for a virtual-display session.
+      status: pending
+    - test_name: test_isolated_session_dispatch_runs_inside_account_gui_domain
+      file: tests/live/tsession_macos.nim
+      description: A verb dispatched into the isolated session reports the dedicated account's uid and sees that session's windows.
+      status: pending
+    - test_name: test_isolated_refuses_when_only_the_callers_session_exists
+      file: tests/live/tsession_macos.nim
+      description: On a machine whose only Aqua session is the caller's, session-start --kind isolated exits 4 / no-isolated-session.
+      status: pending
+    - test_name: test_host_session_not_perturbed_by_isolated_input
+      file: tests/live/tsession_macos.nim
+      description: Typing into the isolated session changes its clipboard and frontmost app while the host's stay unchanged.
+      status: pending
+      vacuity_guard: The frontmost-app probe reports different apps for the two sessions, so it reads per-session state.
+    - test_name: test_skylight_session_gui_domain_measurement
+      file: tests/live/tsession_macos.nim
+      description: Records whether a SkyLight-created session yields a usable gui domain; the test asserts the recorded result matches what it measures.
+      status: pending
+
+** GS10: Linux off-screen sessions (companion)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: companion/linux
+   :platform_prereqs: GS5=linux GS7=linux GS8=linux
+   :requires: os.linux desktop.automation
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - [ ] =backends/session/linux_sway.nim= and =linux_gnome.nim= wrapping the
+      existing =desktop_env= targets; =linux_xvfb.nim=; =linux-host= attach.
+    - [ ] Optional loopback VNC endpoint (=wayvnc= / =x11vnc=) reported in
+      =Session.vnc=.
+
+*** Verification
+    - test_name: test_session_start_sway_returns_env_and_runs_app
+      file: tests/live/tsession_linux.nim
+      description: session-start --kind headless (sway) returns an env with which app-launch starts a client whose window the session lists.
+      status: pending
+    - test_name: test_session_start_gnome_headless_runs_app
+      file: tests/live/tsession_linux.nim
+      description: session-start --kind headless with the linux-gnome backend starts a private GNOME Shell in which app-launch starts a client the session lists.
+      status: pending
+    - test_name: test_linux_host_attach_reports_existing_session
+      file: tests/live/tsession_linux.nim
+      description: With a sway already running, the linux-host session reports its displays and windows and changes no compositor setting.
+      status: pending
+      negative_control: With no compositor reachable, linux-host exits 4 / session-not-running.
+    - test_name: test_session_start_xvfb_runs_x11_fixture
+      file: tests/live/tsession_linux.nim
+      description: The Xvfb session runs an X11 fixture visible to windows and screenshot.
+      status: pending
+    - test_name: test_session_vnc_endpoint_is_loopback_only
+      file: tests/live/tsession_linux.nim
+      description: --vnc yields a 127.0.0.1 endpoint that serves the session's framebuffer.
+      status: pending
+    - test_name: test_session_host_death_is_reported_as_error
+      file: tests/live/tsession_linux.nim
+      description: Killing the session host makes session-info report state error with a reason, never running.
+      status: pending
+
+** GS11: Windows off-screen sessions
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS2
+   :owner: later/windows
+   :platform_prereqs: GS5=windows GS7=windows GS8=windows
+   :requires: os.windows desktop.automation
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - [ ] =backends/session/windows_desktop.nim=: =CreateDesktop=, launch via
+      =lpDesktop=, GDI capture, posted input.
+    - [ ] A measurement of which applications accept posted input and of a
+      second interactive session as an alternative; decides spec §12
+      question 2.
+
+*** Verification
+    - test_name: test_windows_desktop_session_captures_and_drives_fixture
+      file: tests/live/tsession_windows.nim
+      description: A Win32 fixture launched onto a created desktop is captured and its button pressed by posted input, while the input desktop is unchanged.
+      status: pending
+    - test_name: test_windows_desktop_session_reports_posted_delivery_and_shared_clipboard
+      file: tests/live/tsession_windows.nim
+      description: The Session object reports isolation.clipboard false, and every input verb on the session reports delivery posted.
+      status: pending
+
+** GS12: macOS parity evidence
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS9
+   :owner: substrate/macos
+   :platform_prereqs: GS5=macos GS6=macos GS7=macos GS8=macos
+   :requires: os.macos desktop.automation
+   :complexity: medium
+   :END:
+
+   Run GuiAssert's macOS backends against the scenarios of Agent Harbor's
+   macOS computer-use end-to-end suite and record the results here. The
+   scenarios are restated in GuiAssert's own terms; each row records the
+   GuiAssert verbs used, the result, and the GuiAssert commit and date it was
+   measured at. Scenarios whose subject is Agent Harbor policy or surfaces
+   (remote-view and intervention, screen-reader speech capture, MCP) are out
+   of scope and listed as such rather than dropped.
+
+*** Deliverables
+    - [ ] A parity script =tests/parity/macos_parity.sh= that runs each
+      in-scope scenario through the =guiassert= CLI and, for P2, through
+      =serve=, and prints one result line per scenario.
+    - [ ] The results table below, filled in with measured results.
+
+    | Id | Scenario                                                                                  | GuiAssert verbs                                             | Result | Measured at |
+    |----+-------------------------------------------------------------------------------------------+-------------------------------------------------------------+--------+-------------|
+    | P1 | List windows and applications of a fixture app inside the isolated session                | session-start/isolated, app-launch, windows, apps           | —      | —           |
+    | P2 | Accessibility tree of the AppKit fixture: CLI and serve results identical, golden names   | tree (CLI and serve), find                                  | —      | —           |
+    | P3 | Screenshot and recording inside the isolated session; bytes decode to the reported size  | screenshot, record-start, record-stop                       | —      | —           |
+    | P4 | Driving the isolated session does not perturb the host session (frontmost app, clipboard) | type, key, click; host probes                               | —      | —           |
+    | P5 | Permission report bound to the signed identity; a non-granted identity is denied          | capabilities --probe, permissions                           | —      | —           |
+    | P6 | Session viability: capture, tree, input, app launch, clipboard, persistence across calls  | session-*, screenshot, tree, click, type, app-launch        | —      | —           |
+    | P7 | Click roundtrip on a known button with the state change visible through tree and OCR      | find, click, tree, ocr                                      | —      | —           |
+    | X1 | Remote-view / intervention roundtrip                                                      | out of scope (Agent Harbor surface)                         | n/a    | —           |
+    | X2 | Screen-reader speech capture and assertions                                               | out of scope (not in this initiative)                       | n/a    | —           |
+    | X3 | Appium Mac2 driver smoke                                                                  | optional appium tree backend; recorded if GS7 ships it      | —      | —           |
+
+*** Verification
+    - test_name: bash tests/parity/macos_parity.sh
+      description: Every in-scope scenario P1–P7 passes on a macOS host holding the grants, with the isolated session provided by a dedicated account.
+      status: pending
+
+** GS13: Linux parity evidence (companion)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS10
+   :owner: companion/linux
+   :platform_prereqs: GS5=linux GS6=linux GS7=linux GS8=linux
+   :requires: os.linux desktop.automation
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - [ ] =tests/parity/linux_parity.sh= and a results table, restating the
+      scenarios of Agent Harbor's Linux computer-use suite in GuiAssert terms:
+      click/scroll/drag roundtrip; capability report; element find by role,
+      name and state; form fill, submit and status readback; OCR of a
+      canvas-drawn fixture; screenshot and recording pipeline; waiting for a
+      timer-driven dialog; zero-touch session bootstrap; tree-then-OCR text
+      extraction (GuiAssert supplies both stages; the fallback policy stays in
+      Agent Harbor). Remote-view, speech and MCP scenarios are listed as out
+      of scope.
+
+*** Verification
+    - test_name: bash tests/parity/linux_parity.sh
+      description: Every in-scope Linux scenario passes in private sway and Xvfb sessions.
+      status: pending
+
+** GS14: Windows parity evidence
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS11
+   :owner: later/windows
+   :platform_prereqs: GS5=windows GS6=windows GS7=windows GS8=windows
+   :requires: os.windows desktop.automation
+   :complexity: medium
+   :END:
+
+*** Deliverables
+    - [ ] =tests/parity/windows_parity.ps1= and a results table covering the
+      Windows scenarios Agent Harbor relies on.
+
+*** Verification
+    - test_name: verify_windows_parity_script
+      file: tests/parity/windows_parity.ps1
+      description: Every in-scope Windows scenario passes on the Windows host (run with pwsh).
+      status: pending
+
+** GS15: Agent Harbor switch-over, per platform (companion)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS3
+   :owner: companion/linux
+   :platform_prereqs: per platform: macOS needs GS12, Linux needs GS13, Windows needs GS14
+   :complexity: medium
+   :END:
+
+   Agent Harbor's default desktop backend flips to GuiAssert one platform at a
+   time, and only for a platform whose parity milestone is =completed=. Until
+   then the GuiAssert backend stays opt-in there.
+
+*** Deliverables
+    - [ ] macOS default flipped (after GS12).
+    - [ ] Linux default flipped (after GS13).
+    - [ ] Windows default flipped (after GS14).
+
+*** Verification
+    - test_name: e2e_ah_computer_use_suite_on_guiassert_backend
+      description: Agent Harbor's computer-use suite for the flipped platform runs green with the GuiAssert backend as default.
+      status: pending
+
+** GS16: Removal of Agent Harbor's duplicated native code (companion)
+   :PROPERTIES:
+   :status: planned
+   :depends_on: GS12 GS13 GS14 GS15
+   :owner: companion/linux
+   :complexity: medium
+   :END:
+
+   Gated on parity on every platform: the native capture, OCR, tree, input and
+   off-screen session code in Agent Harbor is removed only after GS12, GS13 and
+   GS14 are all =completed= and GS15 has flipped every platform. Agent
+   Harbor's policy layers (spec §11) are untouched.
+
+*** Deliverables
+    - [ ] Native duplicated backends removed from Agent Harbor; the GuiAssert
+      backend is the only implementation.
+
+*** Verification
+    - test_name: verify_ah_has_no_native_desktop_backends
+      description: Agent Harbor's computer-use suite is green on every platform with the native backends deleted.
+      status: pending
