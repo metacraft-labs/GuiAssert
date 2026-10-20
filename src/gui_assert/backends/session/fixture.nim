@@ -12,6 +12,20 @@
 ## The reserved session `host` always exists and is never started or
 ## stopped. `--vnc` is refused (`unsupported-option`): the fixture has no
 ## remote-view endpoint to offer, and inventing one would be a lie.
+##
+## **Readiness** (spec §6.1): `session-start` returns only once the session
+## is `running`, which for the fixture means its host process has seen the
+## record that names it and said so (a `<id>.ready` marker beside the
+## record). A host that exits first, or never reports ready within the
+## readiness bound, fails the start with `backend-error` / `session-failed`,
+## and everything the start created is removed. `GUIASSERT_FIXTURE_HOST`
+## makes the host misbehave on purpose so consumers can test that path.
+##
+## **Launches** (spec §9.2): every `app-launch` records the environment the
+## process would receive relative to the session (`Session.env` merged with
+## `--env`, and `Session.envUnset` minus what `--env` sets) in
+## `<state-dir>/fixture/launches/<pid>.json`, so a consumer's launch policy
+## is observable without a real process.
 
 import std/[json, options, os, osproc, streams, strutils, tables]
 
@@ -27,6 +41,16 @@ import ../fixture_desktop
 const
   hostGraceMs = 5000
     ## How long a session host waits for its record before giving up.
+  readinessBoundMs* = 10_000
+    ## How long `session-start` waits for the session to report ready, at
+    ## most (spec §6.1); a `--timeout-ms` deadline shortens it.
+  readinessMarginMs = 250
+    ## Kept back from the deadline so the readiness failure is reported as
+    ## `session-failed` before the deadline itself expires.
+  launchSchema = "guiassert/fixture-launch/1"
+  fixtureEnvUnset = ["DISPLAY", "WAYLAND_DISPLAY"]
+    ## What a process spawned into a fixture session must not inherit: the
+    ## fixture session has no display server, so the host's must not leak in.
 
 proc fixtureBackends(): SessionBackends =
   SessionBackends(capture: fixtureBackendName, tree: fixtureBackendName,
@@ -57,6 +81,9 @@ proc reconcile(s: Session): Session =
     result.state = ssError
     result.stateReason = some("host-exited")
 
+proc readyMarkerPath(stateDir, id: string): string =
+  stateDir / "sessions" / (id & ".ready")
+
 proc spawnHost(cfg: FixtureConfig, id: string): int =
   ## Start the detached session host for session `id`; returns its pid.
   ##
@@ -76,9 +103,9 @@ proc spawnHost(cfg: FixtureConfig, id: string): int =
       discard setHandleInformation(getStdHandle(h), DWORD(HANDLE_FLAG_INHERIT), 0)
   var p: Process
   try:
-    p = startProcess(cfg.selfExe,
-                     args = @["__session-host", "--state-dir", cfg.stateDir, id],
-                     options = {})
+    var args = @["__session-host", "--state-dir", cfg.stateDir, id]
+    if cfg.env.hostMode.len > 0: args.add cfg.env.hostMode
+    p = startProcess(cfg.selfExe, args = args, options = {})
   except OSError as e:
     raise failed("session-failed", "cannot start the session host: " & e.msg)
   try:
@@ -96,9 +123,11 @@ proc spawnHost(cfg: FixtureConfig, id: string): int =
   finally:
     p.close()
 
-proc sessionHostLoop(stateDir, id: string): int =
-  ## Live as long as the session record names this process.
+proc sessionHostLoop(stateDir, id, mode: string): int =
+  ## Live as long as the session record names this process. The first time
+  ## it does, report ready (unless `mode` is "never-ready").
   let me = getCurrentProcessId()
+  if mode == "exit-before-ready": return 3
   var waited = 0
   var everMine = false
   while true:
@@ -108,16 +137,23 @@ proc sessionHostLoop(stateDir, id: string): int =
       mine = r.isSome and r.get.session.hostPid == some(me)
     except CatchableError:
       return 1
+    if mine and not everMine and mode != "never-ready":
+      try: writePrivateFile(readyMarkerPath(stateDir, id), $me & "\n")
+      except CatchableError: return 1
     if mine: everMine = true
     elif everMine: return 0             # stopped: the record is gone
     elif waited >= hostGraceMs: return 0 # the starter never recorded us
-    sleep(100)
-    waited += 100
+    # Poll briskly until the record names us (the starter is waiting for
+    # readiness), then at the old, relaxed pace for the session's life.
+    let pause = if everMine: 100 else: 10
+    sleep(pause)
+    if not everMine: waited += pause
 
-proc runFixtureSessionHost*(stateDir, id: string): int =
+proc runFixtureSessionHost*(stateDir, id: string, mode = ""): int =
   ## The body of `guiassert __session-host`: detach the real host (POSIX:
   ## fork, new session, no inherited descriptors), print its pid on stdout
-  ## for the starter, and live as long as the session record names it.
+  ## for the starter, report ready once the session record names it, and
+  ## live as long as it does. `mode` is GUIASSERT_FIXTURE_HOST's value.
   ## Returns the exit code.
   when defined(posix):
     let child = fork()
@@ -140,7 +176,7 @@ proc runFixtureSessionHost*(stateDir, id: string): int =
   else:
     stdout.writeLine($getCurrentProcessId())
     stdout.flushFile()
-  sessionHostLoop(stateDir, id)
+  sessionHostLoop(stateDir, id, mode)
 
 proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
   ## The fixture session backend. Raises `backend-unavailable` when
@@ -164,36 +200,80 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
                              name: some("Fixture Display " & $(i + 1)),
                              bounds: rect(i * size.width, 0, size.width, size.height),
                              scale: scale, primary: i == 0, isVirtual: true)
+    let priv = %*{"backend": fixtureBackendName,
+                  "account": (if spec.account.isSome: %spec.account.get else: newJNull())}
+    var pid = 0
     cfg.transact(t):
-      let id = if spec.name.isSome: spec.name.get else: t.nextSessionId()
-      if id == hostSessionId:
-        raise badArgs("invalid-name", "'host' is the reserved id of the caller's session")
-      if readSessionRecord(cfg.stateDir, id).isSome:
-        raise badArgs("conflicting-arguments", "a session named '" & id &
-          "' already exists")
+      var id = ""
+      if spec.name.isSome:
+        id = spec.name.get
+        if id == hostSessionId:
+          raise badArgs("invalid-name", "'host' is the reserved id of the caller's session")
+        let existing = readSessionRecord(cfg.stateDir, id)
+        if existing.isSome:
+          # Stopped sessions leave no record, so any record is a session
+          # that is not stopped (running, starting or in error).
+          raise badArgs("name-in-use", "a session named '" & id & "' already exists (" &
+            $reconcile(existing.get.session).state & ")",
+            details = %*{"name": id, "state": $reconcile(existing.get.session).state})
+      else:
+        # A generated id never takes a name a caller chose.
+        id = t.nextSessionId()
+        while readSessionRecord(cfg.stateDir, id).isSome: id = t.nextSessionId()
       result = Session(id: id, name: spec.name, kind: spec.kind,
                        backend: fixtureBackendName, platform: spFixture,
-                       state: ssRunning, lifetime: spec.lifetime,
+                       state: ssStarting, lifetime: spec.lifetime,
                        isolation: isolationOf(spec.kind), displays: displays,
+                       envUnset: @fixtureEnvUnset,
                        backends: fixtureBackends(), createdAt: t.nowStamp())
       result.env["GUIASSERT_SESSION"] = id
       var d = scen
       d.displays = displays
       cfg.saveDesktop(id, d)
       # The record exists (state starting) before the host does, so the
-      # host never waits on a record that will not appear.
-      var starting = result
-      starting.state = ssStarting
-      writeSessionRecord(cfg.stateDir, starting,
-                         %*{"backend": fixtureBackendName,
-                            "account": (if spec.account.isSome: %spec.account.get
-                                        else: newJNull())})
-      let pid = cfg.spawnHost(id)
+      # host never waits on a record that will not appear; it names the host
+      # once the host's pid is known, which is what the host waits for.
+      removeRecord(readyMarkerPath(cfg.stateDir, id))
+      writeSessionRecord(cfg.stateDir, result, priv)
+      pid = cfg.spawnHost(id)
       result.hostPid = some(pid)
-      writeSessionRecord(cfg.stateDir, result,
-                         %*{"backend": fixtureBackendName,
-                            "account": (if spec.account.isSome: %spec.account.get
-                                        else: newJNull())})
+      writeSessionRecord(cfg.stateDir, result, priv)
+    # Wait for the host to report ready, outside the fixture lock so other
+    # verbs are not held up by a slow start.
+    let bound = min(readinessBoundMs, cfg.token.remainingMs - readinessMarginMs)
+    let marker = readyMarkerPath(cfg.stateDir, result.id)
+    let startNs = monoNowNs()
+    var why = ""
+    while true:
+      if fileExists(marker):
+        var content = ""
+        try: content = readFileCapped(marker, 64).strip
+        except CatchableError: discard
+        if content == $pid: break
+      if not processAlive(pid):
+        why = "the session host exited before the session was ready"
+        break
+      if elapsedMsSince(startNs) >= bound:
+        why = "the session did not become ready within " & $max(bound, 0) & " ms"
+        break
+      if cfg.token.reason != crNone:
+        why = "cancelled"
+        break
+      sleep(10)
+    removeRecord(marker)
+    if why.len > 0:
+      # Undo the start: no record, no desktop, no host.
+      if processAlive(pid):
+        signalProcess(pid, true)
+        discard waitProcessGone(pid, 2000)
+      cfg.transact(t):
+        removeRecord(sessionRecordPath(cfg.stateDir, result.id))
+        cfg.removeDesktop(result.id)
+      cfg.token.checkpoint()
+      raise failed("session-failed", "session '" & result.id & "': " & why)
+    result.state = ssRunning
+    cfg.withFixtureLock:
+      writeSessionRecord(cfg.stateDir, result, priv)
 
   result.list = proc (): seq[Session] =
     let scen = loadScenario(cfg.scenarioPath)
@@ -231,9 +311,27 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
   result.apps = proc (session: string): seq[App] =
     cfg.transact(t):
       result = cfg.loadDesktop(t, session).apps
+    # Without the Accessibility permission the fixture cannot tell whether
+    # an application exposes a tree; it says so instead of guessing.
+    if cfg.env.denyAccessibility:
+      for a in result.mitems: a.accessible = none(bool)
 
   result.launch = proc (session: string, spec: LaunchSpec): LaunchReport =
     cfg.token.checkpoint()
+    # The session's environment contract: the base is GuiAssert's own
+    # environment minus `envUnset`, then `Session.env`, then `--env`.
+    var sessionEnv = initOrderedTable[string, string]()
+    var unset: seq[string]
+    if session != hostSessionId:
+      let r = readSessionRecord(cfg.stateDir, session)
+      if r.isSome:
+        sessionEnv = r.get.session.env
+        unset = r.get.session.envUnset
+    var effective = sessionEnv
+    for (k, v) in spec.env: effective[k] = v
+    var effectiveUnset: seq[string]
+    for k in unset:
+      if k notin effective: effectiveUnset.add k
     cfg.transact(t):
       var d = cfg.loadDesktop(t, session)
       let name = case spec.kind
@@ -247,22 +345,50 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
       let app = App(pid: pid, name: name,
                     bundleId: (if spec.kind == lkBundleId: some(spec.bundleId)
                                else: none(string)),
-                    appId: none(string), frontmost: true, hidden: false)
+                    appId: none(string), frontmost: true, hidden: false,
+                    accessible: some(true))
       for a in d.apps.mitems: a.frontmost = false
       d.apps.add app
       let wb = rect(160, 120, 480, 320)
-      let win = Window(id: "fixture-window-" & $pid, pid: pid, app: name,
-                       appId: none(string), title: some(name), bounds: wb,
-                       display: some(d.displayOf(none(string)).id), layer: 0,
-                       onScreen: true, focused: true, minimized: false)
-      for w in d.windows.mitems: w.focused = false
-      d.windows.insert(win, 0)
+      var win = none(Window)
+      if d.launchWindow:
+        win = some(Window(id: "fixture-window-" & $pid, pid: pid, app: name,
+                          appId: none(string), title: some(name),
+                          document: none(string), bounds: wb,
+                          display: some(d.displayOf(none(string)).id), layer: 0,
+                          onScreen: true, focused: true, minimized: false))
+        for w in d.windows.mitems: w.focused = false
+        d.windows.insert(win.get, 0)
       d.trees.add AppTree(pid: pid, root: FNode(
         role: roleApplication, nativeRole: "AXApplication", name: some(name),
-        children: @[FNode(role: roleWindow, nativeRole: "AXWindow", name: some(name),
-                          bounds: some(wb), states: {stVisible})]))
+        children: (if d.launchWindow:
+                     @[FNode(role: roleWindow, nativeRole: "AXWindow", name: some(name),
+                             bounds: some(wb), states: {stVisible})]
+                   else: @[])))
       cfg.saveDesktop(session, d)
-      result = LaunchReport(app: app, window: some(win))
+      var envJson = newJObject()
+      for k, v in effective: envJson[k] = %v
+      writeRecord(cfg.fixtureDir / "launches" / ($pid & ".json"), launchSchema,
+                  %*{"session": session, "pid": pid, "env": envJson,
+                     "envUnset": effectiveUnset})
+      result = LaunchReport(app: app, window: win)
+    if result.window.isNone and spec.waitWindowMs.isSome:
+      # The application runs but opens no window: wait out --wait-window-ms
+      # (cancellably), then report the expiry with the App, so the caller
+      # can quit what it started instead of leaking it.
+      cfg.token.sleepCancellable(spec.waitWindowMs.get)
+      cfg.transact(t):
+        let d = cfg.loadDesktop(t, session)
+        for w in d.windows:
+          if w.pid == result.app.pid:
+            result.window = some(w)
+            break
+      if result.window.isNone:
+        var e = newContractError(ekTimeout, "condition-not-met",
+          "application " & $result.app.pid & " opened no window within --wait-window-ms " &
+          $spec.waitWindowMs.get & "; it is still running",
+          details = %*{"app": result.app.toJson})
+        raise e
 
   result.quit = proc (session: string, pid: int, force: bool): QuitReport =
     cfg.transact(t):
@@ -291,6 +417,9 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
                 desktopAccess: psNotApplicable, identity: some("guiassert-fixture"))
 
   result.features = proc (probe: bool): seq[Feature] =
+    for f in ["session-management", "app-management"]:
+      result.add Feature(feature: f, backend: fixtureBackendName, state: fsSupported,
+                         reason: none(string), remedy: none(string))
     for k in [skVirtualDisplay, skIsolated, skHeadless]:
       result.add Feature(feature: "session-" & $k, backend: fixtureBackendName,
                          state: fsSupported, reason: none(string),

@@ -300,6 +300,65 @@ proc specVerbRows*(): OrderedTable[string, string] =
     doAssert cells[0].startsWith("`") and cells[0].endsWith("`"), "verb cell: " & line
     result[cells[0][1 .. ^2]] = cells[2]
 
+proc specTable*(header: openArray[string]): seq[seq[string]] =
+  ## The body rows of the one table of the specification whose header row
+  ## is exactly `header` (cell texts, backticks kept). Fails when there is no
+  ## such table or more than one.
+  var found = 0
+  var inTable = false
+  for line in specText().splitLines:
+    let cells = splitCells(line)
+    if cells.len == header.len and cells == @header:
+      inc found
+      inTable = true
+      continue
+    if not inTable: continue
+    if cells.len == 0:
+      inTable = false
+      continue
+    if cells[0].startsWith("---"): continue
+    doAssert cells.len == header.len, "malformed row of the " & $header & " table: " & line
+    result.add cells
+  doAssert found == 1, "expected one table headed " & $header & " in " & specPath &
+    ", found " & $found
+
+proc backticked*(cell: string): seq[string] =
+  ## The `code` spans of a table cell, in order.
+  var i = 0
+  while true:
+    let a = cell.find('`', i)
+    if a < 0: break
+    let b = cell.find('`', a + 1)
+    if b < 0: break
+    result.add cell[a + 1 ..< b]
+    i = b + 1
+
+proc specFeatures*(): seq[(string, string)] =
+  ## The feature vocabulary of spec §7.5 ("Features"): (feature, module).
+  for row in specTable(["Feature", "Module", "Needed by"]):
+    let f = backticked(row[0])
+    doAssert f.len == 1, "feature cell: " & row[0]
+    result.add (f[0], row[1])
+
+proc specDegradedReasons*(): seq[string] =
+  ## The degraded-feature reasons of spec §7.5 ("Features").
+  for row in specTable(["Degraded reason", "Meaning"]):
+    result.add backticked(row[0])[0]
+
+proc specReasons*(): OrderedTable[string, seq[string]] =
+  ## The kinds and reasons of spec §7.3, kind -> reasons.
+  for row in specTable(["code", "kind", "meaning", "reasons"]):
+    let k = backticked(row[1])
+    if k.len == 0: continue          # the success row
+    # A parenthesized remark ("(serve `cancel` target)") names no reason.
+    var cell = ""
+    var depth = 0
+    for c in row[3]:
+      if c == '(': inc depth
+      elif c == ')': dec depth
+      elif depth == 0: cell.add c
+    result[k[0]] = backticked(cell)
+
 proc specCommonObjects*(): string =
   ## The `Common objects` code block of spec §7.5.
   let text = specText()

@@ -13,24 +13,13 @@ import ../core/[contract, interfaces]
 import ../cancel
 import ./[args, context, registry, verbs]
 
-proc fromBackendError*(e: ref BackendError): ref ContractError =
-  ## The contract error for a backend error: not found (3), unavailable (4),
-  ## permission denied (6) or failed (5), carrying the backend's reason and
-  ## remedy. A reason outside the kind's closed set becomes `internal`.
-  let kind =
-    if e of ref BackendNotFoundError: ekNotFound
-    elif e of ref BackendUnavailableError: ekBackendUnavailable
-    elif e of ref PermissionDeniedError: ekPermissionDenied
-    else: ekBackendError
-  newContractError(kind, e.reason, e.msg, e.remedy,
-                   %*{"backend": e.backend})
-
 proc runInvocation*(argv: seq[string], ctx: RunContext): Outcome =
   ## Parse and run one invocation and return its exit code and envelope
   ## line. `ctx.token` carries cancellation and receives the `--timeout-ms`
   ## deadline.
   var verb = findVerbToken(argv)
   var envelope: JsonNode
+  var feature = ""   # the verb's feature, once the invocation parsed
   try:
     if verb == "serve":
       raise badArgs("invalid-value", (if ctx.nested:
@@ -38,6 +27,7 @@ proc runInvocation*(argv: seq[string], ctx: RunContext): Outcome =
         "serve is not run through runInvocation"))
     let inv = parseInvocation(argv)
     verb = inv.verb
+    feature = verbFeature(inv)
     let env = prepare(inv, ctx)
     if env.timeoutMs.isSome: ctx.token.setDeadline(env.timeoutMs.get)
     ctx.token.checkpoint()
@@ -46,9 +36,11 @@ proc runInvocation*(argv: seq[string], ctx: RunContext): Outcome =
     ctx.token.checkpoint()
     envelope = successEnvelope(verb, data)
   except ContractError as e:
-    envelope = failureEnvelope(verb, e)
+    # Every exit 4 / exit 6 envelope names its feature (spec §7.3); one that
+    # did not come through a `featured` call names the verb's.
+    envelope = failureEnvelope(verb, withFeature(e, feature))
   except BackendError as e:
-    envelope = failureEnvelope(verb, fromBackendError(e))
+    envelope = failureEnvelope(verb, withFeature(fromBackendError(e), feature))
   except CatchableError as e:
     envelope = failureEnvelope(verb, newContractError(ekInternal, "exception",
       "unexpected " & $e.name & ": " & e.msg))

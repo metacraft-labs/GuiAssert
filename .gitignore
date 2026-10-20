@@ -53,3 +53,5 @@ tests/contract/tcli_state
 tests/contract/tcontract_schema
 tests/contract/tserve_protocol
 tests/tcore_contract
+tests/tcore_mp4
+tests/contract/tcontract_decisions

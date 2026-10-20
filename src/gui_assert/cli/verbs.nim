@@ -9,6 +9,12 @@
 ## `--backend`, `GUIASSERT_<MODULE>_BACKEND`, `GUIASSERT_BACKEND`, the
 ## session's own backends and the platform default; an explicit selection
 ## never falls back to another backend.
+##
+## Every exit 4 and exit 6 failure names the capability it lacked in
+## `details.feature`, a name of the closed vocabulary of `core/contract`
+## (spec §7.3, §7.5 "Features"): each backend call runs inside `featured`
+## with the feature it needs, and `verbFeature` gives the verb's own feature
+## for everything else.
 
 import std/[json, options, os, strutils, tables, math, times]
 
@@ -26,6 +32,28 @@ import ./[args, context, registry, state]
 
 when mediaCompiledIn:
   import ../media
+
+proc fromBackendError*(e: ref BackendError): ref ContractError =
+  ## The contract error for a backend error: not found (3), unavailable (4),
+  ## permission denied (6) or failed (5), carrying the backend's reason and
+  ## remedy. A reason outside the kind's closed set becomes `internal`.
+  let kind =
+    if e of ref BackendNotFoundError: ekNotFound
+    elif e of ref BackendUnavailableError: ekBackendUnavailable
+    elif e of ref PermissionDeniedError: ekPermissionDenied
+    else: ekBackendError
+  newContractError(kind, e.reason, e.msg, e.remedy,
+                   %*{"backend": e.backend})
+
+template featured*(feature: string, body: untyped): untyped =
+  ## Run `body`; an exit 4 or exit 6 failure it raises carries `feature` as
+  ## `details.feature` unless it names one already (`withFeature`).
+  try:
+    body
+  except ContractError as x:
+    raise withFeature(x, feature)
+  except BackendError as x:
+    raise withFeature(fromBackendError(x), feature)
 
 type
   Selected* = object
@@ -163,7 +191,13 @@ proc prepare*(inv: Invocation, ctx: RunContext): VerbEnv =
         "session '" & result.session & "' is " & $result.sessionRecord.get.state &
           (if result.sessionRecord.get.stateReason.isSome:
              " (" & result.sessionRecord.get.stateReason.get & ")" else: ""),
-        remedy = "stop it with session-stop and start a new one")
+        remedy = "stop it with session-stop and start a new one",
+        details = %*{"feature": nil, "session": result.session,
+                     "state": $result.sessionRecord.get.state})
+  if ctx.stdinOffered and not (inv.has("stdin") or inv.has("value-stdin")):
+    raise badArgs("conflicting-arguments", "the request carries stdin, but '" &
+      inv.verb & "' reads none (only type --stdin and element-action " &
+      "--value-stdin do)")
   selectBackends(result)
   for m in Module:
     if result.selection[m].name == fixtureBackendName:
@@ -198,6 +232,42 @@ proc fixtureInjection*(e: VerbEnv) =
   if delay > 0: e.ctx.token.sleepCancellable(delay)
   let f = e.fixtureCfg.env.injectedFailure(e.inv.verb)
   if f.isSome: raise f.get
+
+proc captureFeatureOf(inv: Invocation): string =
+  ## The capture feature a `--display` / `--window` / `--region` /
+  ## `--own-pixels` target needs.
+  if inv.has("own-pixels"): "own-pixels-capture"
+  elif inv.has("window"): "window-capture"
+  elif inv.has("region"): "region-capture"
+  else: "display-capture"
+
+proc verbFeature*(inv: Invocation): string =
+  ## The feature of the vocabulary (spec §7.5, "Features") verb `inv` needs
+  ## first, or "" for a verb that needs none (`version`, `capabilities`,
+  ## `vision-compare`). A verb that needs two (ocr of a capture) names the
+  ## other where it calls that backend.
+  result = case inv.verb
+    of "permissions", "session-list", "session-info", "session-stop": "session-management"
+    of "session-start":
+      if inv.has("vnc"): "session-vnc" else: "session-" & inv.value("kind").get("")
+    of "apps", "app-launch", "app-quit": "app-management"
+    of "displays", "windows": "window-enumeration"
+    of "window-focus", "window-set-bounds": "window-management"
+    of "screenshot": captureFeatureOf(inv)
+    of "record", "record-start", "record-stop", "recordings": "recording"
+    of "ocr", "vision-windows": "ocr"
+    of "tree", "find", "element": "tree-read"
+    of "element-action": "element-actions"
+    of "wait":
+      if inv.has("element"): "tree-read"
+      elif inv.has("text"): "ocr"
+      else: "window-enumeration"
+    of "move", "click", "drag", "scroll": "pointer-input"
+    of "type", "key": "keyboard-input"
+    of "vision-segment": "video-decode"
+    of "watch": (if inv.has("frames"): "display-capture" else: "window-enumeration")
+    else: ""
+  if result.len > 0 and not isFeature(result): result = ""
 
 proc ensureAvailable(e: VerbEnv, m: Module) =
   let sel = e.selection[m]
@@ -256,6 +326,16 @@ template withSessionLock(e: VerbEnv, id: string, body: untyped) =
 # Shared argument shapes
 # ---------------------------------------------------------------------------
 
+proc readInput(e: VerbEnv, flag: string): string =
+  ## The whole standard input of the invocation, for `flag` (spec §7.5):
+  ## taken exactly as given, nothing stripped, at most `maxTextFileBytes`.
+  if e.ctx.stdin == nil:
+    raise badArgs("missing-argument", flag & " reads standard input, and this " &
+      "invocation has none (a serve request passes it as \"stdin\")")
+  try: e.ctx.stdin(maxTextFileBytes)
+  except FileTooLargeError as x: raise badArgs("invalid-value", flag & ": " & x.msg)
+  except IOError as x: raise badArgs("invalid-value", flag & ": cannot read stdin: " & x.msg)
+
 proc captureTarget(e: VerbEnv): CaptureTarget =
   ## `--display <id> | --window <id> | --region x,y,w,h`; none: the
   ## session's primary display.
@@ -278,6 +358,9 @@ proc elementFilter(e: VerbEnv): ElementFilter =
     except TreeError as x: raise badArgs("invalid-value", "--role: " & x.msg)
   result.name = e.inv.value("name")
   result.nameContains = e.inv.value("name-contains")
+  result.ignoreCase = e.inv.has("ignore-case")
+  if result.ignoreCase and result.name.isNone and result.nameContains.isNone:
+    raise badArgs("conflicting-arguments", "--ignore-case applies to --name or --name-contains")
   for s in e.inv.values("state"):
     try: result.states.incl parseNodeState(s)
     except TreeError as x: raise badArgs("invalid-value", "--state: " & x.msg)
@@ -365,7 +448,9 @@ proc unknownPermissions(): Permissions =
               inputSynthesis: psUnknown, desktopAccess: psUnknown,
               identity: none(string))
 
-proc unavailableFeature(m: Module, name: string, x: ref Exception): Feature =
+proc unavailableFeatures(m: Module, name: string, x: ref Exception): seq[Feature] =
+  ## Every feature of module `m` as unavailable, for a backend that cannot
+  ## even be constructed here, with the reason it gave.
   var reason = "not-implemented"
   var remedy = ""
   if x of ref ContractError:
@@ -374,8 +459,22 @@ proc unavailableFeature(m: Module, name: string, x: ref Exception): Feature =
   elif x of ref BackendError:
     reason = (ref BackendError)(x).reason
     remedy = (ref BackendError)(x).remedy
-  Feature(feature: $m, backend: name, state: fsUnavailable, reason: some(reason),
-          remedy: (if remedy.len > 0: some(remedy) else: none(string)))
+  for f in featuresOfModule($m):
+    result.add Feature(feature: f, backend: name, state: fsUnavailable,
+                       reason: some(reason),
+                       remedy: (if remedy.len > 0: some(remedy) else: none(string)))
+
+proc mediaFeatures(): seq[Feature] =
+  ## The media module's features: video input to `vision-segment`, which
+  ## GS4 implements (until then not implemented, or not compiled in).
+  if mediaCompiledIn:
+    @[Feature(feature: "video-decode", backend: "ffmpeg", state: fsUnavailable,
+              reason: some("not-implemented"),
+              remedy: some("decode the video to PNG frames and pass --frames <dir>"))]
+  else:
+    @[Feature(feature: "video-decode", backend: "ffmpeg", state: fsUnavailable,
+              reason: some("not-compiled-in"),
+              remedy: some("decode the video to PNG frames and pass --frames <dir>"))]
 
 proc verbCapabilities(e: VerbEnv): JsonNode =
   let probe = e.inv.has("probe")
@@ -392,8 +491,9 @@ proc verbCapabilities(e: VerbEnv): JsonNode =
         of modInput: e.inputBackend().features(probe)
         of modSession: e.sessionBackend().features(probe)
     except ContractError, BackendUnavailableError:
-      fs = @[unavailableFeature(m, e.selection[m].name, getCurrentException())]
+      fs = unavailableFeatures(m, e.selection[m].name, getCurrentException())
     for f in fs: features.add f.toJson
+  for f in mediaFeatures(): features.add f.toJson
   var perms = unknownPermissions()
   try: perms = e.sessionBackend().permissions(none(string))
   except ContractError, BackendUnavailableError: discard
@@ -435,7 +535,8 @@ proc verbSessionStart(e: VerbEnv): JsonNode =
   if spec.lifetime == slOwner and e.ctx.owner.isNone:
     raise newContractError(ekBackendUnavailable, "unsupported-option",
       "--lifetime owner needs an owner that outlives the call; it is honoured " &
-      "only under `guiassert serve`", remedy = "use --lifetime detached, or serve")
+      "only under `guiassert serve`", remedy = "use --lifetime detached, or serve",
+      details = %*{"feature": nil})
   spec.vnc = e.inv.has("vnc")
   if e.inv.has("account"):
     if spec.kind != skIsolated:
@@ -478,6 +579,20 @@ proc verbAppLaunch(e: VerbEnv): JsonNode =
   if given.len > 1:
     raise badArgs("conflicting-arguments", given.join(" and ") & " exclude each other")
   let wait = e.inv.intFlag("wait-window-ms", 0, 600_000)
+  var envPairs: seq[(string, string)]
+  for kv in e.inv.values("env"):
+    let eq = kv.find('=')
+    if eq <= 0:
+      raise badArgs("invalid-value", "--env takes KEY=VALUE")
+    let k = kv[0 ..< eq]
+    if k[0] notin {'A'..'Z', 'a'..'z', '_'} or
+       not k.allCharsInSet({'A'..'Z', 'a'..'z', '0'..'9', '_'}):
+      raise badArgs("invalid-value", "--env: '" & k &
+        "' is not a variable name ([A-Za-z_][A-Za-z0-9_]*)")
+    for (pk, _) in envPairs:
+      if pk == k:
+        raise badArgs("conflicting-arguments", "--env " & k & " is given more than once")
+    envPairs.add (k, kv[eq + 1 .. ^1])
   var spec: LaunchSpec
   if e.inv.has("bundle-id"):
     spec = LaunchSpec(kind: lkBundleId, bundleId: e.inv.value("bundle-id").get)
@@ -488,6 +603,7 @@ proc verbAppLaunch(e: VerbEnv): JsonNode =
       raise badArgs("missing-argument", "app-launch -- needs a program")
     spec = LaunchSpec(kind: lkArgv, argv: e.inv.passthrough)
   spec.waitWindowMs = wait
+  spec.env = envPairs
   let b = e.sessionBackend()
   var r: LaunchReport
   e.withSessionLock(e.session):
@@ -590,8 +706,9 @@ proc verbOcr(e: VerbEnv): JsonNode =
   let outPath = e.resolvePath(e.inv.require("out"))
   let req = e.ocrRequest(outPath)
   let ocr = e.ocrBackend()
-  let img = e.captureBackend().capture(CaptureRequest(session: e.session,
-    target: e.captureTarget(), outPath: outPath, cursor: false))
+  let img = featured(captureFeatureOf(e.inv)):
+    e.captureBackend().capture(CaptureRequest(session: e.session,
+      target: e.captureTarget(), outPath: outPath, cursor: false))
   ocrDataJson(img, ocr.recognize(req))
 
 # ---------------------------------------------------------------------------
@@ -639,14 +756,22 @@ proc verbElementAction(e: VerbEnv): JsonNode =
   var action: NodeAction
   try: action = parseNodeAction(e.inv.positionals[1])
   except TreeError as x: raise badArgs("invalid-value", x.msg)
-  if action == actSetValue and not e.inv.has("value"):
-    raise badArgs("missing-argument", "set-value needs --value")
-  if action != actSetValue and e.inv.has("value"):
-    raise badArgs("conflicting-arguments", "--value applies only to set-value")
+  let hasValue = e.inv.has("value")
+  let hasStdin = e.inv.has("value-stdin")
+  if action == actSetValue and not (hasValue or hasStdin):
+    raise badArgs("missing-argument", "set-value needs --value or --value-stdin")
+  if action != actSetValue and (hasValue or hasStdin):
+    raise badArgs("conflicting-arguments", "--value and --value-stdin apply only to set-value")
+  if hasValue and hasStdin:
+    raise badArgs("conflicting-arguments", "give --value or --value-stdin, not both")
+  var value = e.inv.value("value")
+  if hasStdin: value = some(e.readInput("--value-stdin"))
+  if value.isSome and not isValidUtf8(value.get):
+    raise badArgs("invalid-value", "the value is not valid UTF-8")
   let b = e.treeBackend()
   var n: Node
   e.withSessionLock(e.session):
-    n = b.perform(e.session, path, action, e.inv.value("value"))
+    n = b.perform(e.session, path, action, value)
   %*{"element": n.elementToJson, "action": $action}
 
 # ---------------------------------------------------------------------------
@@ -665,7 +790,11 @@ proc findWord(words: seq[OcrWord], needle: string): Option[OcrWord] =
       if s.len > needle.len + words[i].text.len: break
   none(OcrWord)
 
-proc verbWait(e: VerbEnv): JsonNode =
+const waitFrameName = "wait-frame.png"
+  ## The one file `wait --text` writes in `--out-dir`: each attempt's frame
+  ## replaces the last, and it is reported (`data.image`) or removed.
+
+proc verbWaitLoop(e: VerbEnv): JsonNode =
   let mode = e.inv.exclusive(["element", "text", "window", "window-gone"],
                              required = true)
   let waitMs = parseIntValue("--wait-ms", e.inv.require("wait-ms"), 0, 86_400_000)
@@ -699,7 +828,8 @@ proc verbWait(e: VerbEnv): JsonNode =
       raise newContractError(ekNotFound, "file", "--out-dir does not exist: " & outDir)
     discard e.inv.rectFlag("ocr-region")
     ocr = e.ocrBackend()
-    cap = e.captureBackend()
+    cap = featured(if e.inv.has("ocr-region"): "region-capture" else: "display-capture"):
+      e.captureBackend()
   else:
     e.inv.refuse(@elementFlags & @textFlags, "to wait --" & mode)
     winFilter = e.windowFilter()
@@ -724,8 +854,9 @@ proc verbWait(e: VerbEnv): JsonNode =
       let target = if e.inv.has("ocr-region"):
                      CaptureTarget(kind: ctkRegion, region: e.inv.rectFlag("ocr-region").get)
                    else: CaptureTarget(kind: ctkDisplay, id: none(string))
-      let img = cap.capture(CaptureRequest(session: e.session, target: target,
-                                           outPath: outDir / "wait-frame.png"))
+      let img = featured(if e.inv.has("ocr-region"): "region-capture" else: "display-capture"):
+        cap.capture(CaptureRequest(session: e.session, target: target,
+                                   outPath: outDir / waitFrameName))
       let r = ocr.recognize(OcrRequest(imagePath: img.path))
       observed = r.words.len
       let w = findWord(r.words, e.inv.value("text").get)
@@ -748,6 +879,21 @@ proc verbWait(e: VerbEnv): JsonNode =
         "the condition did not hold within --wait-ms " & $waitMs,
         details = %*{"attempts": attempt, "elapsedMs": elapsed})
     e.ctx.token.sleepCancellable(interval)
+
+proc verbWait(e: VerbEnv): JsonNode =
+  ## `wait`. A `--text` wait reports every image file it wrote: the frame
+  ## that matched is `data.image`; when it ends any other way (expiry,
+  ## cancellation, an error) the frame it wrote is removed (spec §7.5,
+  ## "Captured content").
+  var frame = ""
+  if e.inv.has("text") and e.inv.has("out-dir"):
+    frame = e.resolvePath(e.inv.value("out-dir").get) / waitFrameName
+  try:
+    result = verbWaitLoop(e)
+  except CatchableError:
+    if frame.len > 0:
+      try: removeFile(frame) except OSError: discard
+    raise
 
 # ---------------------------------------------------------------------------
 # Input
@@ -777,13 +923,28 @@ proc verbClick(e: VerbEnv): JsonNode =
     except KeyComboError as x: raise badArgs("invalid-value", "--modifiers: " & x.msg)
   e.inputVerb(ib.click(e.session, at, btn, count, mods))
 
+const maxDragWaypoints = 1000
+  ## The most `drag --path` waypoints one drag takes.
+
 proc verbDrag(e: VerbEnv): JsonNode =
   let src = parsePointValue("--from", e.inv.require("from"))
   let dst = parsePointValue("--to", e.inv.require("to"))
+  var path = @[src]
+  if e.inv.has("path"):
+    let spec = e.inv.value("path").get
+    let parts = spec.split(';')
+    if parts.len > maxDragWaypoints:
+      raise badArgs("invalid-value", "--path takes at most " & $maxDragWaypoints &
+        " waypoints, got " & $parts.len)
+    for p in parts:
+      if p.len == 0:
+        raise badArgs("invalid-value", "--path is x,y;x,y;… with no empty waypoint")
+      path.add parsePointValue("--path", p)
+  path.add dst
   let btn = e.button()
   let steps = e.inv.intFlag("steps", 1, 1000).get(10)
   let dur = e.inv.intFlag("duration-ms", 0, 600_000).get(0)
-  e.inputVerb(ib.drag(e.session, src, dst, btn, steps, dur))
+  e.inputVerb(ib.drag(e.session, path, btn, steps, dur))
 
 proc verbScroll(e: VerbEnv): JsonNode =
   let at = parsePointValue("--at", e.inv.require("at"))
@@ -796,10 +957,15 @@ proc verbScroll(e: VerbEnv): JsonNode =
 
 proc verbType(e: VerbEnv): JsonNode =
   let hasText = e.inv.positionals.len > 0
-  if hasText == e.inv.has("text-file"):
-    raise (if hasText: badArgs("conflicting-arguments", "give <text> or --text-file, not both")
-           else: badArgs("missing-argument", "type needs <text> or --text-file"))
+  var given = 0
+  for b in [hasText, e.inv.has("text-file"), e.inv.has("stdin")]:
+    if b: inc given
+  if given != 1:
+    raise (if given > 1: badArgs("conflicting-arguments",
+                                 "give one of <text>, --text-file and --stdin")
+           else: badArgs("missing-argument", "type needs <text>, --text-file or --stdin"))
   var text = if hasText: e.inv.positionals[0] else: ""
+  if e.inv.has("stdin"): text = e.readInput("--stdin")
   if e.inv.has("text-file"):
     let p = e.resolvePath(e.inv.value("text-file").get)
     if not fileExists(p): raise newContractError(ekNotFound, "file", "no file at " & p)
@@ -997,8 +1163,7 @@ proc verbWatch(e: VerbEnv): JsonNode =
 # Dispatch
 # ---------------------------------------------------------------------------
 
-proc dispatch*(e: VerbEnv): JsonNode =
-  ## Run the verb of `e` and return its `data`.
+proc dispatchVerb(e: VerbEnv): JsonNode =
   case e.inv.verb
   of "version": verbVersion(e)
   of "capabilities": verbCapabilities(e)
@@ -1038,3 +1203,9 @@ proc dispatch*(e: VerbEnv): JsonNode =
   else:
     raise newContractError(ekInternal, "exception", "verb '" & e.inv.verb &
       "' is in the registry but has no implementation")
+
+proc dispatch*(e: VerbEnv): JsonNode =
+  ## Run the verb of `e` and return its `data`. An exit 4 or exit 6 failure
+  ## that does not name its feature yet names the verb's (`verbFeature`).
+  featured(verbFeature(e.inv)):
+    dispatchVerb(e)

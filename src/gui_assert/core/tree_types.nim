@@ -14,7 +14,7 @@
 ## `ElementFilter` and `matches` implement the element search shared by the
 ## `find` and `wait` verbs, so every backend filters the same way.
 
-import std/[options, strutils]
+import std/[options, strutils, unicode]
 
 import ./geometry
 
@@ -68,6 +68,9 @@ type
     stOffscreen = "offscreen"
     stRequired = "required"
     stInvalid = "invalid"
+    stProtected = "protected"
+      ## A password or secure text field: its `value` and `text` are never
+      ## reported (spec §7.5, C3 of contract 1.0).
 
   NodeAction* = enum
     ## The actions `element-action` can perform (spec §7.5).
@@ -92,8 +95,14 @@ type
     nativeRole*: string
     name*: Option[string]
     value*: Option[string]
+    text*: Option[string]
+      ## The node's text content as the platform's text interface reports it
+      ## (AT-SPI Text, the AX value of static text, UIA TextPattern),
+      ## distinct from `name` and `value`; none when it has no text interface.
     description*: Option[string]
     bounds*: Option[Rect]
+      ## Desktop coordinates (spec §5), whatever space the platform reports
+      ## them in; none when they cannot be mapped to the desktop.
     states*: set[NodeState]
     actions*: set[NodeAction]
     childCount*: int
@@ -111,10 +120,13 @@ type
 
   ElementFilter* = object
     ## An element search. Every set criterion must hold; an unset one
-    ## matches everything. `states` must all be present on the node.
+    ## matches everything. `states` must all be present on the node. Name
+    ## matching is case-sensitive unless `ignoreCase` (spec §7.5, "Matching
+    ## rules").
     role*: Option[Role]
-    name*: Option[string]          ## exact name
-    nameContains*: Option[string]  ## case-insensitive substring of the name
+    name*: Option[string]          ## the exact name
+    nameContains*: Option[string]  ## a substring of the name
+    ignoreCase*: bool              ## compare names with Unicode case folding
     states*: set[NodeState]
 
 proc parseRole*(s: string): Role =
@@ -177,16 +189,26 @@ proc childPath*(parent: string, role: Role, index: int): string =
   ## The path of the `index`-th child of role `role` under `parent`.
   parent & "/" & $role & "[" & $index & "]"
 
+proc foldCase(s: string): string =
+  ## `s` lower-cased rune by rune (Unicode simple case mapping), for the
+  ## `ignoreCase` comparison. Invalid UTF-8 is compared as given.
+  if validateUtf8(s) >= 0: s else: unicode.toLower(s)
+
 proc matches*(n: Node, f: ElementFilter): bool =
   ## True when node `n` satisfies every criterion of `f`. A name criterion
-  ## never matches a node without a name.
+  ## never matches a node without a name. Names compare exactly
+  ## (case-sensitive) unless `f.ignoreCase`.
   if f.role.isSome and n.role != f.role.get: return false
   if f.name.isSome:
-    if n.name.isNone or n.name.get != f.name.get: return false
+    if n.name.isNone: return false
+    if f.ignoreCase:
+      if foldCase(n.name.get) != foldCase(f.name.get): return false
+    elif n.name.get != f.name.get: return false
   if f.nameContains.isSome:
-    if n.name.isNone or
-       not n.name.get.toLowerAscii.contains(f.nameContains.get.toLowerAscii):
-      return false
+    if n.name.isNone: return false
+    if f.ignoreCase:
+      if not foldCase(n.name.get).contains(foldCase(f.nameContains.get)): return false
+    elif not n.name.get.contains(f.nameContains.get): return false
   result = f.states <= n.states
 
 proc findAll*(root: Node, f: ElementFilter, limit = high(int)):

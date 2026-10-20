@@ -101,8 +101,10 @@ proc parseInvocation*(argv: seq[string]): Invocation =
       haveVerb = true
     else:
       if result.positionals.len >= spec.positionals.len:
-        raise badArgs("invalid-value", "unexpected argument '" & tok & "' for '" &
-          spec.name & "'")
+        # The token is not echoed: it may be text to type (spec §7.5,
+        # "Captured content").
+        raise badArgs("invalid-value", "unexpected argument #" &
+          $(result.positionals.len + 1) & " for '" & spec.name & "'")
       result.positionals.add tok
     inc i
   if not haveVerb:

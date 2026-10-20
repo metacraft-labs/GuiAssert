@@ -14,6 +14,12 @@
 ##   real binary, and checks each `data` object key by key and type by type:
 ##   every documented key present with its documented JSON type, and no
 ##   undocumented key (`lossy` excepted, spec §7.4).
+## * `test_spec_closed_lists_match_the_code` parses the closed lists the
+##   specification publishes (the kinds and reasons of §7.3, the feature
+##   vocabulary and the degraded reasons of §7.5, the key table of §7.5) and
+##   requires the code that enforces them (`core/contract`, `core/keys`) to
+##   hold exactly the same entries, so a reason, feature or key cannot be
+##   added on one side only.
 ##
 ## Stand-ins: the fixture backend only (spec §9.2), selected below the real
 ## binary.
@@ -22,6 +28,7 @@ import std/[json, os, sequtils, sets, strutils, tables, unittest]
 
 import ./harness
 import ../../src/gui_assert/cli/registry
+import ../../src/gui_assert/core/[contract, keys]
 
 # ---------------------------------------------------------------------------
 # A parser for the specification's schema notation
@@ -345,5 +352,55 @@ suite "contract schema":
     extra["colour"] = %"blue"
     check(objects, extra, display, "d", errs)
     check errs.len == 1
+
+  test "test_spec_closed_lists_match_the_code":
+    # §7.3: every kind with exactly its reasons, in the table's order.
+    let reasons = specReasons()
+    check reasons.len == 8
+    for k in ErrorKind:
+      check reasons.hasKey($k)
+      if reasons.hasKey($k):
+        check reasons[$k] == reasonsOf(k)
+        if reasons[$k] != reasonsOf(k):
+          checkpoint $k & ": spec " & $reasons[$k] & " vs code " & $reasonsOf(k)
+    check "name-in-use" in reasons["bad-args"]
+    # §7.5 Features: the vocabulary and the module of each.
+    check specFeatures() == featureVocabulary
+    check specDegradedReasons() == degradedReasons
+    # §7.5 The key table: modifiers and named keys with their spellings,
+    # the function-key range, and the character row.
+    var mods: seq[seq[string]]
+    var named: seq[(string, seq[string])]
+    var sawFunction, sawCharacter = false
+    for row in specTable(["Kind", "Canonical", "Also accepted"]):
+      let canonical = backticked(row[1])
+      let aliases = backticked(row[2])
+      case row[0]
+      of "modifier": mods.add canonical & aliases
+      of "named":
+        check canonical.len == 1
+        named.add (canonical[0], aliases)
+      of "function":
+        check canonical == @["F1", "F" & $maxFunctionKey]
+        sawFunction = true
+      of "character":
+        check "single printable character" in row[1]
+        sawCharacter = true
+      else:
+        checkpoint "unknown key-table kind " & row[0]
+        check false
+    check sawFunction and sawCharacter
+    var codeMods: seq[seq[string]]
+    for m in Modifier: codeMods.add modifierSpellings[m]
+    check mods == codeMods
+    var codeNamed: seq[(string, seq[string])]
+    for (c, a) in namedKeyTable: codeNamed.add (c, a)
+    check named == codeNamed
+
+  test "spec table reader control: a table that is not there is refused":
+    # Negative control for the reader the drift test relies on: it must not
+    # return an empty list for a header the specification does not have.
+    expect AssertionDefect:
+      discard specTable(["No", "Such", "Table"])
 
 cleanupFreshDirs()

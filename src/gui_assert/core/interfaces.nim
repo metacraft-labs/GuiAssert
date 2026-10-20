@@ -155,8 +155,12 @@ type
     move*: proc (session: string, to: Point): InputReport {.closure.}
     click*: proc (session: string, at: Point, button: MouseButton, count: int,
                   modifiers: seq[string]): InputReport {.closure.}
-    drag*: proc (session: string, src, dst: Point, button: MouseButton,
+    drag*: proc (session: string, path: seq[Point], button: MouseButton,
                  steps: int, durationMs: int): InputReport {.closure.}
+      ## Press at `path[0]`, move through every later point in order with the
+      ## button held (`steps` pointer events per segment, `durationMs` over
+      ## the whole drag), release at the last point. `path` has at least two
+      ## points: `--from`, the `--path` waypoints, `--to`.
     scroll*: proc (session: string, at: Point, dx, dy: int,
                    unit: ScrollUnit): InputReport {.closure.}
     typeText*: proc (session: string, text: string,
@@ -190,7 +194,12 @@ type
     of lkBundleId: bundleId*: string
     of lkAppPath: appPath*: string
     of lkArgv: argv*: seq[string]
-    waitWindowMs*: Option[int]   ## wait this long for the first window
+    waitWindowMs*: Option[int]
+      ## Wait this long for the first window; when it expires with the
+      ## process still running, the launch fails with `timeout` /
+      ## `condition-not-met` carrying the `App` (spec §7.5).
+    env*: seq[(string, string)]
+      ## `--env KEY=VALUE`, merged over `Session.env` (later wins).
 
   LaunchReport* = object
     app*: App

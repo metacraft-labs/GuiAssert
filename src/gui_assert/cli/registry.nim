@@ -222,7 +222,7 @@ const
                                  ("region", fkValue)]
   findFlags: seq[FlagSpec] = @[("pid", fkValue), ("app", fkValue),
     ("role", fkValue), ("name", fkValue), ("name-contains", fkValue),
-    ("state", fkRepeated)]
+    ("ignore-case", fkSwitch), ("state", fkRepeated)]
 
   verbSpecs*: seq[VerbSpec] = @[
     VerbSpec(name: "version"),
@@ -237,7 +237,7 @@ const
     VerbSpec(name: "session-stop", positionals: @["id"], flags: @[("force", fkSwitch)]),
     VerbSpec(name: "apps"),
     VerbSpec(name: "app-launch", flags: @[("bundle-id", fkValue), ("app", fkValue),
-      ("wait-window-ms", fkValue)], passthrough: true),
+      ("wait-window-ms", fkValue), ("env", fkRepeated)], passthrough: true),
     VerbSpec(name: "app-quit", positionals: @["pid"], flags: @[("force", fkSwitch)]),
     VerbSpec(name: "displays"),
     VerbSpec(name: "windows", flags: @[("app", fkValue), ("pid", fkValue),
@@ -264,7 +264,7 @@ const
       @[("limit", fkValue)]),
     VerbSpec(name: "element", positionals: @["path"]),
     VerbSpec(name: "element-action", positionals: @["path", "action"],
-      flags: @[("value", fkValue)]),
+      flags: @[("value", fkValue), ("value-stdin", fkSwitch)]),
     VerbSpec(name: "wait", flags: @[("element", fkSwitch), ("text", fkValue),
       ("window", fkSwitch), ("window-gone", fkSwitch)] & findFlags &
       @[("title", fkValue), ("title-contains", fkValue), ("ocr-region", fkValue),
@@ -273,11 +273,12 @@ const
     VerbSpec(name: "click", flags: @[("at", fkValue), ("button", fkValue),
       ("count", fkValue), ("modifiers", fkValue)]),
     VerbSpec(name: "drag", flags: @[("from", fkValue), ("to", fkValue),
-      ("button", fkValue), ("steps", fkValue), ("duration-ms", fkValue)]),
+      ("path", fkValue), ("button", fkValue), ("steps", fkValue),
+      ("duration-ms", fkValue)]),
     VerbSpec(name: "scroll", flags: @[("at", fkValue), ("dx", fkValue),
       ("dy", fkValue), ("unit", fkValue)]),
     VerbSpec(name: "type", positionals: @["text?"],
-      flags: @[("text-file", fkValue), ("interval-ms", fkValue)]),
+      flags: @[("text-file", fkValue), ("stdin", fkSwitch), ("interval-ms", fkValue)]),
     VerbSpec(name: "key", positionals: @["combo"]),
     VerbSpec(name: "vision-compare", positionals: @["a", "b"],
       flags: @[("tiles", fkValue)]),

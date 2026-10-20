@@ -2,7 +2,10 @@
 
 Status: **in progress** (GS0, the specification and contract, written; GS1,
 the core split, and GS2, the `guiassert` CLI, `serve`, the fixture backend
-and the contract suite, implemented; the platform backends of §4 are not) · Execution:
+and the contract suite, implemented; GS2.1 decided and implemented the
+companion campaign's change requests C1–C17, and **contract
+`guiassert-desktop/1.0` is frozen** (§7.7); the platform backends of §4 are
+not implemented) · Execution:
 [[Desktop-Substrate.milestones.org]] · Related:
 [[Vision-Understanding.md]], [[../src/gui_assert/image_math.nim]],
 [[../src/gui_assert/ocr.nim]], [[../src/gui_assert/screen_capture.nim]],
@@ -287,6 +290,26 @@ internal, non-contract verb) whose pid is recorded, and every later invocation
 re-attaches through the record. Each call reconciles the record against
 reality (is the host pid alive, does the compositor answer); a session whose
 host died is reported with `state: "error"` and a reason, never as running.
+Every verb that targets a session that is not `running` (its host died, or
+it is still starting) answers exit 4 / `session-not-running`, never exit 3
+or exit 5, so a caller tells "the session is gone, recreate it" from "the
+operation failed" by the exit code alone; `session-info`, `session-list`,
+`session-stop`, `capabilities` and `permissions` still answer for it.
+
+**Readiness.** `session-start` returns only once the session is `running`:
+its display server answers and, for a kind whose session has a tree backend,
+its accessibility bus is up, so an `app-launch` right after it works. A
+session that does not get there within the **readiness bound** (10 s, or the
+`--timeout-ms` deadline less 250 ms when that is shorter) fails the start with
+exit 5 / `session-failed`; the start then stops everything it started and
+leaves no record. A session host that exits before the session is ready
+fails it the same way, at once.
+
+**Names.** `--name` sets the session's id. A name that a session which is
+not stopped already uses (running, starting or in error) is exit 2 /
+`name-in-use` with `details: {"name", "state"}`; a stopped session leaves no
+record, so its name can be used again. A session started without `--name`
+gets a generated id that never takes a name already in use.
 
 `--lifetime detached` (default) keeps the session until `session-stop`.
 `--lifetime owner` is accepted only under `serve` and stops the session when the
@@ -296,10 +319,19 @@ immediately).
 
 Applications are started **into** a session with `app-launch --session <id>`,
 which supplies the session's environment (`WAYLAND_DISPLAY`, `DISPLAY`,
-`XDG_RUNTIME_DIR`, the session bus, the AT-SPI bus) or its launch mechanism
-(macOS `launchctl asuser` / a LaunchAgent in the session's `gui/<uid>` domain;
-Windows `lpDesktop`). The session's `env` map is also returned so a caller may
-spawn processes itself.
+`XDG_RUNTIME_DIR`, the session bus `DBUS_SESSION_BUS_ADDRESS`, the AT-SPI bus
+`AT_SPI_BUS_ADDRESS`) or its launch mechanism (macOS `launchctl asuser` / a
+LaunchAgent in the session's `gui/<uid>` domain; Windows `lpDesktop`). The
+session's environment is also returned, so a caller may spawn processes
+itself and get exactly what `app-launch` would: `Session.env` carries every
+variable a process in the session needs set (the session bus and the AT-SPI
+bus included), and `Session.envUnset` every variable it must **not** inherit
+from the caller (for example the host's `DISPLAY`, or `NO_AT_BRIDGE`,
+`GTK_A11Y`, `GDK_BACKEND`, `QT_QPA_PLATFORM` when they would route the
+application away from the session or disable its accessibility). A process
+spawned into the session starts from the caller's environment, removes every
+`envUnset` variable, then sets every `env` variable; `app-launch --env
+KEY=VALUE` (repeatable) is applied last and wins over both.
 
 **Isolation is stated, not implied.** A `Session` carries
 `isolation: {pixels, input, clipboard}`, each `true` only when that property
@@ -411,6 +443,22 @@ they do not apply (the §7.4 rule that a key's presence never depends on the
 backend). A consumer that reads only `code`/`kind`/`message` is a complete
 consumer.
 
+**`details.feature`.** Every exit 4 (`backend-unavailable`) and exit 6
+(`permission-denied`) envelope has a `details` object, and it always carries
+`feature`: the name, from the closed vocabulary of §7.5 ("Features"), of the
+capability the invocation lacked, so a consumer names what is missing from a
+stable payload instead of a table keyed on verbs. It is `null` exactly when
+the failure is not about a capability:
+
+- reason `session-not-running`: the session, not a capability, is missing;
+- an option or flag the **transport** cannot honour: `--lifetime owner` on
+  the one-shot CLI (`unsupported-option`, §6.1), and `serve --listen unix:`
+  in a build without a Unix-socket transport (`wrong-platform`, §8.1).
+
+Alongside `feature`, `details` carries `module` and `backend` when a backend
+was selected (and `selectedBy`, the §3.4 rule that chose it, when the backend
+cannot run at all).
+
 - `verb` is the canonical verb name when the verb resolved, otherwise the
   token as given, otherwise `""`.
 - The process exit code equals `error.code` (0 on success). Consumers branch on
@@ -426,7 +474,7 @@ consumer.
 | --- | --- | --- | --- |
 | 0 | — | success, `"ok": true` | |
 | 1 | `internal` | unexpected failure, a bug | `exception`, `serialization` |
-| 2 | `bad-args` | malformed invocation | `unknown-verb`, `unknown-flag`, `missing-argument`, `invalid-value`, `conflicting-arguments`, `unknown-backend`, `contract-unsupported`, `invalid-name` |
+| 2 | `bad-args` | malformed invocation | `unknown-verb`, `unknown-flag`, `missing-argument`, `invalid-value`, `conflicting-arguments`, `unknown-backend`, `contract-unsupported`, `invalid-name`, `name-in-use` |
 | 3 | `not-found` | a named object does not resolve | `session`, `display`, `window`, `app`, `element`, `recording`, `file`, `request` (serve `cancel` target) |
 | 4 | `backend-unavailable` | the selected backend cannot do this here | `not-compiled-in`, `wrong-platform`, `missing-tool`, `display-server-unsupported`, `unsupported-option`, `not-implemented`, `no-isolated-session`, `session-not-running` |
 | 5 | `backend-error` | the backend tried and failed | `capture-failed`, `ocr-failed`, `tree-failed`, `input-failed`, `session-failed`, `busy`, `stale-path` |
@@ -474,17 +522,17 @@ Point     = [x, y]
 Display   = {"id": str, "name": str|null, "bounds": Rect, "scale": float,
              "primary": bool, "virtual": bool}
 Window    = {"id": str, "pid": int, "app": str, "appId": str|null,
-             "title": str|null, "bounds": Rect, "display": str|null,
+             "title": str|null, "document": str|null, "bounds": Rect, "display": str|null,
              "layer": int, "onScreen": bool, "focused": bool, "minimized": bool}
 App       = {"pid": int, "name": str, "bundleId": str|null, "appId": str|null,
-             "frontmost": bool, "hidden": bool}
+             "frontmost": bool, "hidden": bool, "accessible": bool|null}
 Isolation = {"pixels": bool, "input": bool, "clipboard": bool}
 Session   = {"id": str, "name": str|null, "kind": "host"|"virtual-display"|"isolated"|"headless",
              "backend": str, "platform": "macos"|"linux"|"windows"|"fixture",
              "state": "starting"|"running"|"stopping"|"stopped"|"error",
              "stateReason": str|null, "lifetime": "detached"|"owner",
              "isolation": Isolation, "displays": [Display], "env": {str: str},
-             "vnc": {"host": str, "port": int}|null,
+             "envUnset": [str], "vnc": {"host": str, "port": int}|null,
              "backends": {"capture": str, "tree": str, "input": str},
              "createdAt": str, "hostPid": int|null}
 ImageRef  = {"path": str, "format": "png", "width": int, "height": int,
@@ -498,13 +546,34 @@ Recording = {"id": str, "path": str, "state": "recording"|"stopped"|"failed",
 OcrWord   = {"text": str, "confidence": float /*0-100*/, "bbox": Rect /*image px*/,
              "line": int, "block": int}
 Node      = {"path": str, "role": str, "nativeRole": str, "name": str|null,
-             "value": str|null, "description": str|null, "bounds": Rect|null,
+             "value": str|null, "text": str|null, "description": str|null, "bounds": Rect|null,
              "states": [str], "actions": [str], "childCount": int,
              "children": [Node]}           // Element = Node with "children": []
 InputReport = {"kind": str, "at": Point|null, "to": Point|null, "button": str|null,
                "count": int|null, "length": int|null, "keys": str|null,
-               "delivery": "injected"|"posted", "session": str}
+               "path": [Point]|null, "delivery": "injected"|"posted", "session": str}
 ```
+
+What the newer keys mean:
+
+- `Window.document`: the document the window shows, as the platform names it
+  (macOS `AXDocument`, a file URL); `null` where the platform has no
+  equivalent or the window shows none. A caller can verify which document a
+  window holds without trusting its title.
+- `App.accessible`: whether the application exposes an accessibility tree on
+  the session's bus (macOS: its AX application element answers; Linux: it is
+  registered with the session's AT-SPI registry; Windows: it has a UIA
+  provider); `null` when that cannot be determined, for example without the
+  Accessibility permission (never `false` for "could not look").
+- `Session.env` / `Session.envUnset`: §6.1.
+- `Node.text`: the node's **text content** as the platform's text interface
+  reports it (AT-SPI `Text`, the AX value of static text, UIA `TextPattern`):
+  a label's string, a text field's or document's content. It is distinct from
+  `name` (the accessible label) and `value` (the value interface), and `null`
+  for a node with no text interface.
+- `InputReport.path`: `drag` only, the vertices delivered with the button
+  held, in order (`--from`, every `--path` waypoint, `--to`); `null` for every
+  other verb.
 
 The accessibility `role` is a normalized vocabulary (`application`, `window`,
 `dialog`, `button`, `checkbox`, `radio`, `text-field`, `text-area`, `label`,
@@ -513,34 +582,170 @@ The accessibility `role` is a normalized vocabulary (`application`, `window`,
 `toolbar`, `image`, `group`, `unknown`), with the platform's own role kept in
 `nativeRole`. `states` come from `focused`, `focusable`, `enabled`,
 `selected`, `checked`, `expanded`, `editable`, `visible`, `offscreen`,
-`required`, `invalid`. A `path` is `/app[<pid>]/<role>[<i>]/…`, where `<i>` is
+`required`, `invalid`, `protected`. A `path` is `/app[<pid>]/<role>[<i>]/…`, where `<i>` is
 the index among siblings of the same role. Paths are addresses into the tree as
 it was read; a path that no longer resolves is `not-found` / `element`, and one
 that resolves to a node of another role is `backend-error` / `stale-path`.
 
+**`Node.bounds` are desktop coordinates** (§5), whatever space the platform
+reports: a tree backend whose platform gives window-relative geometry (AT-SPI
+on Wayland) converts it through the compositor's window placement, so the
+centre of an element's `bounds` is where `click --at` reaches it. When a
+backend cannot map a node's geometry to the desktop, `bounds` is `null`,
+never a rectangle in another space.
+
+**Protected fields.** A password or secure text field (macOS
+`AXSecureTextField`, AT-SPI `ROLE_PASSWORD_TEXT`, UIA `IsPassword`) carries the
+state `protected` and reports `value: null` and `text: null` on every verb
+(`tree`, `find`, `element`, the re-read of `element-action`, `wait
+--element`); its role stays the normalized one (`text-field`). The serializer
+enforces it for every backend.
+
 Typed text is never echoed back: `type` reports its `length`, not its
 characters, so a password typed through GuiAssert does not reach a log through
 GuiAssert's own output.
+
+**Captured content.** Typed and set text, the `value` and `text` of nodes
+(protected ones never appear at all), OCR words and text are captured
+content. GuiAssert puts captured content **only in the `data` object** of an
+envelope (and, where documented, in `details`, such as `details.app` of an
+`app-launch` expiry or `details.recording`, which carry no text): never in
+`message`, never in a diagnostic on stderr, never in a serve `event` payload,
+and never in a state record (the fixture's simulated desktop under
+`<state-dir>/fixture/`, §9.2, is the simulated application's own state and is
+the one exception). Every image file a verb writes is reported: `wait --text`
+writes one frame (`<out-dir>/wait-frame.png`) and reports it as `data.image`
+when it matches, and removes it when the wait ends any other way; `watch
+--frames` reports every frame it writes in one `frame` event (on serve, and in
+`--events-file`), so the files in `--out-dir` are exactly the ones its events
+name. A consumer that masks, encrypts or expires captured content therefore
+knows every place GuiAssert put some.
+
+#### Matching rules
+
+- `find` and `wait --element` match `--name` exactly and `--name-contains` as
+  a substring, both **case-sensitive**; `--ignore-case` makes both compare
+  with Unicode case folding (and is refused without one of them).
+- `windows --title` / `--title-contains` are case-sensitive as well.
+- `--app <name>` matches `App.name` exactly. Where it selects **one**
+  application (`tree`, `find`, `wait --element`), a name that more than one
+  running application has is exit 2 / `conflicting-arguments` with the
+  candidates' pids in `details.pids`, never the first match; select one with
+  `--pid`. `windows --app` is a filter and lists the windows of every
+  application of that name.
+
+#### Features
+
+`capabilities.features` lists every feature of this vocabulary exactly once,
+each reported by the backend selected for its module (for `--session <id>`,
+that session's backends, §3.4). The same names are `details.feature` of exit 4
+and exit 6 envelopes (§7.2). The set is closed; a new feature is a minor
+contract change.
+
+| Feature | Module | Needed by |
+| --- | --- | --- |
+| `window-enumeration` | capture | `displays`, `windows`, `wait --window` / `--window-gone`, `watch --windows` |
+| `display-capture` | capture | `screenshot`, `ocr` and `wait --text` of a display, `watch --frames` |
+| `window-capture` | capture | `screenshot --window`, `ocr --window` |
+| `region-capture` | capture | `screenshot --region`, `ocr --region`, `wait --text --ocr-region` |
+| `own-pixels-capture` | capture | `screenshot --window --own-pixels` |
+| `recording` | capture | `record`, `record-start`, `record-stop`, `recordings` |
+| `ocr` | ocr | `ocr`, `wait --text`, `vision-windows --ocr` |
+| `tree-read` | tree | `tree`, `find`, `element`, `wait --element` |
+| `element-actions` | tree | `element-action` |
+| `pointer-input` | input | `move`, `click`, `drag`, `scroll` |
+| `keyboard-input` | input | `type`, `key` |
+| `window-management` | input | `window-focus`, `window-set-bounds` |
+| `session-management` | session | `session-list`, `session-info`, `session-stop`, `permissions` |
+| `app-management` | session | `apps`, `app-launch`, `app-quit` |
+| `session-virtual-display` | session | `session-start --kind virtual-display` |
+| `session-isolated` | session | `session-start --kind isolated` |
+| `session-headless` | session | `session-start --kind headless` |
+| `session-vnc` | session | `session-start --vnc` |
+| `video-decode` | media | `vision-segment <video>` |
+
+A feature's `reason` is `null` when its `state` is `supported` or
+`available`; a `backend-unavailable` or `permission-denied` reason (§7.3) when
+it is `unavailable`; and one of the following when it is `degraded`:
+
+| Degraded reason | Meaning |
+| --- | --- |
+| `window-crop` | window capture crops a display capture to the window (`source.kind: "window-crop"`) |
+| `png-sequence` | recordings are PNG sequences (no media backend) |
+| `fixture-frames-only` | the fixture OCR reads only frames the fixture captured |
+| `titles-redacted` | windows are enumerated with `title: null` (no Screen Recording grant) |
+| `posted-delivery` | input is posted to the target window (`delivery: "posted"`) |
+
+#### The key table
+
+`key <combo>` takes `[<modifier>+]…<key>`, and `click --modifiers` a
+comma-separated list of modifiers. Names match **case-insensitively**, and
+each row's spellings are interchangeable; the reported `keys` is normalized to
+the canonical spellings, modifiers in the order of this table. A combination
+naming a modifier twice (under any spelling) or a name not in the table is
+exit 2 / `invalid-value`, never guessed. Spelling variants beyond these
+(`page_up`, `arrowleft`) are the caller's to translate.
+
+| Kind | Canonical | Also accepted |
+| --- | --- | --- |
+| modifier | `ctrl` | `control` |
+| modifier | `alt` | `option` |
+| modifier | `shift` | — |
+| modifier | `cmd` | `command`, `meta`, `super`, `win` |
+| named | `Return` | `Enter` |
+| named | `Tab` | — |
+| named | `Escape` | `Esc` |
+| named | `BackSpace` | — |
+| named | `Delete` | — |
+| named | `Insert` | — |
+| named | `Space` | — |
+| named | `Home` | — |
+| named | `End` | — |
+| named | `PageUp` | — |
+| named | `PageDown` | — |
+| named | `Pause` | — |
+| named | `Up` | — |
+| named | `Down` | — |
+| named | `Left` | — |
+| named | `Right` | — |
+| function | `F1` … `F24` | — |
+| character | any single printable character | — |
+
+`cmd` is the Command key on macOS and the Windows / Super key elsewhere. A
+**character** is one Unicode code point that is not a control character and
+not white space (the space bar is `Space`); the letters `A`–`Z` name the same
+key as `a`–`z` and normalize to lower case (an upper-case letter is
+`shift+a`, or `type A`); `+` is written last (`ctrl++`, or `+` alone).
 
 **Meta**
 
 | Verb | Arguments | `data` |
 | --- | --- | --- |
 | `version` | — | `{"guiassert": str, "contract": {"name": "guiassert-desktop", "major": 1, "minor": int}, "platform": str, "arch": str, "compiled": {"capture": [str], "ocr": [str], "tree": [str], "input": [str], "session": [str], "media": [str]}}` |
-| `capabilities` | `[--probe]` (run active probes, may take seconds) | `{"platform": str, "selected": {module: str}, "features": [{"feature": str, "backend": str, "state": "supported"\|"available"\|"degraded"\|"unavailable", "reason": str\|null, "remedy": str\|null}], "permissions": Permissions}` |
+| `capabilities` | `[--probe]` (run active probes, may take seconds); honours `--session` (that session's backends) | `{"platform": str, "selected": {module: str}, "features": [{"feature": str, "backend": str, "state": "supported"\|"available"\|"degraded"\|"unavailable", "reason": str\|null, "remedy": str\|null}], "permissions": Permissions}` |
 | `permissions` | `[--request screen-recording\|accessibility]` (shows the OS prompt; never bypasses it) | `{"permissions": Permissions, "requested": str\|null}` where `Permissions = {"screenRecording", "accessibility", "inputSynthesis", "desktopAccess"}` each `"granted"\|"denied"\|"not-determined"\|"not-applicable"\|"unknown"`, plus `"identity": str\|null` (the bundle or binary the OS evaluates) |
 
 **Sessions and applications**
 
 | Verb | Arguments | `data` |
 | --- | --- | --- |
-| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc] [--account <user>]` (`--account` only for `isolated`) | `{"session": Session}` |
+| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc] [--account <user>]` (`--account` only for `isolated`); returns once the session is ready, else exit 5 / `session-failed`; a `--name` in use is exit 2 / `name-in-use` (§6.1) | `{"session": Session}` (state `running`) |
 | `session-list` | — | `{"sessions": [Session]}` (includes `host`) |
 | `session-info` | `<id>` | `{"session": Session}` |
 | `session-stop` | `<id> [--force]` | `{"session": Session}` (state `stopped`); stopping `host` is `bad-args` |
 | `apps` | — | `{"apps": [App]}` |
-| `app-launch` | `(--bundle-id <id> \| --app <path> \| -- <argv…>) [--wait-window-ms N]` | `{"app": App, "window": Window\|null}` |
+| `app-launch` | `(--bundle-id <id> \| --app <path> \| -- <argv…>) [--wait-window-ms N] [--env KEY=VALUE]…` | `{"app": App, "window": Window\|null}` |
 | `app-quit` | `<pid> [--force]` | `{"pid": int, "exited": bool, "exitCode": int\|null}` |
+
+`app-launch` without `--wait-window-ms` does not wait: `window` is the
+application's first window if it already has one, else `null`. With
+`--wait-window-ms N`, when no window appears within N ms while the process is
+still running, the verb answers exit 7 / `condition-not-met` with
+`details.app` (the `App`, its pid included) and leaves the application
+running, so the caller can `app-quit` it instead of leaking it. `--env
+KEY=VALUE` (repeatable; `KEY` matches `[A-Za-z_][A-Za-z0-9_]*`, each key at
+most once) sets a variable for the launched process over `Session.env`
+(§6.1).
 
 **Displays and windows**
 
@@ -560,6 +765,15 @@ GuiAssert's own output.
 | `record-start` | `--out <path.mp4> [--display\|--window\|--region] [--fps F]` | `{"recording": Recording}` (state `recording`) |
 | `record-stop` | `<recording-id>` | `{"recording": Recording}` (state `stopped`, `durationMs` and `frames` set) |
 | `recordings` | — | `{"recordings": [Recording]}` |
+
+**Recordings.** `record` and `record-stop` report `durationMs`, `frames`,
+`width` and `height` **measured from the finalized file**: an MP4's from its
+container (the video track's duration, sample count and presentation size),
+a PNG sequence's from its frames (its duration is frames / fps). A file whose
+container is not finalized (no `moov` index, zero duration, no samples, a
+frame that does not decode) is exit 5 / `capture-failed` with
+`details.recording` (the recording, state `failed`), never state `stopped`;
+`recordings` lists it as `failed`.
 
 `--out` is required: GuiAssert writes where it is told and keeps no capture
 archive. With no `--display` / `--window` / `--region`, a capture verb uses the
@@ -583,9 +797,9 @@ knobs; an engine that has no equivalent rejects them (`unsupported-option`).
 | Verb | Arguments | `data` |
 | --- | --- | --- |
 | `tree` | `(--pid N \| --app <name> \| --window <id> \| --focused) [--depth N] [--max-nodes N (default 5000)]` | `{"root": Node, "nodeCount": int, "truncated": bool}` |
-| `find` | `[--pid\|--app\|--window] [--role r] [--name s] [--name-contains s] [--state s]… [--limit N]` | `{"elements": [Element], "truncated": bool}` |
+| `find` | `[--pid\|--app\|--window] [--role r] [--name s] [--name-contains s] [--ignore-case] [--state s]… [--limit N]` (matching rules above) | `{"elements": [Element], "truncated": bool}` |
 | `element` | `<path>` | `{"element": Element}` |
-| `element-action` | `<path> <action> [--value v]` (`press`, `focus`, `set-value`, `increment`, `decrement`, `expand`, `collapse`, `select`, `show-menu`, `scroll-to-visible`) | `{"element": Element, "action": str}` (the element re-read after the action) |
+| `element-action` | `<path> <action> [--value v \| --value-stdin]` (`press`, `focus`, `set-value`, `increment`, `decrement`, `expand`, `collapse`, `select`, `show-menu`, `scroll-to-visible`; `--value` / `--value-stdin` only for `set-value`, and `set-value --value ""` is valid and clears the field) | `{"element": Element, "action": str}` (the element re-read after the action) |
 | `wait` | `(--element <filter flags as in find> \| --text <needle> [--ocr-region x,y,w,h] --out-dir <dir> \| --window <query flags as in windows> \| --window-gone <query>) --wait-ms N [--interval-ms N]` | `{"matched": true, "elapsedMs": int, "attempts": int, "element": Element\|null, "word": OcrWord\|null, "image": ImageRef\|null, "window": Window\|null}`; on expiry exit 7 / `condition-not-met` with `details.attempts`; serve streams `poll` |
 
 `wait --wait-ms` bounds the wait condition and expires as `condition-not-met`;
@@ -600,10 +814,31 @@ never depends on a race between the two clocks.
 | --- | --- | --- |
 | `move` | `--to x,y` | `{"input": InputReport}` |
 | `click` | `--at x,y [--button left\|right\|middle] [--count N] [--modifiers cmd,shift,…]` | `{"input": InputReport}` |
-| `drag` | `--from x,y --to x,y [--button b] [--steps N] [--duration-ms N]` | `{"input": InputReport}` |
+| `drag` | `--from x,y --to x,y [--path x,y;x,y;…] [--button b] [--steps N] [--duration-ms N]` | `{"input": InputReport}` (`path` set) |
 | `scroll` | `--at x,y --dx N --dy N [--unit line\|pixel]` | `{"input": InputReport}` |
-| `type` | `<text> \| --text-file <path>` `[--interval-ms N]` | `{"input": InputReport}` (`length` set, text not echoed) |
-| `key` | `<combo>` e.g. `cmd+s`, `ctrl+shift+Tab`, `Return` (names from a fixed, documented key table; unknown names are `bad-args`) | `{"input": InputReport}` (`keys` normalized) |
+| `type` | `(<text> \| --text-file <path> \| --stdin)` `[--interval-ms N]` | `{"input": InputReport}` (`length` set, text not echoed) |
+| `key` | `<combo>` e.g. `cmd+s`, `ctrl+shift+Tab`, `Return` (names from the key table above; unknown names are `bad-args`) | `{"input": InputReport}` (`keys` normalized) |
+
+**Secrets off `argv`.** On the one-shot CLI, `argv` is visible to other local
+users through the process table, and `--text-file` puts the text on disk.
+`type --stdin` reads the text to type from standard input, and
+`element-action <path> set-value --value-stdin` the value to set; both take
+the input whole and exactly as given (nothing is stripped, a trailing newline
+is typed), at most 1 MiB, and it must be valid UTF-8. Exactly one of `<text>`,
+`--text-file` and `--stdin` is given. The input is read to its end (a
+terminal, too, until end-of-file); an empty input is the empty string, and a
+standard input that is closed or cannot be read is exit 2 / `invalid-value`.
+A read still waiting for its writer is interrupted by the `--timeout-ms`
+deadline (exit 7) and by a signal (exit 8), like any other wait. Over `serve`
+the input is the `run` request's `stdin` key (§8.3), and since a request line
+is at most 1 MiB, its JSON-escaped `stdin` is bounded by that as well.
+
+**Drag paths.** `drag --path x,y;x,y;…` adds up to 1000 waypoints between
+`--from` and `--to`: the button is pressed at `--from`, the pointer passes
+through every waypoint in order with the button held, and it is released at
+`--to`; `--steps` pointer events are delivered per segment and
+`--duration-ms` spans the whole drag. A drag cannot be composed from
+separate `move` requests, because the button must stay down.
 
 Input verbs act at desktop coordinates in the given session. They report what
 was delivered, not what the application did; checking the effect is the
@@ -647,6 +882,12 @@ Records from a newer schema are refused (`internal`), never half-read.
 
 ### 7.7 Contract versioning
 
+**Contract `guiassert-desktop/1.0` is FROZEN** (2026-10-20, after GS2.1
+decided and implemented the consumer requests C1–C17 of the milestone file).
+Everything this section's tables, objects and rules say is the 1.0 contract;
+from here on every change is an **additive 1.x minor** under the rules
+below, and anything that would change a shape or a meaning needs major 2.
+
 - The contract is `guiassert-desktop/<major>.<minor>`; `version` reports it, and
   so does the serve `ready` line.
 - **Minor** (compatible): a new verb, a new optional flag, a new key in a
@@ -655,7 +896,10 @@ Records from a newer schema are refused (`internal`), never half-read.
   type, an exit code, a kind, or the meaning of an existing value.
 - The contract table in this document and `core/contract.nim` change together;
   `tests/contract/tcontract_schema.nim` checks that every verb listed here is
-  implemented, and that the fixture emits every documented key of its `data`.
+  implemented, that the fixture emits every documented key of its `data`, and
+  that the closed lists written here (the reasons of §7.3, the feature
+  vocabulary and degraded reasons, the key table) equal the ones the code
+  enforces (`core/contract`, `core/keys`).
 - A binary implements exactly one major. `--contract <major>` and the serve
   `hello` let a consumer fail fast on a mismatch.
 
@@ -710,7 +954,12 @@ On start the daemon writes one line before reading anything:
 - `op: "run"`: `argv` is exactly a CLI invocation without the program name. It
   is parsed by the same parser and executed by the same code as the CLI, so the
   envelope is **byte-identical** to the CLI's stdout line for the same argv and
-  state. `timeoutMs` is equivalent to `--timeout-ms`.
+  state. `timeoutMs` is equivalent to `--timeout-ms`. `stdin` (optional, a
+  string) is the request's standard input, what `type --stdin` and
+  `element-action … --value-stdin` read (the daemon's own stdin is the
+  protocol stream and is never a verb's input); a request with `stdin` whose
+  argv reads none is exit 2 / `conflicting-arguments`, and `--stdin` in a
+  request without it is exit 2 / `missing-argument`.
 - `op: "hello"`: optional; answers `{"contract": …, "accepted": bool}` with
   `accepted: false` and exit 2 / `contract-unsupported` when none of the listed
   majors is implemented.
@@ -812,6 +1061,15 @@ deterministically from a scenario file, with no OS access:
   OCR words on it. A built-in default scenario ("fixture-form": one window with
   a labelled text field, a checkbox and a Submit button) is used when none is
   given. Scenario files are parsed strictly (unknown keys are rejected).
+  The built-in scenario's form also has a **protected** Password field
+  (`AXSecureTextField`, state `protected`, §7.5) whose characters the fixture
+  never reports or draws (it shows one `*` per character), and its window
+  names a `document`. Scenario keys beyond the contract objects: per node an
+  optional `text` (default: a label's name, a text field's value) and
+  `onPress`; at the top `launchWindow` (default `true`; `false` makes
+  launched applications open no window, so `--wait-window-ms` expires) and
+  the rendering and clock keys of the built-in scenario. An app's
+  `accessible` must agree with whether the scenario gives it a tree.
 - State lives under `<state-dir>/fixture/` so that verbs compose **across
   invocations**: `type` into the focused text field changes that node's
   `value`; `click` on the Submit button's bounds adds a status label to the
@@ -826,7 +1084,22 @@ deterministically from a scenario file, with no OS access:
   separated) makes that verb fail with that code; `GUIASSERT_FIXTURE_DENY=
   screen-recording|accessibility` makes the matching verbs return exit 6;
   `GUIASSERT_FIXTURE_UNAVAILABLE=<module>` makes a module exit 4;
-  `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>` makes a verb slow enough to cancel.
+  `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>` makes a verb slow enough to cancel;
+  `GUIASSERT_FIXTURE_HOST=exit-before-ready|never-ready` makes the session
+  host of the next `session-start` exit, or never report ready (exit 5 /
+  `session-failed`, §6.1); `GUIASSERT_FIXTURE_RECORDING=unfinalized` writes
+  recordings without their container index (exit 5 / `capture-failed`,
+  §7.5).
+- Fixture sessions are ready once their session host has seen its record;
+  their `env` is `{"GUIASSERT_SESSION": <id>}` and their `envUnset`
+  `["DISPLAY", "WAYLAND_DISPLAY"]` (a fixture session has no display server,
+  so the host's must not leak in). Every `app-launch` records the
+  environment the process would receive relative to the session in
+  `<state-dir>/fixture/launches/<pid>.json` (`{"schema":
+  "guiassert/fixture-launch/1", "session", "pid", "env": {…}, "envUnset":
+  […]}`: `Session.env` merged with `--env`, and the `envUnset` names that
+  `--env` does not set), so a consumer's launch policy is observable without a
+  real process.
 - The fixture is shipped as a flake package output (`guiassert-fixture`)
   alongside `guiassert`, so consumers pin both by revision.
 

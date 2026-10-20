@@ -31,8 +31,9 @@ const
   contractName* = "guiassert-desktop"
   contractMajor* = 1
   contractMinor* = 0
-    ## Minor versions add verbs, flags, keys, reasons, events or backend
-    ## names (spec §7.7).
+    ## Contract 1.0 is frozen (spec §7.7): every later change is an additive
+    ## 1.x minor (a new verb, flag, key, reason, feature, event or backend
+    ## name); changing a shape or a meaning needs a new major.
   serveProtocolVersion* = 1
     ## The `"v"` of every serve message; moves with the contract major.
   maxSafeInteger* = 9007199254740991'i64
@@ -69,7 +70,7 @@ const
     @["exception", "serialization"],
     @["unknown-verb", "unknown-flag", "missing-argument", "invalid-value",
       "conflicting-arguments", "unknown-backend", "contract-unsupported",
-      "invalid-name"],
+      "invalid-name", "name-in-use"],
     @["session", "display", "window", "app", "element", "recording", "file",
       "request"],
     @["not-compiled-in", "wrong-platform", "missing-tool",
@@ -82,6 +83,27 @@ const
     @["deadline", "condition-not-met"],
     @["request", "signal", "shutdown"]]
     ## The closed reason set of each kind (spec §7.3, contract 1.0).
+
+  featureVocabulary*: seq[tuple[feature, module: string]] = @[
+    ("window-enumeration", "capture"), ("display-capture", "capture"),
+    ("window-capture", "capture"), ("region-capture", "capture"),
+    ("own-pixels-capture", "capture"), ("recording", "capture"),
+    ("ocr", "ocr"),
+    ("tree-read", "tree"), ("element-actions", "tree"),
+    ("pointer-input", "input"), ("keyboard-input", "input"),
+    ("window-management", "input"),
+    ("session-management", "session"), ("app-management", "session"),
+    ("session-virtual-display", "session"), ("session-isolated", "session"),
+    ("session-headless", "session"), ("session-vnc", "session"),
+    ("video-decode", "media")]
+    ## The closed set of `capabilities.features[].feature` names and the
+    ## module whose backend provides each (spec §7.5, "Features"). The same
+    ## names are `details.feature` of every exit 4 and exit 6 envelope.
+
+  degradedReasons*: seq[string] = @["window-crop", "png-sequence",
+    "fixture-frames-only", "titles-redacted", "posted-delivery"]
+    ## The closed set of `reason`s of a feature whose state is `degraded`
+    ## (spec §7.5, "Features").
 
 func code*(k: ErrorKind): int = ord(k) + 1
   ## The process exit code of kind `k`.
@@ -123,6 +145,41 @@ proc newContractError*(kind: ErrorKind, reason, msg: string, remedy = "",
 proc badArgs*(reason, msg: string, details: JsonNode = nil): ref ContractError =
   ## Shorthand for a `bad-args` error.
   newContractError(ekBadArgs, reason, msg, details = details)
+
+proc isFeature*(name: string): bool =
+  ## True when `name` is in the feature vocabulary.
+  for (f, _) in featureVocabulary:
+    if f == name: return true
+  false
+
+proc featureModule*(name: string): string =
+  ## The module whose backend provides feature `name` ("" for an unknown one).
+  for (f, m) in featureVocabulary:
+    if f == name: return m
+  ""
+
+proc featuresOfModule*(module: string): seq[string] =
+  ## The features module `module` provides, in vocabulary order.
+  for (f, m) in featureVocabulary:
+    if m == module: result.add f
+
+const featureFreeReasons* = ["session-not-running"]
+  ## The `backend-unavailable` reasons whose `details.feature` is always
+  ## null: the session, not a capability, is missing (spec §7.3).
+
+proc withFeature*(e: ref ContractError, feature: string): ref ContractError =
+  ## Attach `details.feature` to an exit 4 or exit 6 error that does not
+  ## carry one yet (spec §7.3): `feature`, or null for a feature-free reason
+  ## or when `feature` is "". Any other error is returned unchanged; an error
+  ## that already names its feature (or null) keeps it.
+  result = e
+  if e.kind notin {ekBackendUnavailable, ekPermissionDenied}: return
+  if e.details.isNil: e.details = newJObject()
+  elif e.details.kind != JObject: return
+  if e.details.hasKey("feature"): return
+  e.details["feature"] =
+    if feature.len == 0 or e.reason in featureFreeReasons: newJNull()
+    else: %feature
 
 proc shapeError(path, msg: string): ref JsonShapeError =
   newException(JsonShapeError, path & ": " & msg)
@@ -378,7 +435,8 @@ proc toJson*(w: Window): JsonNode =
   var lossy = false
   result = %*{"id": strField(w.id, lossy), "pid": w.pid,
               "app": strField(w.app, lossy), "appId": optStrField(w.appId, lossy),
-              "title": optStrField(w.title, lossy), "bounds": w.bounds.toJson,
+              "title": optStrField(w.title, lossy),
+              "document": optStrField(w.document, lossy), "bounds": w.bounds.toJson,
               "display": optStrField(w.display, lossy), "layer": w.layer,
               "onScreen": w.onScreen, "focused": w.focused,
               "minimized": w.minimized}
@@ -386,13 +444,14 @@ proc toJson*(w: Window): JsonNode =
 
 proc fromJson*(_: typedesc[Window], n: JsonNode, path = "window"): Window =
   ## Strict inverse of `toJson(Window)`.
-  expectObject(n, path, ["id", "pid", "app", "appId", "title", "bounds",
-                         "display", "layer", "onScreen", "focused",
+  expectObject(n, path, ["id", "pid", "app", "appId", "title", "document",
+                         "bounds", "display", "layer", "onScreen", "focused",
                          "minimized"], ["lossy"])
   discard readLossy(n, path)
   Window(id: readStr(n, "id", path), pid: readInt(n, "pid", path),
          app: readStr(n, "app", path), appId: readOptStr(n, "appId", path),
          title: readOptStr(n, "title", path),
+         document: readOptStr(n, "document", path),
          bounds: rectFromJson(n["bounds"], path & ".bounds"),
          display: readOptStr(n, "display", path),
          layer: readInt(n, "layer", path),
@@ -406,19 +465,22 @@ proc toJson*(a: App): JsonNode =
   result = %*{"pid": a.pid, "name": strField(a.name, lossy),
               "bundleId": optStrField(a.bundleId, lossy),
               "appId": optStrField(a.appId, lossy),
-              "frontmost": a.frontmost, "hidden": a.hidden}
+              "frontmost": a.frontmost, "hidden": a.hidden,
+              "accessible": (if a.accessible.isNone: newJNull() else: %a.accessible.get)}
   result.addLossy lossy
 
 proc fromJson*(_: typedesc[App], n: JsonNode, path = "app"): App =
   ## Strict inverse of `toJson(App)`.
   expectObject(n, path, ["pid", "name", "bundleId", "appId", "frontmost",
-                         "hidden"], ["lossy"])
+                         "hidden", "accessible"], ["lossy"])
   discard readLossy(n, path)
-  App(pid: readInt(n, "pid", path), name: readStr(n, "name", path),
-      bundleId: readOptStr(n, "bundleId", path),
-      appId: readOptStr(n, "appId", path),
-      frontmost: readBool(n, "frontmost", path),
-      hidden: readBool(n, "hidden", path))
+  result = App(pid: readInt(n, "pid", path), name: readStr(n, "name", path),
+               bundleId: readOptStr(n, "bundleId", path),
+               appId: readOptStr(n, "appId", path),
+               frontmost: readBool(n, "frontmost", path),
+               hidden: readBool(n, "hidden", path))
+  if n["accessible"].kind != JNull:
+    result.accessible = some(readBool(n, "accessible", path))
 
 proc toJson*(i: Isolation): JsonNode =
   ## `Isolation` (spec §7.5).
@@ -434,13 +496,15 @@ proc toJson*(s: Session): JsonNode =
   ## `Session` (spec §7.5).
   var env = newJObject()
   for k, v in s.env: env[k] = %v
+  var envUnset = newJArray()
+  for k in s.envUnset: envUnset.add %k
   var displays = newJArray()
   for d in s.displays: displays.add d.toJson
   result = %*{"id": s.id, "name": optToJson(s.name), "kind": $s.kind,
               "backend": s.backend, "platform": $s.platform,
               "state": $s.state, "stateReason": optToJson(s.stateReason),
               "lifetime": $s.lifetime, "isolation": s.isolation.toJson,
-              "displays": displays, "env": env,
+              "displays": displays, "env": env, "envUnset": envUnset,
               "vnc": (if s.vnc.isNone: newJNull()
                       else: %*{"host": s.vnc.get.host, "port": s.vnc.get.port}),
               "backends": {"capture": s.backends.capture, "tree": s.backends.tree,
@@ -450,8 +514,8 @@ proc toJson*(s: Session): JsonNode =
 proc fromJson*(_: typedesc[Session], n: JsonNode, path = "session"): Session =
   ## Strict inverse of `toJson(Session)`.
   const keys = ["id", "name", "kind", "backend", "platform", "state",
-                "stateReason", "lifetime", "isolation", "displays", "env", "vnc",
-                "backends", "createdAt", "hostPid"]
+                "stateReason", "lifetime", "isolation", "displays", "env",
+                "envUnset", "vnc", "backends", "createdAt", "hostPid"]
   expectObject(n, path, keys)
   result.id = readStr(n, "id", path)
   result.name = readOptStr(n, "name", path)
@@ -468,6 +532,9 @@ proc fromJson*(_: typedesc[Session], n: JsonNode, path = "session"): Session =
   for k, v in n["env"].pairs:
     expectKind(v, {JString}, path & ".env." & k, "a string")
     result.env[k] = v.getStr
+  for i, k in readArray(n, "envUnset", path):
+    expectKind(k, {JString}, path & ".envUnset[" & $i & "]", "a string")
+    result.envUnset.add k.getStr
   if n["vnc"].kind != JNull:
     let v = n["vnc"]
     expectObject(v, path & ".vnc", ["host", "port"])
@@ -557,8 +624,11 @@ proc fromJson*(_: typedesc[OcrWord], n: JsonNode, path = "word"): OcrWord =
     raise shapeError(path & ".confidence", "confidence is on the 0..100 scale")
 
 proc toJson*(n: Node): JsonNode =
-  ## `Node` (spec §7.5), children included.
+  ## `Node` (spec §7.5), children included. A `protected` node (a password
+  ## or secure text field) is written with `value` and `text` null whatever
+  ## the backend put there, so its characters never cross the contract.
   var lossy = false
+  let protected = stProtected in n.states
   var states = newJArray()
   for s in NodeState:
     if s in n.states: states.add %($s)
@@ -569,7 +639,9 @@ proc toJson*(n: Node): JsonNode =
   for c in n.children: children.add c.toJson
   result = %*{"path": n.path, "role": $n.role,
               "nativeRole": strField(n.nativeRole, lossy),
-              "name": optStrField(n.name, lossy), "value": optStrField(n.value, lossy),
+              "name": optStrField(n.name, lossy),
+              "value": (if protected: newJNull() else: optStrField(n.value, lossy)),
+              "text": (if protected: newJNull() else: optStrField(n.text, lossy)),
               "description": optStrField(n.description, lossy),
               "bounds": optToJson(n.bounds), "states": states, "actions": actions,
               "childCount": n.childCount, "children": children}
@@ -583,7 +655,7 @@ proc elementToJson*(n: Node): JsonNode =
 
 proc fromJson*(_: typedesc[Node], n: JsonNode, path = "node"): Node =
   ## Strict inverse of `toJson(Node)`.
-  expectObject(n, path, ["path", "role", "nativeRole", "name", "value",
+  expectObject(n, path, ["path", "role", "nativeRole", "name", "value", "text",
                          "description", "bounds", "states", "actions",
                          "childCount", "children"], ["lossy"])
   discard readLossy(n, path)
@@ -596,6 +668,7 @@ proc fromJson*(_: typedesc[Node], n: JsonNode, path = "node"): Node =
   result.nativeRole = readStr(n, "nativeRole", path)
   result.name = readOptStr(n, "name", path)
   result.value = readOptStr(n, "value", path)
+  result.text = readOptStr(n, "text", path)
   result.description = readOptStr(n, "description", path)
   if n["bounds"].kind != JNull:
     result.bounds = some(rectFromJson(n["bounds"], path & ".bounds"))
@@ -607,6 +680,8 @@ proc fromJson*(_: typedesc[Node], n: JsonNode, path = "node"): Node =
     expectKind(a, {JString}, path & ".actions[" & $i & "]", "a string")
     try: result.actions.incl parseNodeAction(a.getStr)
     except TreeError as e: raise shapeError(path & ".actions", e.msg)
+  if stProtected in result.states and (result.value.isSome or result.text.isSome):
+    raise shapeError(path, "a protected node reports neither value nor text")
   result.childCount = readInt(n, "childCount", path)
   for i, c in readArray(n, "children", path):
     result.children.add Node.fromJson(c, path & ".children[" & $i & "]")
@@ -615,15 +690,19 @@ proc fromJson*(_: typedesc[Node], n: JsonNode, path = "node"): Node =
 
 proc toJson*(r: InputReport): JsonNode =
   ## `InputReport` (spec §7.5). Typed text never appears: only `length`.
+  var path = newJNull()
+  if r.path.isSome:
+    path = newJArray()
+    for p in r.path.get: path.add p.toJson
   %*{"kind": r.kind, "at": optToJson(r.at), "to": optToJson(r.to),
      "button": optToJson(r.button), "count": optToJson(r.count),
-     "length": optToJson(r.length), "keys": optToJson(r.keys),
+     "length": optToJson(r.length), "keys": optToJson(r.keys), "path": path,
      "delivery": $r.delivery, "session": r.session}
 
 proc fromJson*(_: typedesc[InputReport], n: JsonNode, path = "input"): InputReport =
   ## Strict inverse of `toJson(InputReport)`.
   expectObject(n, path, ["kind", "at", "to", "button", "count", "length", "keys",
-                         "delivery", "session"])
+                         "path", "delivery", "session"])
   result = InputReport(kind: readStr(n, "kind", path),
                        button: readOptStr(n, "button", path),
                        count: readOptInt(n, "count", path),
@@ -633,6 +712,11 @@ proc fromJson*(_: typedesc[InputReport], n: JsonNode, path = "input"): InputRepo
                        session: readStr(n, "session", path))
   if n["at"].kind != JNull: result.at = some(pointFromJson(n["at"], path & ".at"))
   if n["to"].kind != JNull: result.to = some(pointFromJson(n["to"], path & ".to"))
+  if n["path"].kind != JNull:
+    var pts: seq[Point]
+    for i, p in readArray(n, "path", path):
+      pts.add pointFromJson(p, path & ".path[" & $i & "]")
+    result.path = some(pts)
 
 proc toJson*(p: Permissions): JsonNode =
   ## `Permissions` (spec §7.5, `permissions` verb).
@@ -650,17 +734,46 @@ proc fromJson*(_: typedesc[Permissions], n: JsonNode, path = "permissions"): Per
               desktopAccess: readEnum[PermissionState](n, "desktopAccess", path),
               identity: readOptStr(n, "identity", path))
 
+proc featureProblem*(f: Feature): string =
+  ## "" when `f` follows the feature rules of spec §7.5, else what is wrong:
+  ## the name is in the vocabulary; `supported` and `available` carry no
+  ## reason; `degraded` carries one of `degradedReasons`; `unavailable`
+  ## carries a `backend-unavailable` or `permission-denied` reason.
+  if not isFeature(f.feature): return "'" & f.feature & "' is not a feature of the vocabulary"
+  case f.state
+  of fsSupported, fsAvailable:
+    if f.reason.isSome: return "a " & $f.state & " feature carries no reason"
+  of fsDegraded:
+    if f.reason.isNone or f.reason.get notin degradedReasons:
+      return "a degraded feature's reason is one of " & degradedReasons.join(", ")
+  of fsUnavailable:
+    if f.reason.isNone or (f.reason.get notin kindReasons[ekBackendUnavailable] and
+                           f.reason.get notin kindReasons[ekPermissionDenied]):
+      return "an unavailable feature's reason is a backend-unavailable or " &
+             "permission-denied reason"
+  ""
+
 proc toJson*(f: Feature): JsonNode =
-  ## One `capabilities` feature entry (spec §7.5).
+  ## One `capabilities` feature entry (spec §7.5). A feature outside the
+  ## rules (`featureProblem`) is an `internal` / `serialization` error, so an
+  ## undocumented name or reason never reaches a consumer.
+  let problem = featureProblem(f)
+  if problem.len > 0:
+    raise newContractError(ekInternal, "serialization",
+      "cannot serialize the feature entry: " & problem)
   %*{"feature": f.feature, "backend": f.backend, "state": $f.state,
      "reason": optToJson(f.reason), "remedy": optToJson(f.remedy)}
 
 proc fromJson*(_: typedesc[Feature], n: JsonNode, path = "feature"): Feature =
   ## Strict inverse of `toJson(Feature)`.
   expectObject(n, path, ["feature", "backend", "state", "reason", "remedy"])
-  Feature(feature: readStr(n, "feature", path), backend: readStr(n, "backend", path),
-          state: readEnum[FeatureState](n, "state", path),
-          reason: readOptStr(n, "reason", path), remedy: readOptStr(n, "remedy", path))
+  result = Feature(feature: readStr(n, "feature", path),
+                   backend: readStr(n, "backend", path),
+                   state: readEnum[FeatureState](n, "state", path),
+                   reason: readOptStr(n, "reason", path),
+                   remedy: readOptStr(n, "remedy", path))
+  let problem = featureProblem(result)
+  if problem.len > 0: raise shapeError(path, problem)
 
 proc contractJson*(): JsonNode =
   ## `{"name": "guiassert-desktop", "major": 1, "minor": 0}`.

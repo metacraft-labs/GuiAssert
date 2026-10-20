@@ -21,7 +21,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_shims; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done

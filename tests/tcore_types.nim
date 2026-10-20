@@ -115,8 +115,13 @@ suite "core tree types":
                     children: @[field, submit, unnamed], childCount: 3)
     check field.matches(ElementFilter(role: some(roleTextField)))
     check not submit.matches(ElementFilter(nameContains: some("mail")))
-    check field.matches(ElementFilter(nameContains: some("MAIL"),
+    # Names match case-sensitively unless ignoreCase (spec §7.5, "Matching
+    # rules"; contract 1.0 decision C13).
+    check not field.matches(ElementFilter(nameContains: some("MAIL"),
+                                          states: {stEditable}))
+    check field.matches(ElementFilter(nameContains: some("MAIL"), ignoreCase: true,
                                       states: {stEditable}))
+    check field.matches(ElementFilter(nameContains: some("mail"), states: {stEditable}))
     check not field.matches(ElementFilter(states: {stChecked}))
     check not unnamed.matches(ElementFilter(name: some("")))
     let found = root.findAll(ElementFilter(role: some(roleButton)))

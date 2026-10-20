@@ -50,6 +50,5 @@ proc newFixtureOcr*(cfg: FixtureConfig): OcrEngine =
       words.add w
     initOcrResult(words, fixtureBackendName, langs)
   result.features = proc (probe: bool): seq[Feature] =
-    @[Feature(feature: "ocr", backend: fixtureBackendName, state: fsSupported,
-              reason: some("reads fixture-captured frames only"),
-              remedy: none(string))]
+    @[Feature(feature: "ocr", backend: fixtureBackendName, state: fsDegraded,
+              reason: some("fixture-frames-only"), remedy: none(string))]

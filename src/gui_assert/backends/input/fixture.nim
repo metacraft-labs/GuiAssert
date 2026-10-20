@@ -61,20 +61,28 @@ proc newFixtureInput*(cfg: FixtureConfig): InputBackend =
     result.count = some(count)
     if modifiers.len > 0: result.keys = some(modifiers.join("+"))
 
-  result.drag = proc (session: string, src, dst: Point, button: MouseButton,
+  result.drag = proc (session: string, path: seq[Point], button: MouseButton,
                       steps: int, durationMs: int): InputReport =
     cfg.checkAccessibility()
-    let per = if steps > 0: durationMs div steps else: 0
-    for i in 0 ..< steps:
-      cfg.token.sleepCancellable(per)
+    if path.len < 2:
+      raise newBackendError(BackendError, fixtureBackendName, "input-failed",
+        "a drag needs a start and an end point")
+    # The pointer visits every vertex in order, `steps` events per segment,
+    # with the button held throughout; the whole drag takes `durationMs`.
+    let events = steps * (path.len - 1)
+    let per = if events > 0: durationMs div events else: 0
+    for seg in 0 ..< path.len - 1:
+      for i in 0 ..< steps:
+        cfg.token.sleepCancellable(per)
     cfg.transact(t):
       var d = cfg.loadDesktop(t, session)
-      d.pointer = dst
+      d.pointer = path[^1]
       cfg.saveDesktop(session, d)
     result = report("drag", session)
-    result.at = some(src)
-    result.to = some(dst)
+    result.at = some(path[0])
+    result.to = some(path[^1])
     result.button = some($button)
+    result.path = some(path)
 
   result.scroll = proc (session: string, at: Point, dx, dy: int,
                         unit: ScrollUnit): InputReport =
@@ -154,9 +162,9 @@ proc newFixtureInput*(cfg: FixtureConfig): InputBackend =
   result.features = proc (probe: bool): seq[Feature] =
     let st = if cfg.env.denyAccessibility: fsUnavailable else: fsSupported
     let r = if cfg.env.denyAccessibility: some("tcc-accessibility") else: none(string)
-    @[Feature(feature: "pointer", backend: fixtureBackendName, state: st, reason: r,
+    @[Feature(feature: "pointer-input", backend: fixtureBackendName, state: st, reason: r,
               remedy: none(string)),
-      Feature(feature: "keyboard", backend: fixtureBackendName, state: st, reason: r,
+      Feature(feature: "keyboard-input", backend: fixtureBackendName, state: st, reason: r,
               remedy: none(string)),
-      Feature(feature: "window-placement", backend: fixtureBackendName, state: st,
+      Feature(feature: "window-management", backend: fixtureBackendName, state: st,
               reason: r, remedy: none(string))]

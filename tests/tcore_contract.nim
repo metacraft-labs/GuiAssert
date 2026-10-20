@@ -20,7 +20,8 @@ proc sampleSession(): Session =
                                        primary: true, isVirtual: true)],
                    vnc: some(VncEndpoint(host: "127.0.0.1", port: 5901)),
                    backends: SessionBackends(capture: "a", tree: "b", input: "c"),
-                   createdAt: "2026-01-01T00:00:01.000Z", hostPid: some(42))
+                   createdAt: "2026-01-01T00:00:01.000Z", hostPid: some(42),
+                   envUnset: @["DISPLAY", "NO_AT_BRIDGE"])
   result.env["K"] = "V"
 
 suite "contract envelope and kinds":
@@ -97,14 +98,20 @@ suite "contract objects":
     check back.toJson == s.toJson
     check back.env["K"] == "V" and back.hostPid == some(42) and back.kind == skHeadless and
           back.vnc.get.port == 5901 and back.lifetime == slOwner
+    check back.envUnset == @["DISPLAY", "NO_AT_BRIDGE"]
     let d = s.displays[0]
     check Display.fromJson(d.toJson) == d
     let w = Window(id: "w1", pid: 7, app: "A", appId: some("x"), title: none(string),
+                   document: some("file:///d.txt"),
                    bounds: rect(1, 2, 3, 4), display: some("d1"), layer: 3,
                    onScreen: true, focused: false, minimized: true)
     check Window.fromJson(w.toJson) == w
     let a = App(pid: 7, name: "A", bundleId: some("b"), frontmost: true)
     check App.fromJson(a.toJson) == a
+    check a.toJson["accessible"].kind == JNull
+    for acc in [true, false]:
+      let b = App(pid: 7, name: "A", accessible: some(acc))
+      check App.fromJson(b.toJson) == b
     let src = ImageSource(kind: iskWindowCrop, id: some("w1"), session: some("host"))
     let img = ImageRef(path: "/x.png", format: "png", width: 10, height: 20, scale: 2.0,
                        origin: point(-5, 7), sha256: "ab", capturedAt: formatTimestamp(1),
@@ -118,7 +125,8 @@ suite "contract objects":
     let word = OcrWord(text: "Hi", confidence: 90.0, bbox: [1, 2, 3, 4], lineNum: 1, blockNum: 2)
     check OcrWord.fromJson(word.toJson) == word
     let node = Node(path: "/app[1]", role: roleApplication, nativeRole: "AXApplication",
-                    name: some("A"), states: {stFocused, stEnabled}, actions: {actPress},
+                    name: some("A"), text: some("body"), states: {stFocused, stEnabled},
+                    actions: {actPress},
                     childCount: 1, children: @[Node(path: "/app[1]/button[0]",
                       role: roleButton, nativeRole: "AXButton", bounds: some(rect(1, 1, 2, 2)))])
     check $Node.fromJson(node.toJson).toJson == $node.toJson
@@ -126,13 +134,96 @@ suite "contract objects":
     check node.elementToJson["childCount"].getInt == 1
     let rep = InputReport(kind: "type", length: some(3), delivery: dPosted, session: "s")
     check InputReport.fromJson(rep.toJson) == rep
+    check rep.toJson["path"].kind == JNull
+    let drag = InputReport(kind: "drag", path: some(@[point(1, 2), point(3, 4)]),
+                           delivery: dInjected, session: "s")
+    check InputReport.fromJson(drag.toJson) == drag
+    check $drag.toJson["path"] == "[[1,2],[3,4]]"
     check not rep.toJson.hasKey("text")
     let p = Permissions(screenRecording: psGranted, accessibility: psDenied,
                         inputSynthesis: psUnknown, desktopAccess: psNotApplicable,
                         identity: some("id"))
     check Permissions.fromJson(p.toJson) == p
-    let f = Feature(feature: "x", backend: "b", state: fsDegraded, reason: some("r"))
+    let f = Feature(feature: "window-capture", backend: "b", state: fsDegraded,
+                    reason: some("window-crop"))
     check Feature.fromJson(f.toJson) == f
+
+  test "features follow the closed vocabulary and reason rules":
+    # Spec §7.5 "Features": a name outside the vocabulary, a reason on a
+    # supported feature, a degraded or unavailable feature without its kind
+    # of reason: none is written, none is read.
+    let bad = [Feature(feature: "x", backend: "b", state: fsSupported),
+               Feature(feature: "ocr", backend: "b", state: fsSupported, reason: some("r")),
+               Feature(feature: "ocr", backend: "b", state: fsDegraded, reason: some("busy")),
+               Feature(feature: "ocr", backend: "b", state: fsDegraded),
+               Feature(feature: "ocr", backend: "b", state: fsUnavailable,
+                       reason: some("window-crop")),
+               Feature(feature: "ocr", backend: "b", state: fsUnavailable)]
+    for f in bad:
+      expect ContractError: discard f.toJson
+      var j = %*{"feature": f.feature, "backend": "b", "state": $f.state,
+                 "reason": (if f.reason.isSome: %f.reason.get else: newJNull()),
+                 "remedy": nil}
+      expect JsonShapeError: discard Feature.fromJson(j)
+    for f in [Feature(feature: "ocr", backend: "b", state: fsAvailable),
+              Feature(feature: "recording", backend: "b", state: fsDegraded,
+                      reason: some("png-sequence")),
+              Feature(feature: "tree-read", backend: "b", state: fsUnavailable,
+                      reason: some("tcc-accessibility")),
+              Feature(feature: "video-decode", backend: "b", state: fsUnavailable,
+                      reason: some("not-compiled-in"))]:
+      check Feature.fromJson(f.toJson) == f
+    check featuresOfModule("media") == @["video-decode"]
+    check featureModule("own-pixels-capture") == "capture"
+    check not isFeature("capture")
+
+  test "withFeature names the feature of exit 4 and exit 6 only":
+    let u = withFeature(newContractError(ekBackendUnavailable, "missing-tool", "m"), "ocr")
+    check u.details["feature"].getStr == "ocr"
+    let p = withFeature(newContractError(ekPermissionDenied, "tcc-accessibility", "m",
+                                         details = %*{"backend": "x"}), "tree-read")
+    check p.details["feature"].getStr == "tree-read" and p.details["backend"].getStr == "x"
+    # An error that names its feature (or null) keeps it.
+    let kept = withFeature(newContractError(ekBackendUnavailable, "unsupported-option",
+                                            "m", details = %*{"feature": nil}), "ocr")
+    check kept.details["feature"].kind == JNull
+    let inner = withFeature(withFeature(newContractError(ekBackendUnavailable,
+                                                         "missing-tool", "m"), "region-capture"), "ocr")
+    check inner.details["feature"].getStr == "region-capture"
+    # A feature-free reason is null whatever the verb's feature.
+    let gone = withFeature(newContractError(ekBackendUnavailable, "session-not-running", "m"),
+                           "pointer-input")
+    check gone.details["feature"].kind == JNull
+    # Other kinds are untouched.
+    check withFeature(newContractError(ekBackendError, "busy", "m"), "ocr").details.isNil
+    check withFeature(badArgs("invalid-value", "m"), "ocr").details.isNil
+
+  test "a protected node never carries its value or text":
+    let n = Node(path: "/app[1]/text-field[0]", role: roleTextField, nativeRole: "AXSecureTextField",
+                 name: some("Password"), value: some("hunter2"), text: some("hunter2"),
+                 states: {stProtected, stEditable})
+    let j = n.toJson
+    check j["value"].kind == JNull and j["text"].kind == JNull
+    check "hunter2" notin $j and "hunter2" notin $n.elementToJson
+    check "protected" in $j["states"]
+    var forged = j.copy
+    forged["value"] = %"hunter2"
+    expect JsonShapeError: discard Node.fromJson(forged)
+    # Control: the same node without the state reports both.
+    var open = n
+    open.states.excl stProtected
+    check open.toJson["value"].getStr == "hunter2" and open.toJson["text"].getStr == "hunter2"
+
+  test "element names match case-sensitively unless ignoreCase":
+    let n = Node(path: "/app[1]/button[0]", role: roleButton, nativeRole: "b",
+                 name: some("Submit Ärger"))
+    check n.matches(ElementFilter(name: some("Submit Ärger")))
+    check not n.matches(ElementFilter(name: some("submit ärger")))
+    check n.matches(ElementFilter(name: some("submit ärger"), ignoreCase: true))
+    check n.matches(ElementFilter(nameContains: some("mit Ä")))
+    check not n.matches(ElementFilter(nameContains: some("mit ä")))
+    check n.matches(ElementFilter(nameContains: some("MIT ä"), ignoreCase: true))
+    check not n.matches(ElementFilter(nameContains: some("Cancel"), ignoreCase: true))
 
   test "absent optionals are null, never omitted; arrays are never null":
     let w = Window(id: "w", app: "A").toJson
@@ -194,12 +285,30 @@ suite "keys":
     check normalizeCombo("shift+ctrl+Tab") == "ctrl+shift+Tab"
     check normalizeCombo("Return") == "Return"
     check normalizeCombo("alt+F12") == "alt+F12"
-    for bad in ["", "cmd+", "+s", "ctrl+ctrl+a", "S", "F0", "F25", "Enter", "meta+a",
-                "cmd+s+x", "Ctrl+a"]:
+    for bad in ["", "cmd+", "+s", "ctrl+ctrl+a", "F0", "F25", "f25", "cmd+s+x",
+                "PgUp", "page_up", "hyper+a", "ctrl+control+a", "cmd+meta+a",
+                "Tab+a", "ctrl+\t", "ctrl+ ", "++", "a b", "\x7F", "\xC2\x85"]:
       expect KeyComboError: discard normalizeCombo(bad)
     check parseModifiers("cmd,shift") == {modShift, modCmd}
     expect KeyComboError: discard parseModifiers("cmd,cmd")
+    expect KeyComboError: discard parseModifiers("cmd,meta")
     expect KeyComboError: discard parseModifiers("cmd,")
+
+  test "names are case-insensitive and aliases normalize to the canonical spelling":
+    # Every spelling of the table (spec §7.5, "The key table").
+    for (spelled, canonical) in [("Enter", "Return"), ("enter", "Return"),
+        ("RETURN", "Return"), ("Esc", "Escape"), ("ESCAPE", "Escape"),
+        ("backspace", "BackSpace"), ("pageup", "PageUp"), ("PAGEDOWN", "PageDown"),
+        ("pause", "Pause"), ("insert", "Insert"), ("f5", "F5"), ("F24", "F24"),
+        ("S", "s"), ("é", "é"), ("+", "+"), ("!", "!"), ("1", "1")]:
+      check normalizeCombo(spelled) == canonical
+    for (spelled, canonical) in [("Control+a", "ctrl+a"), ("option+a", "alt+a"),
+        ("command+a", "cmd+a"), ("meta+a", "cmd+a"), ("super+a", "cmd+a"),
+        ("WIN+a", "cmd+a"), ("Ctrl+Shift+Tab", "ctrl+shift+Tab"),
+        ("cmd+option+control+shift+Enter", "ctrl+alt+shift+cmd+Return"),
+        ("ctrl++", "ctrl++")]:
+      check normalizeCombo(spelled) == canonical
+    check parseModifiers("Meta,OPTION") == {modAlt, modCmd}
 
 suite "raster":
   test "text is drawn where its rectangle says, glyphs differ":

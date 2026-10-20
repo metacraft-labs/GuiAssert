@@ -37,6 +37,9 @@ type
     app*: string
     appId*: Option[string]
     title*: Option[string]   ## none when the platform redacts it
+    document*: Option[string]
+      ## The document the window shows, as the platform names it (macOS
+      ## `AXDocument`, a file URL); none where the platform has no equivalent.
     bounds*: Rect
     display*: Option[string]
     layer*: int
@@ -52,6 +55,10 @@ type
     appId*: Option[string]
     frontmost*: bool
     hidden*: bool
+    accessible*: Option[bool]
+      ## Whether the application exposes an accessibility tree on the
+      ## session's bus; none when that cannot be determined (for example
+      ## without the Accessibility permission).
 
   Isolation* = object
     ## Which properties a session isolates from the host session; each is
@@ -106,6 +113,11 @@ type
     isolation*: Isolation
     displays*: seq[Display]
     env*: OrderedTable[string, string]
+      ## What a process spawned into the session needs set (the display, the
+      ## runtime directory, the session bus, the AT-SPI bus, …).
+    envUnset*: seq[string]
+      ## The variables a process spawned into the session must not inherit
+      ## from the caller (for example the host's `DISPLAY`).
     vnc*: Option[VncEndpoint]
     backends*: SessionBackends
     createdAt*: string       ## RFC 3339 UTC with milliseconds
@@ -172,6 +184,9 @@ type
     count*: Option[int]
     length*: Option[int]
     keys*: Option[string]
+    path*: Option[seq[Point]]
+      ## `drag` only: the vertices delivered with the button held, in order
+      ## (`--from`, every `--path` waypoint, `--to`).
     delivery*: Delivery
     session*: string
 

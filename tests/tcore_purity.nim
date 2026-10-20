@@ -45,7 +45,7 @@ const
                   "unicode", "bitops", "endians", "streams", "strformat"]
     ## Spec §3.2. `streams` is for in-memory streams only.
 
-  importFreeCoreModules = ["sha256"]
+  importFreeCoreModules = ["sha256", "mp4"]
     ## Core modules with no import statement at all, so they show no import
     ## edges; `test_core_imports_only_stdlib_allowlist` checks that they
     ## really import nothing.

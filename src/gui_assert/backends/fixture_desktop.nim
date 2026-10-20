@@ -31,7 +31,7 @@
 ## * **Failure injection** (`GUIASSERT_FIXTURE_FAIL`, `_DENY`, `_UNAVAILABLE`,
 ##   `_DELAY_MS`) is parsed here (`parseFixtureEnv`).
 
-import std/[json, options, os, strutils, tables, algorithm, sequtils, math]
+import std/[json, options, os, strutils, tables, algorithm, sequtils, math, unicode]
 
 import ../core/[geometry, image, png, raster, contract, desktop_types,
                 ocr_types, tree_types, interfaces, sha256]
@@ -53,6 +53,7 @@ const
   "languages": ["eng"],
   "ocrConfidence": 96.5,
   "windowCapture": "own-pixels",
+  "launchWindow": true,
   "background": [40, 44, 52],
   "baseFrame": null,
   "pointer": [0, 0],
@@ -62,11 +63,12 @@ const
   ],
   "apps": [
     {"pid": 4242, "name": "Fixture Form", "bundleId": "dev.guiassert.fixture-form",
-     "appId": null, "frontmost": true, "hidden": false}
+     "appId": null, "frontmost": true, "hidden": false, "accessible": true}
   ],
   "windows": [
     {"id": "fixture-window-1", "pid": 4242, "app": "Fixture Form", "appId": null,
-     "title": "Fixture Form", "bounds": [100, 80, 600, 400], "display": "fixture-display-1",
+     "title": "Fixture Form", "document": "file:///fixture/Documents/Form.fixture",
+     "bounds": [100, 80, 600, 400], "display": "fixture-display-1",
      "layer": 0, "onScreen": true, "focused": true, "minimized": false}
   ],
   "trees": [
@@ -89,14 +91,21 @@ const
             "bounds": [130, 260, 120, 36],
             "states": ["focusable", "enabled", "visible"], "actions": ["press", "focus"],
             "onPress": {"addLabel": {"name": "Submitted {field:Name}",
-                                     "bounds": [130, 320, 400, 24]}}}
+                                     "bounds": [130, 320, 400, 24]}}},
+           {"role": "label", "nativeRole": "AXStaticText", "name": "Password",
+            "bounds": [130, 384, 80, 24], "states": ["visible", "enabled"]},
+           {"role": "text-field", "nativeRole": "AXSecureTextField", "name": "Password",
+            "value": "", "bounds": [220, 380, 300, 32],
+            "states": ["focusable", "enabled", "editable", "visible", "protected"],
+            "actions": ["focus", "set-value"]}
          ]}
       ]}}
   ]
 }
 """
     ## The built-in `fixture-form` scenario: one window with a labelled text
-    ## field, a checkbox and a Submit button (spec §9.2).
+    ## field, a checkbox, a Submit button and a protected Password field
+    ## (spec §9.2).
 
 type
   PressEffect* = object
@@ -111,6 +120,8 @@ type
     role*: Role
     nativeRole*: string
     name*, value*, description*: Option[string]
+    text*: Option[string]
+      ## The text content the scenario states; none: derived (`nodeText`).
     bounds*: Option[Rect]
     states*: set[NodeState]
     actions*: set[NodeAction]
@@ -130,6 +141,9 @@ type
     languages*: seq[string]
     ocrConfidence*: float
     windowCapture*: string           ## "own-pixels" or "crop"
+    launchWindow*: bool
+      ## Whether an application `app-launch` starts opens a window (false:
+      ## it runs without one, so `--wait-window-ms` expires).
     background*: Rgb
     baseFrame*: Option[string]       ## absolute path of a PNG
     pointer*: Point
@@ -155,6 +169,13 @@ type
     denyAccessibility*: bool
     unavailable*: set[FixtureModule]    ## GUIASSERT_FIXTURE_UNAVAILABLE
     delays*: Table[string, int]         ## GUIASSERT_FIXTURE_DELAY_MS
+    hostMode*: string
+      ## GUIASSERT_FIXTURE_HOST: "" (a healthy session host),
+      ## "exit-before-ready" or "never-ready".
+    recordingFault*: string
+      ## GUIASSERT_FIXTURE_RECORDING: "" or "unfinalized" (recordings are
+      ## written without their container index, as a recorder that died
+      ## would leave them).
 
   EventSink* = proc (event: string, data: JsonNode) {.closure.}
     ## Receives the streaming events of an operation (spec §8.4).
@@ -220,7 +241,11 @@ proc parseFixtureEnv*(env: Table[string, string]): FixtureEnv =
   ## * `GUIASSERT_FIXTURE_DENY=screen-recording|accessibility,…`;
   ## * `GUIASSERT_FIXTURE_UNAVAILABLE=<module>,…` — capture, ocr, tree,
   ##   input, session;
-  ## * `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>,…`.
+  ## * `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>,…`;
+  ## * `GUIASSERT_FIXTURE_HOST=exit-before-ready|never-ready` — the session
+  ##   host `session-start` waits for exits, or never reports ready;
+  ## * `GUIASSERT_FIXTURE_RECORDING=unfinalized` — recordings are written
+  ##   without their container index.
   proc entries(name: string): seq[string] =
     let v = env.getOrDefault(name, "")
     if v.len == 0: return @[]
@@ -271,6 +296,16 @@ proc parseFixtureEnv*(env: Table[string, string]): FixtureEnv =
       raise badArgs("invalid-value", "GUIASSERT_FIXTURE_DELAY_MS: '" & e &
         "' is not <verb>:<milliseconds>")
     result.delays[p[0]] = ms
+  let host = env.getOrDefault("GUIASSERT_FIXTURE_HOST", "")
+  if host notin ["", "exit-before-ready", "never-ready"]:
+    raise badArgs("invalid-value", "GUIASSERT_FIXTURE_HOST: '" & host &
+      "' is not exit-before-ready or never-ready")
+  result.hostMode = host
+  let rf = env.getOrDefault("GUIASSERT_FIXTURE_RECORDING", "")
+  if rf notin ["", "unfinalized"]:
+    raise badArgs("invalid-value", "GUIASSERT_FIXTURE_RECORDING: '" & rf &
+      "' is not unfinalized")
+  result.recordingFault = rf
 
 proc injectedFailure*(fe: FixtureEnv, verb: string): Option[ref ContractError] =
   ## The failure GUIASSERT_FIXTURE_FAIL injects into `verb`, if any.
@@ -301,14 +336,15 @@ proc rgbFromJson(n: JsonNode, path: string): Rgb =
   (c[0], c[1], c[2])
 
 proc fnodeFromJson(n: JsonNode, path: string): FNode =
-  expectObject(n, path, ["role"], ["nativeRole", "name", "value", "description",
-               "bounds", "states", "actions", "children", "onPress"])
+  expectObject(n, path, ["role"], ["nativeRole", "name", "value", "text",
+               "description", "bounds", "states", "actions", "children", "onPress"])
   result.role = readEnum[Role](n, "role", path)
   result.nativeRole = if n.hasKey("nativeRole"): readStr(n, "nativeRole", path)
                       else: $result.role
   if n.hasKey("name"): result.name = readOptStr(n, "name", path)
   if n.hasKey("value"): result.value = readOptStr(n, "value", path)
   if n.hasKey("description"): result.description = readOptStr(n, "description", path)
+  if n.hasKey("text"): result.text = readOptStr(n, "text", path)
   if n.hasKey("bounds") and n["bounds"].kind != JNull:
     result.bounds = some(rectFromJson(n["bounds"], path & ".bounds"))
   if n.hasKey("states"):
@@ -338,6 +374,7 @@ proc toJson(n: FNode): JsonNode =
   result["name"] = if n.name.isSome: %n.name.get else: newJNull()
   result["value"] = if n.value.isSome: %n.value.get else: newJNull()
   result["description"] = if n.description.isSome: %n.description.get else: newJNull()
+  result["text"] = if n.text.isSome: %n.text.get else: newJNull()
   result["bounds"] = if n.bounds.isSome: n.bounds.get.toJson else: newJNull()
   result["states"] = %toSeq(n.states).mapIt($it)
   result["actions"] = %toSeq(n.actions).mapIt($it)
@@ -354,7 +391,7 @@ proc desktopFromJson(n: JsonNode, baseDir: string, isState: bool): Desktop =
   ## one format; a saved desktop also carries its scenario id and pid counter.
   const required = ["schema", "name", "displays", "apps", "windows", "trees"]
   const optional = ["clock", "languages", "ocrConfidence", "windowCapture",
-                    "background", "baseFrame", "pointer"]
+                    "launchWindow", "background", "baseFrame", "pointer"]
   let path = if isState: "desktop" else: "scenario"
   if isState:
     expectObject(n, path, @required & @["scenarioId", "nextPid"], optional)
@@ -390,6 +427,9 @@ proc desktopFromJson(n: JsonNode, baseDir: string, isState: bool): Desktop =
     result.windowCapture = readStr(n, "windowCapture", path)
     if result.windowCapture notin ["own-pixels", "crop"]:
       raise scenarioError("windowCapture is \"own-pixels\" or \"crop\"")
+  result.launchWindow = true
+  if n.hasKey("launchWindow"):
+    result.launchWindow = readBool(n, "launchWindow", path)
   result.background = (40, 44, 52)
   if n.hasKey("background"):
     result.background = rgbFromJson(n["background"], path & ".background")
@@ -411,6 +451,13 @@ proc desktopFromJson(n: JsonNode, baseDir: string, isState: bool): Desktop =
     expectObject(t, tp, ["pid", "root"])
     result.trees.add AppTree(pid: readInt(t, "pid", tp),
                              root: fnodeFromJson(t["root"], tp & ".root"))
+  for a in result.apps:
+    if a.accessible.isSome:
+      var hasTree = false
+      for t in result.trees: hasTree = hasTree or t.pid == a.pid
+      if a.accessible.get != hasTree:
+        raise scenarioError("app " & $a.pid & " says accessible " & $a.accessible.get &
+          " but has " & (if hasTree: "a" else: "no") & " tree")
   var maxPid = 1000
   for a in result.apps: maxPid = max(maxPid, a.pid)
   result.nextPid = maxPid + 1
@@ -423,7 +470,7 @@ proc desktopToJson(d: Desktop): JsonNode =
               "clock": {"start": formatTimestamp(d.clockStartMs),
                         "stepMs": d.clockStepMs},
               "languages": d.languages, "ocrConfidence": d.ocrConfidence,
-              "windowCapture": d.windowCapture,
+              "windowCapture": d.windowCapture, "launchWindow": d.launchWindow,
               "background": [d.background.r, d.background.g, d.background.b],
               "baseFrame": (if d.baseFrame.isSome: %d.baseFrame.get else: newJNull()),
               "pointer": d.pointer.toJson,
@@ -562,12 +609,33 @@ proc treeIndex*(d: Desktop, pid: int): int =
     if t.pid == pid: return i
   -1
 
+proc nodeText*(n: FNode): Option[string] =
+  ## A node's text content (spec §7.5 `Node.text`): what the scenario states,
+  ## else what a platform text interface would report for its role: a
+  ## label's displayed string, a text field's or text area's content; none
+  ## for a role without a text interface.
+  if n.text.isSome: return n.text
+  case n.role
+  of roleLabel: n.name
+  of roleTextField, roleTextArea: some(n.value.get(""))
+  else: none(string)
+
+proc contractNode(n: FNode, path: string): Node =
+  ## The contract node of a fixture node (children not converted). The
+  ## serializer blanks a protected node's value and text; the fixture blanks
+  ## them here as well, so no layer above it holds the characters.
+  result = Node(path: path, role: n.role, nativeRole: n.nativeRole, name: n.name,
+                value: n.value, text: nodeText(n), description: n.description,
+                bounds: n.bounds, states: n.states, actions: n.actions,
+                childCount: n.children.len)
+  if stProtected in n.states:
+    result.value = none(string)
+    result.text = none(string)
+
 proc toNode(n: FNode, path: string, depthLeft: int, budget: var int,
             truncated: var bool, count: var int): Node =
   ## Convert with paths; at most `budget` nodes, `depthLeft` levels below.
-  result = Node(path: path, role: n.role, nativeRole: n.nativeRole, name: n.name,
-                value: n.value, description: n.description, bounds: n.bounds,
-                states: n.states, actions: n.actions, childCount: n.children.len)
+  result = contractNode(n, path)
   dec budget
   inc count
   if depthLeft == 0:
@@ -645,9 +713,7 @@ proc elementAt*(d: Desktop, ti: int, chain: seq[int]): Node =
   ## The node at a chain as a contract element (no children).
   var dd = d
   let n = dd.trees[ti].root.walk(chain)
-  Node(path: d.pathOf(ti, chain), role: n.role, nativeRole: n.nativeRole,
-       name: n.name, value: n.value, description: n.description, bounds: n.bounds,
-       states: n.states, actions: n.actions, childCount: n.children.len)
+  contractNode(n, d.pathOf(ti, chain))
 
 proc shiftBounds*(n: var FNode, dx, dy: int) =
   ## Move a node, its descendants and the labels its press adds by (dx, dy).
@@ -673,7 +739,10 @@ proc focusedChain(n: FNode, chain: var seq[int]): bool =
   false
 
 proc fieldValue(n: FNode, name: string): Option[string] =
-  if n.role == roleTextField and n.name == some(name): return n.value
+  ## The value of the text field named `name`; a protected field's value is
+  ## never expanded into a label.
+  if n.role == roleTextField and n.name == some(name):
+    return (if stProtected in n.states: some("") else: n.value)
   for c in n.children:
     let v = fieldValue(c, name)
     if v.isSome: return v
@@ -816,7 +885,11 @@ proc drawNode(f: var Frame, n: FNode, origin: Point, scale: float, fs: int,
       f.image.fillRect(r, (255, 255, 255))
       f.image.strokeRect(r, (if stFocused in n.states: (40, 100, 220)
                              else: (120, 120, 120)), 2)
-      f.addText(n.value.get(""), point(r.x + px(6, scale), midY), (20, 20, 20), fs, conf)
+      # A protected field shows one mask character per character, as a
+      # secure text field does; its characters are never drawn.
+      let shown = if stProtected in n.states: repeat('*', n.value.get("").runeLen)
+                  else: n.value.get("")
+      f.addText(shown, point(r.x + px(6, scale), midY), (20, 20, 20), fs, conf)
     of roleCheckbox:
       let box = rect(r.x, r.y + max(0, (r.height - px(16, scale)) div 2),
                      px(16, scale), px(16, scale))

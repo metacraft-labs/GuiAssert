@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS2 landed on macOS (guiassert CLI and serve, fixture backends, contract suite against both binaries, flake packages), independently verified. Contract 1.0 is not frozen: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) go to a dedicated follow-up milestone, and GS2's Outstanding Tasks list which of them the build already satisfies. GS3 part B can start against build/bin/guiassert-fixture (or the flake's guiassert-fixture). GS1 and GS2 Linux/Windows legs run on the first pull request into dev.
+  :next_steps: GS2.1 implemented on macOS: the companion campaign's requests C1–C17 are decided (each decision under its request in GS0's Outstanding Tasks) and implemented, and contract guiassert-desktop/1.0 is FROZEN (spec §7.7); it awaits independent verification. Once committed, GS3 part B builds against the frozen 1.0 (build/bin/guiassert-fixture or the flake's guiassert-fixture), and GS4 starts. GS1, GS2 and GS2.1 Linux/Windows legs run on the first pull request into dev.
   :last_updated: 2026-10-20
-  :current_milestone: GS2
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec and contract complete.
+  :current_milestone: GS2.1
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17.
   :END:
 
 * Introduction
@@ -56,6 +56,7 @@
   | GS0       | substrate/macos | completed                      | —       | —       | —       |
   | GS1       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS2       | substrate/macos | partially_completed            | completed | planned | planned |
+  | GS2.1     | substrate/macos | partially_completed            | completed | planned | planned |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | planned                        | —       | —       | —       |
   | GS5       | split           | planned                        | planned | planned | planned |
@@ -112,8 +113,10 @@
       =serve= flags, =media= in =version=, the full Nix runner matrix and
       =push: [dev, stable]= in GS1, and the missing per-backend live tests in
       GS5, GS8, GS10 and GS11.
-    - [ ] The companion campaign reads spec §7–§8 before GS3 and records any
-      contract change it needs here before GS2 freezes it.
+    - [X] The companion campaign reads spec §7–§8 before GS3 and records any
+      contract change it needs here before GS2 freezes it. (Recorded
+      2026-10-20 as C1–C17; every request decided and implemented in GS2.1,
+      each decision below its request; contract 1.0 is frozen, spec §7.7.)
       - 2026-10-20, companion/linux: §5–§8 reviewed against every operation
         of Agent Harbor's desktop provider, its MCP tool schemas and its
         computer-use suites (the consumer mapping is Agent Harbor's
@@ -127,24 +130,52 @@
           =null= when it cannot be mapped. Need: Agent Harbor clicks an
           element's centre; today it correlates the AT-SPI window to the
           compositor tree by pid and title itself, which is mechanism.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written.
+          Spec §7.5 states Node.bounds are desktop coordinates, converted by
+          the tree backend, null when unmappable; the fixture's bounds track
+          its window. Contract test:
+          test_node_bounds_are_desktop_coordinates. Per-backend obligation:
+          GS7 (AT-SPI on Wayland conversion; AX, UIA).
         - C2 =Node.text=. Add =text: str|null= (AT-SPI Text interface, the AX
           value of static text, UIA TextPattern), distinct from =value= and
           =name=. Need: =desktop_get_text= returns the content of labels and
           documents, which today comes from the Text interface, not from
           =value=.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written.
+          Node.text (str|null) added to spec §7.5 and core/contract; the
+          fixture reports a label's string, a field's content, or a
+          scenario-given text. Test:
+          test_node_text_is_distinct_from_name_and_value. Obligation: GS7
+          (AT-SPI Text, AX static text value, UIA TextPattern).
         - C3 Protected fields. A node that is a password or secure text field
           reports =value: null= and =text: null= and carries a new state
           =protected=. Need: =type= never echoes text, but an =element= or
           =element-action= re-read of the same field would otherwise return
           the characters.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written.
+          New state `protected`; value and text null on every verb, enforced
+          in the one serializer for every backend (and in the fixture). The
+          built-in fixture-form gained a protected Password field. Test:
+          test_protected_field_never_reports_value_or_text. Obligation: GS7
+          (AXSecureTextField, ROLE_PASSWORD_TEXT, UIA IsPassword).
         - C4 =Window.document=. Add =document: str|null= (macOS =AXDocument=;
           =null= where the platform has no equivalent). Need: Agent Harbor's
           =ah desktop windows --workspace= and its GUI launchers verify window
           isolation by the window's open document, not only its title.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written.
+          Window.document (str|null) added; the fixture-form window names
+          one, launched windows report null. Test:
+          test_window_document_is_reported_or_null. Obligation: GS7 macOS
+          (AXDocument); GS5 (null on the other capture backends).
         - C5 =App.accessible=. Add =accessible: bool|null=: whether the
           application exposes an accessibility tree on the session's bus.
           Need: =desktop_list_apps= is specified as listing applications with
           their accessibility support status.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written,
+          with null when it cannot be determined (no Accessibility
+          permission), never false for "could not look". Test:
+          test_app_accessible_is_true_false_or_unknown. Obligation: GS7 (AX
+          element answers / AT-SPI registry / UIA provider).
         - C6 =Session.envUnset=. Add =envUnset: [str]=, the variables a process
           spawned into the session must not inherit (for example =DISPLAY=,
           =NO_AT_BRIDGE=, =GTK_A11Y=, =GDK_BACKEND=, =QT_QPA_PLATFORM=).
@@ -154,6 +185,13 @@
           session's environment to an agent process that spawns
           applications itself; =env= alone cannot reproduce what
           =app-launch= does.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written.
+          Session.envUnset ([str]) added; spec §6.1 states that Session.env
+          carries the session bus and the AT-SPI bus and how env, envUnset
+          and --env compose (caller env minus envUnset, plus env, plus
+          --env). Test: test_session_env_and_env_unset. Obligation: GS9,
+          GS10, GS11 (each session backend's env/envUnset, checked by
+          spawning a client with only them).
         - C7 Capability vocabulary. Define the closed set of
           =capabilities.features[].feature= names (at least display, window
           and region capture, own-pixels capture, recording, OCR, tree read,
@@ -163,6 +201,17 @@
           exit 6 envelope. Need: Agent Harbor's =doctor= and its commands must
           name the missing capability in a stable payload, without a lookup
           table keyed on verb names.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED. The closed
+          feature vocabulary (19 names, each owned by one module) and the
+          degraded-reason set are in spec §7.5 "Features" and core/contract;
+          capabilities lists every feature exactly once from its module's
+          selected backend and honours --session; every exit 4 and exit 6
+          envelope has details.feature, null exactly for reason
+          session-not-running and for options the transport cannot honour
+          (--lifetime owner on the CLI, serve --listen where unavailable),
+          spec §7.2. Tests: test_capabilities_vocabulary_and_details_feature,
+          test_spec_closed_lists_match_the_code. Obligation: GS5–GS8 (each
+          backend reports its module's features and names them on exit 4/6).
         - C8 Key table. Publish the fixed key table of =key= in §7.5 before the
           freeze, case-insensitive, covering at least =Return= / =Enter=,
           =Tab=, =Escape= / =Esc=, =BackSpace=, =Delete=, =Insert=, =Space=,
@@ -173,12 +222,27 @@
           contract, and these are the keys Agent Harbor's =key= verb and
           =desktop_key= accept today (Agent Harbor translates its own spelling
           variants, such as =page_up=, onto the table).
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED. The key
+          table (case-insensitive; Return/Enter, Escape/Esc, BackSpace,
+          Delete, Insert, Space, Home, End, PageUp, PageDown, Pause, the
+          arrows, F1–F24, any single printable character; ctrl/control,
+          alt/option, shift, cmd/command/meta/super/win) replaces the
+          case-sensitive, alias-free one and is published in spec §7.5; Agent
+          Harbor keeps translating its own variants such as page_up. Tests:
+          test_key_table_is_case_insensitive_with_aliases,
+          test_spec_closed_lists_match_the_code. Obligation: GS8 (every key
+          of the table delivered by each input backend).
         - C9 Dead session host. §6.1 already reports a session whose host died
           with =state: "error"=; state the exit code too: any verb that
           targets such a session answers exit 4 / =session-not-running= (not
           exit 5 or exit 3).
           Need: Agent Harbor tells "the session is gone, recreate it" apart
           from "the operation failed" by exit code alone.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written
+          (already held as built; now stated in spec §6.1, with
+          details.feature null). Test:
+          test_dead_session_verbs_answer_exit_4_session_not_running.
+          Obligation: GS9, GS10, GS11 (kill the real session host).
         - C10 =session-start= readiness and names. =session-start= returns only
           once the session is =running= (its display server answers and, for
           kinds with a tree backend, its accessibility bus is up), or fails
@@ -187,6 +251,15 @@
           reason =name-in-use=. Need: Agent Harbor launches applications
           immediately after creating a session, and its session names are
           unique.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED.
+          session-start returns only a running session (readiness bound 10 s
+          or the --timeout-ms deadline less 250 ms), else exit 5 /
+          session-failed with nothing left behind; a --name of a non-stopped
+          session is exit 2 / name-in-use (new bad-args reason; replaces the
+          former conflicting-arguments). Test:
+          test_session_start_readiness_and_name_in_use. Obligation: GS9,
+          GS10, GS11 (display server answers and AT-SPI bus up before
+          running).
         - C11 =app-launch=. When =--wait-window-ms= expires with the process
           still running, answer exit 7 / =condition-not-met= with
           =details.app= (the =App=, including its pid), so the caller can
@@ -194,12 +267,29 @@
           KEY=VALUE~ merged over =Session.env=. Need: Agent Harbor adds
           per-application environment (for example ~ACCESSIBILITY_ENABLED=1~
           for Chromium-based applications) as launch policy.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written:
+          --wait-window-ms expiry with the process running is exit 7 /
+          condition-not-met with details.app, the application left running;
+          repeatable --env KEY=VALUE merged over Session.env. Test:
+          test_app_launch_wait_expiry_reports_the_app (and
+          test_session_env_and_env_unset for --env). Obligation: GS9, GS10,
+          GS11.
         - C12 Recording finalization. =record= and =record-stop= report
           =durationMs=, =frames=, =width= and =height= measured from the
           finalized file, and a file whose container is not finalized (no
           index, zero duration) is exit 5 / =capture-failed=, never state
           =stopped=. Need: Agent Harbor rejects recordings that exist but do
           not play, and archives only measured metadata.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written:
+          durationMs, frames, width and height are measured from the
+          finalized file (new pure core/mp4 probe; a PNG sequence from its
+          frames); an unfinalized file is exit 5 / capture-failed with
+          details.recording (state failed). Tests:
+          test_recording_metadata_is_measured_and_unfinalized_is_exit_5,
+          test_mp4_probe_matches_ffprobe,
+          test_mp4_probe_refuses_an_unfinalized_file. Obligation: GS5
+          (SCStream, wf-recorder, portal, x11grab, Windows recorders,
+          including a killed recorder).
         - C13 Matching rules. State that =--name= and =--name-contains= of
           =find= (and =wait --element=) are case-sensitive and add
           =--ignore-case=; state that =--app <name>= matches =App.name= exactly
@@ -208,11 +298,25 @@
           =details.pids=, never the first match. Need: Agent Harbor's =find
           --name= is a case-insensitive substring match, and its =--app= must
           not silently pick one of two applications.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED. --name /
+          --name-contains are case-sensitive, --ignore-case added (Unicode
+          case folding); this changed the fixture's former case-insensitive
+          --name-contains. --app <name> matches App.name exactly; where it
+          selects one application (tree, find, wait --element) an ambiguous
+          name is exit 2 / conflicting-arguments with details.pids; windows
+          --app stays a filter. Test:
+          test_matching_is_case_sensitive_with_ignore_case_and_unambiguous_app.
+          Obligation: GS7.
         - C14 Secret inputs off =argv=. Add =--stdin= to =type= (the text is
           read from stdin) and =--value-stdin= to =element-action= (for
           =set-value=). Need: on the one-shot CLI transport, a password typed
           or set through =argv= is visible to other local users through the
           process table, and =--text-file= puts it on disk.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written:
+          type --stdin and element-action set-value --value-stdin (whole
+          input, nothing stripped, 1 MiB, UTF-8); over serve the run
+          request's new optional `stdin` key (spec §8.3). Test:
+          test_secret_input_from_stdin_never_on_argv.
         - C15 No captured content outside =data=. Diagnostics on stderr and
           serve =event= payloads never contain typed text, values of protected
           fields, OCR text or element values; =wait --text= and =watch
@@ -220,14 +324,34 @@
           ones they report). Need: Agent Harbor applies masking, encryption
           and retention to every byte of captured content, so it must know
           every place GuiAssert put some.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written,
+          spec §7.5 "Captured content": captured content only in data (never
+          in message, stderr, serve events or state records; the fixture's
+          simulated desktop is the documented exception); wait --text reports
+          or removes its one frame; watch --frames reports every frame in a
+          frame event. Test: test_no_captured_content_outside_data (scans
+          stderr, events, the events file and error messages for planted
+          typed, set, protected and OCR strings). Obligation: GS5, GS6 (a
+          real recorder's or tesseract's stderr must not be passed through
+          with captured text).
         - C16 =set-value= with an empty value. State that =element-action <path>
           set-value --value ""= is valid and clears the field. Need: Agent
           Harbor's =action clear= maps onto it without a new action name.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED as written
+          (already held as built; now stated in spec §7.5, also for
+          --value-stdin with empty input). Test:
+          test_set_value_empty_clears_the_field. Obligation: GS7.
         - C17 (any 1.x minor) =drag --path x,y;x,y;…=: intermediate waypoints
           between =--from= and =--to=, delivered in order with the button held.
           Need: Agent Harbor's human-cadence drags follow a curved path, and a
           drag cannot be composed from separate =move= requests because the
           button must stay down.
+          Decision (2026-10-20, substrate/macos, GS2.1): ACCEPTED and
+          implemented now in 1.0 (not deferred to a minor): drag --path
+          x,y;x,y;… (at most 1000 waypoints), delivered in order with the
+          button held, --steps per segment; InputReport.path reports the
+          delivered vertices (null for other verbs). Test:
+          test_drag_path_delivers_waypoints_in_order. Obligation: GS8.
         - No change needed: the envelope (§7.2) and exit codes 0–8 (§7.3),
           which Agent Harbor maps one to one; serialization rules (§7.4);
           screenshot and OCR payloads (=ImageRef.origin= and =scale= are
@@ -683,11 +807,11 @@
 *** Outstanding Tasks
     - [X] Independent verification of this implementation (2026-10-20, on
       origin/agents 3748eb24; committed on green).
-    - [ ] Decide the companion campaign's contract requests C1–C17 (GS0
+    - [X] Decide the companion campaign's contract requests C1–C17 (GS0
       Outstanding Tasks) in the spec, then implement them (C1–C16 before
-      contract 1.0 is called frozen; C17 in any 1.x minor). Out of GS2's
-      scope: a dedicated follow-up milestone takes them; none is decided or
-      implemented yet. As built today: C9 (a dead session's verbs answer
+      contract 1.0 is called frozen; C17 in any 1.x minor). Done in GS2.1
+      (all seventeen accepted and implemented, C17 included; 1.0 frozen).
+      What follows is the record of the state GS2 left it in. As built today: C9 (a dead session's verbs answer
       exit 4 / =session-not-running=) and C16 (=set-value --value ""= clears)
       already hold; C8's key table differs (case-sensitive, no aliases such as
       =Enter= / =Esc= / =control= / =option= / =command= / =meta= / =super= /
@@ -705,14 +829,319 @@
     - =src/gui_assert/talking_head/core.nim= — the object-of-procs plugin pattern the backend interfaces follow.
     - Spec §7 and §8 are the authority; the tests above are written from them, not from the implementation.
 
+** GS2.1: Contract 1.0 decisions (C1–C17)
+   :PROPERTIES:
+   :status: partially_completed
+   :status_note: Implemented 2026-10-20 from origin/agents at ffc66dfb (GS2; no newer commit on origin/agents) on macOS (aarch64-darwin, inside nix develop): every request C1–C17 decided (the decision is recorded under its request in GS0's Outstanding Tasks), implemented in the spec, core/contract, the CLI, serve and the fixture backend, and covered by a contract test run against both build/bin/guiassert and build/bin/guiassert-fixture. Contract guiassert-desktop/1.0 is FROZEN (spec §7.7). Independently verified on macOS the same day on the same base (see Deviations, "Review"), which hardened core/mp4 against malformed files, bounded the --stdin read by --timeout-ms and fixed one pre-existing test helper; Linux and Windows have not run (CI runs on the pull request into dev). The per-backend halves of the decisions are test obligations of GS5–GS11.
+   :depends_on: GS2
+   :owner: substrate/macos
+   :platform_status: macos=completed linux=planned windows=planned
+   :complexity: medium
+   :END:
+
+   The companion campaign's review of spec §5–§8 (GS0 Outstanding Tasks,
+   2026-10-20) asked for C1–C16 before 1.0 freezes and C17 in any minor.
+   Manager decision: accept all seventeen, C17 included now. Where a request's
+   effect lands on platform backends that do not exist yet (AT-SPI, AX, UIA,
+   real recorders, real session backends), the rule is in the spec, the
+   fixture honours it, and the per-backend test is an obligation of the
+   milestone that builds that backend (GS5–GS11, entries marked "(GS2.1
+   obligation)").
+
+*** Deliverables
+    - [X] Spec (=Planned-Work/Desktop-Substrate.md=): §6.1 dead-session exit
+      code, readiness bound and =name-in-use=, =env= / =envUnset= /
+      =--env= composition; §7.2 =details.feature= and its two null cases;
+      §7.3 reason =name-in-use=; §7.5 =Window.document=, =App.accessible=,
+      =Session.envUnset=, =Node.text=, =InputReport.path=, state
+      =protected=, =Node.bounds= in desktop coordinates, captured-content
+      rule, matching rules, the feature vocabulary and degraded reasons,
+      the key table, =type --stdin=, =element-action --value-stdin=,
+      =set-value --value ""=, =find --ignore-case=, =app-launch --env= and
+      wait expiry, =drag --path=, measured recordings; §8.3 the =run=
+      request's =stdin= key; §9.2 the fixture's protected field, document,
+      scenario keys, =GUIASSERT_FIXTURE_HOST=, =GUIASSERT_FIXTURE_RECORDING=
+      and launch records; §7.7 the freeze.
+    - [X] =core/contract.nim=: the new keys in the one serializer of each
+      object (a protected node's value and text are blanked there for every
+      backend), reason =name-in-use=, =featureVocabulary=,
+      =degradedReasons=, the feature rules (=featureProblem=, enforced on
+      write and read) and =withFeature=. =core/tree_types.nim=: state
+      =protected=, =Node.text=, case-sensitive matching with =ignoreCase=.
+      =core/keys.nim=: the case-insensitive table with aliases. New pure
+      =core/mp4.nim=: measuring a finalized MP4 (moov/trak/tkhd/mdhd/stsz).
+    - [X] CLI and serve: =details.feature= on every exit 4 / 6 (=featured=
+      around each backend call, =verbFeature= for the rest); =type --stdin=,
+      =element-action --value-stdin= (=RunContext.stdin=; serve's =stdin=
+      request key, refused when unused); =find= / =wait --ignore-case=;
+      =app-launch --env=; =drag --path=; =wait --text= removes its frame
+      unless it reports it; an extra positional is refused without being
+      echoed.
+    - [X] Fixture backend: protected Password field in =fixture-form=,
+      =document=, =accessible= (null without the Accessibility permission),
+      =text=, session readiness handshake with the session host (and
+      =GUIASSERT_FIXTURE_HOST=), =name-in-use=, =envUnset=, launch records,
+      =launchWindow= and the =--wait-window-ms= expiry, recordings measured
+      from their files (and =GUIASSERT_FIXTURE_RECORDING=unfinalized=),
+      exact and unambiguous =--app=, =drag= waypoints, the feature
+      vocabulary.
+    - [X] Tests: =tests/contract/tcontract_decisions.nim= (one test per
+      request, in =tests/contract_suite.txt=), the drift test in
+      =tests/contract/tcontract_schema.nim=, =tests/tcore_mp4.nim= (in
+      =tests/core_suite.txt= and =just test=), new unit tests in
+      =tests/tcore_contract.nim=; =checkFailure= now also requires
+      =details.feature= on every exit 4 / 6 it sees.
+    - [X] The per-backend obligations added to GS5–GS11.
+
+*** Verification
+    All results below: macOS 26 (aarch64-darwin), inside =nix develop=, on
+    the working tree based on origin/agents at ffc66dfb, 2026-10-20. Every
+    contract test ran against both =build/bin/guiassert= and
+    =build/bin/guiassert-fixture=. Every =falsifying_mutation= was applied to
+    the source, =guiassert-fixture= rebuilt, the named test run red, and the
+    mutation reverted.
+    - test_name: test_node_bounds_are_desktop_coordinates
+      file: tests/contract/tcontract_decisions.nim
+      description: (C1) Node bounds lie inside the window's window-server bounds, contain the OCR word of the same label mapped through origin/scale, follow the window when it moves, and their centre is where a click presses the button.
+      status: passing (macOS, both binaries)
+      negative_control: After the window moves, a click at the old centre presses nothing (no status label). Passing.
+      falsifying_mutation: Not shifting the window's nodes in window-set-bounds turns it red (tried 2026-10-20).
+    - test_name: test_node_text_is_distinct_from_name_and_value
+      file: tests/contract/tcontract_decisions.nim
+      description: (C2) A label's text is its string, a field's text its content, a button's text null, and a scenario node's text differs from both its name and value.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Reporting no text for labels turns it red (tried 2026-10-20).
+    - test_name: test_protected_field_never_reports_value_or_text
+      file: tests/contract/tcontract_decisions.nim
+      description: (C3) After typing (via --stdin) and set-value into the protected Password field, element, tree, find, wait --element and element-action report value and text null with state protected, no envelope holds the characters, and the frame shows only mask characters.
+      status: passing (macOS, both binaries)
+      negative_control: The unprotected Name field reports what was typed. Passing.
+      falsifying_mutation: Removing both the serializer's and the fixture's blanking turns it red (tried 2026-10-20). Removing only the fixture's leaves it green by design (the serializer still blanks); removing only the serializer's turns =a protected node never carries its value or text= in tests/tcore_contract.nim red (tried 2026-10-20).
+    - test_name: test_window_document_is_reported_or_null
+      file: tests/contract/tcontract_decisions.nim
+      description: (C4) windows and window-focus report the fixture-form window's document; a launched application's window reports null.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Serializing document as null turns it red (tried 2026-10-20).
+    - test_name: test_app_accessible_is_true_false_or_unknown
+      file: tests/contract/tcontract_decisions.nim
+      description: (C5) accessible is true for an application with a tree, false for one without, null when the Accessibility permission is denied; a scenario claiming a tree it lacks is refused.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Reporting accessible under GUIASSERT_FIXTURE_DENY=accessibility turns it red (tried 2026-10-20).
+    - test_name: test_session_env_and_env_unset
+      file: tests/contract/tcontract_decisions.nim
+      description: (C6, C11 --env) A session reports env and envUnset (host: empty), app-launch --env is merged over Session.env and an explicitly set variable leaves envUnset, malformed or repeated --env is bad-args.
+      status: passing (macOS, both binaries)
+      negative_control: A launch without --env gets exactly the session's env and envUnset. Passing.
+      falsifying_mutation: Ignoring --env in the fixture launch turns it red (tried 2026-10-20).
+    - test_name: test_capabilities_vocabulary_and_details_feature
+      file: tests/contract/tcontract_decisions.nim
+      description: (C7) capabilities lists every feature of the spec's vocabulary exactly once from its module's selected backend, with reasons by the spec's rules, also for --session (a session record naming other backends); 22 exit 4 / 6 cases name the expected feature, null exactly for session-not-running and --lifetime owner on the CLI; exit 5 carries none.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Featuring wait --text's region capture as display-capture turns it red, and so does a withFeature that never attaches (both tried 2026-10-20).
+    - test_name: test_key_table_is_case_insensitive_with_aliases
+      file: tests/contract/tcontract_decisions.nim
+      description: (C8) Every spelling of the spec's key table, in its own, lower and upper case, is accepted and normalized; F1–F24, single characters; unknown names and doubled modifiers refused; click --modifiers aliases; the backspace alias deletes a character.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Matching named keys case-sensitively turns it red (tried 2026-10-20).
+    - test_name: test_dead_session_verbs_answer_exit_4_session_not_running
+      file: tests/contract/tcontract_decisions.nim
+      description: (C9) After its host is killed, 16 verbs in the session answer exit 4 / session-not-running with details.feature null; session-info reports error; session-stop works.
+      status: passing (macOS, both binaries)
+      negative_control: The same session answers windows while its host runs. Passing.
+      falsifying_mutation: Letting verbs run in a non-running session turns it red (tried 2026-10-20).
+    - test_name: test_session_start_readiness_and_name_in_use
+      file: tests/contract/tcontract_decisions.nim
+      description: (C10) session-start returns a running, usable session; a name in use (running, or in error) is exit 2 / name-in-use and leaves the record untouched; a stopped name is reusable; generated ids avoid taken names; a host that exits early or never gets ready is exit 5 / session-failed within --timeout-ms (not exit 7), leaving no record and no host process.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Not waiting for the host's readiness turns it red; so does answering conflicting-arguments for a name in use (both tried 2026-10-20).
+    - test_name: test_app_launch_wait_expiry_reports_the_app
+      file: tests/contract/tcontract_decisions.nim
+      description: (C11) With a scenario whose launched applications open no window, --wait-window-ms expiry is exit 7 / condition-not-met with details.app, the application still running and quittable; without --wait-window-ms the launch returns window null.
+      status: passing (macOS, both binaries)
+      negative_control: An application that opens a window satisfies the same wait. Passing.
+      falsifying_mutation: Not raising on expiry turns it red (tried 2026-10-20).
+    - test_name: test_recording_metadata_is_measured_and_unfinalized_is_exit_5
+      file: tests/contract/tcontract_decisions.nim
+      description: (C12) record and record-stop report frames, size and duration equal to what ffprobe (MP4, guiassert) or the PNG frames (guiassert-fixture) measure; an unfinalized file is exit 5 / capture-failed with details.recording state failed, and recordings lists it failed.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Accepting the measurement whatever it says turns it red (tried 2026-10-20).
+    - test_name: test_matching_is_case_sensitive_with_ignore_case_and_unambiguous_app
+      file: tests/contract/tcontract_decisions.nim
+      description: (C13) find and wait --element match names case-sensitively, --ignore-case folds case (and is refused alone); --app is exact, and two applications of one name are exit 2 / conflicting-arguments with details.pids for tree, find and wait; windows --app filters both.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Case-folding --name-contains unconditionally turns it red, and so does resolving an ambiguous --app to the first application (both tried 2026-10-20).
+    - test_name: test_secret_input_from_stdin_never_on_argv
+      file: tests/contract/tcontract_decisions.nim
+      description: (C14) type --stdin and set-value --value-stdin take stdin exactly (nothing stripped); conflicts, invalid UTF-8 and more than 1 MiB are bad-args with no effect; over serve the request's stdin gives a byte-identical envelope, an unused stdin is conflicting-arguments, a missing one missing-argument, a non-string one a protocol-error.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Ignoring the serve request's stdin turns it red (tried 2026-10-20).
+    - test_name: test_no_captured_content_outside_data
+      file: tests/contract/tcontract_decisions.nim
+      description: (C15) Planted typed, set, protected and OCR strings never appear on the CLI's or the daemon's stderr, in any serve event or events-file line, or in an error message; wait --text leaves exactly its reported frame (and nothing on expiry or cancellation); the frames watch --frames writes are exactly the ones its events name (CLI and serve).
+      status: passing (macOS, both binaries)
+      negative_control: The OCR data of the same frame does hold the typed text, and tree data holds the set value. Passing.
+      falsifying_mutation: Keeping wait --text's frame after a miss turns it red; so does echoing an extra positional in the error message (both tried 2026-10-20).
+    - test_name: test_set_value_empty_clears_the_field
+      file: tests/contract/tcontract_decisions.nim
+      description: (C16) set-value --value "" (and --value-stdin with empty input) clears the field: value and text empty, the value gone from the frame's OCR.
+      status: passing (macOS, both binaries)
+      negative_control: Before clearing, the frame's OCR holds the value. Passing.
+      falsifying_mutation: Refusing an empty value turns it red (tried 2026-10-20).
+    - test_name: test_drag_path_delivers_waypoints_in_order
+      file: tests/contract/tcontract_decisions.nim
+      description: (C17) drag --path reports the delivered vertices in order, takes its --duration-ms, accepts 1000 waypoints, and refuses malformed paths and 1001 waypoints; other verbs report path null.
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Reporting only the end points turns it red (tried 2026-10-20).
+    - test_name: test_spec_closed_lists_match_the_code
+      file: tests/contract/tcontract_schema.nim
+      description: The reasons of spec §7.3, the feature vocabulary and degraded reasons and the key table of spec §7.5, parsed from the spec, equal core/contract's and core/keys' lists.
+      status: passing (macOS, both binaries)
+      negative_control: The spec-table reader refuses a table the spec does not have (=spec table reader control=). Passing.
+      falsifying_mutation: Adding a reason, a key alias or a feature to the code only turns it red (all three tried 2026-10-20).
+    - test_name: test_mp4_probe_matches_ffprobe
+      file: tests/tcore_mp4.nim
+      description: For ffmpeg-written MP4s of several frame counts, rates and sizes (moov last and first), the pure probe's frames, size and duration equal ffprobe's decoding count.
+      status: passing (macOS)
+      falsifying_mutation: Reading tkhd's size 4 bytes early turns it red (tried 2026-10-20).
+    - test_name: test_mp4_probe_refuses_an_unfinalized_file
+      file: tests/tcore_mp4.nim
+      description: The same file without its moov box, truncated, empty, or not an MP4 is refused (Mp4Error); a missing file is IOError.
+      status: passing (macOS)
+      as_built: The explicit "no moov box" check is an equivalent mutant: without it the empty movie still fails as "no video track".
+    - test_name: test_mp4_probe_refuses_malformed_boxes
+      file: tests/tcore_mp4.nim
+      description: Hand-built MP4s whose hdlr, tkhd or mdhd is too short for its fields, whose 64-bit box size runs past the file (2^64-1 and 2^63-ish), or whose mdhd duration is 2^64-1 ticks are each Mp4Error, never a Defect; the same movie with a well-formed mdhd measures 64x48, 5 frames, 500 ms.
+      status: passing (macOS; added in the review)
+      negative_control: The well-formed movie measures exactly. Passing.
+      falsifying_mutation: Dropping the bound check of the hdlr handler code turns it red with IndexDefect (tried 2026-10-20).
+    - test_name: nix develop --command just test-contract
+      description: The whole contract suite, against both binaries.
+      status: passing on macOS (90 OK: 45 tests x 2 binaries, 0 FAILED; run three times in a row, 2026-10-20, by the implementation and again by the review after its fixes); Linux pending its first CI run
+    - test_name: nix develop --command just test
+      description: The default suite, then the contract suite.
+      status: passing (macOS; 299 OK, 0 FAILED after the review added test_mp4_probe_refuses_malformed_boxes; contract suite included)
+    - test_name: nix develop --command just test-core
+      description: The core suite with core/mp4.
+      status: passing (macOS; 37 OK, 0 FAILED after the review)
+    - test_name: nix develop --command just lint
+      description: The workspace lint hook.
+      status: passing 2026-10-20 (no linters configured)
+
+*** Deviations
+    - C17 was taken into 1.0 instead of a later minor (manager decision), and
+      =InputReport= gained =path= for it, so the report says what was
+      delivered.
+    - C7: besides the feature names, the =reason= of a =degraded= feature is
+      now a closed set (=window-crop=, =png-sequence=, =fixture-frames-only=,
+      =titles-redacted=, =posted-delivery=), because the fixture OCR's former
+      free-text reason would otherwise have been the one unstable payload in
+      the report. =capabilities= also lists =video-decode= (backend
+      =ffmpeg=, the media module), so every feature appears exactly once.
+      The fixture's feature names changed (=tree= to =tree-read=, =pointer=
+      to =pointer-input=, …) to the vocabulary.
+    - C7 null cases: besides =session-not-running= and =--lifetime owner=,
+      =serve --listen unix:= on a build without Unix sockets (Windows, for
+      now) also carries =details.feature: null=, for the same reason (a
+      transport, not a capability).
+    - C13: the existing unit test =element filter= (tests/tcore_types.nim)
+      asserted the former case-insensitive =--name-contains=; it now asserts
+      the decided behaviour.
+    - C10: the fixture's session host now polls every 10 ms until it is
+      ready, then every 100 ms as before; at a constant 20 ms the existing
+      byte-parity test's state-directory swap (it deletes and restores the
+      directory between the CLI and the serve run) made the serve run's
+      host see its record vanish and exit.
+    - C15: =tests/contract/tcli_envelope.nim='s =checkFailure= and the new
+      file's checking helpers are templates: a =check= inside a proc does not
+      fail the test that called it (Nim's unittest marks only the program),
+      which hid a failure during the mutation run until changed.
+    - =tests/tcore_mp4.nim= needs =ffprobe= beside =ffmpeg= (the Gyan
+      essentials build the Windows job provisions ships one; not run there
+      yet).
+    - Review: Independent verification, 2026-10-20, macOS (aarch64-darwin), inside
+      =nix develop=, working tree on origin/agents ffc66dfb:
+      - Each of C1–C17: the spec states the decision, the fixture implements
+        it, the contract test asserts it against both binaries, the decision is
+        recorded under its request (GS0), and GS5–GS11 carry the per-backend
+        obligation with a test name. Mutations tried by the review, each red
+        and reverted: the bounded stdin read undone
+        (=test_secret_input_from_stdin_never_on_argv=), named keys matched
+        case-sensitively (=test_key_table_is_case_insensitive_with_aliases=),
+        =name-in-use= answered as =conflicting-arguments=
+        (=test_session_start_readiness_and_name_in_use=), the serializer's
+        protected blanking removed (=a protected node never carries its value
+        or text=, tests/tcore_contract.nim; the contract test stays green by
+        design, the fixture blanks too).
+      - core/mp4 reads untrusted files. Fuzzing (100 000 mutated ffmpeg MP4s:
+        truncations, byte flips, forged box sizes, forged mdhd fields; both
+        =probeMp4= and =probeMp4File=) found no crash, but hand-built inputs
+        did: a field read past its own box (IndexDefect), a 64-bit box size
+        converted before it was bounded (RangeDefect / OverflowDefect) and a
+        2^64-tick duration (RangeDefect). Fixed: every field is read through a
+        box-bounded accessor, a 64-bit size is compared with the bytes left
+        before conversion, and the duration is refused past 2^40 s and rounded
+        without a wrapping product. Covered by
+        =test_mp4_probe_refuses_malformed_boxes=; the fuzzer then found
+        nothing in 100 000 more inputs.
+      - =--stdin=: a writer that never closed stdin held =type --stdin= past
+        =--timeout-ms 500= until it closed (4 s measured), against spec §7.1.
+        The POSIX read now polls in 50 ms slices and checks the token
+        (=--timeout-ms= exit 7, a signal exit 8); checked in
+        =test_secret_input_from_stdin_never_on_argv=. Spec §7.5 now also says
+        what a closed stdin (exit 2 / =invalid-value=), an empty one and a
+        terminal do, and that serve's =stdin= is bounded by the 1 MiB request
+        line. Measured as before the change: =/dev/null= types the empty
+        string; a closed or directory stdin is =invalid-value=.
+      - Test-helper audit (all of tests/): Nim's unittest =check= / =fail=
+        inside a top-level proc prints the calling test as =[OK]= and only sets
+        the program's exit status to 1; =require= there quits the program.
+        Inside a proc nested in the =test= body (a closure over the test's
+        status) it fails the test properly. So no file could pass while a
+        check failed, since every runner checks the exit status, but the
+        failure was attributed to no test. The only top-level instance was
+        =assertSampleScript= in tests/tparser.nim, now a template; with
+        a wrong expected resolution both parser tests turn =[FAILED]=. The
+        =fail= of tests/tnimcache_is_worktree_local.nim is that file's own
+        failure counter, and the =check= proc of tcontract_schema its own
+        schema walker, neither unittest's.
+      - Also run by the review after its fixes, all green: the twelve GS1
+        out-of-suite tests (tvideo_analysis, tchange_detect,
+        tvision_windows, tlayout_tree, tvision_cli, tocr_vision,
+        tocr_backends, tscreen_capture, temotive, tdiscovery,
+        tspeech_synthesis, tgui_assert; 137 OK, 0 FAILED), =nix build
+        path:.#guiassert path:.#guiassert-fixture=, actionlint on
+        .github/workflows/ci.yml, =ah lint= and =ah lint --status-gate=. No
+        guiassert or session-host process was left after the suites.
+
+*** Outstanding Tasks
+    - [X] Independent verification of this implementation (2026-10-20, on
+      origin/agents ffc66dfb; committed on green).
+    - [ ] First CI run of the contract and core suites on Linux x64/arm64 and
+      the Windows job; record the results above.
+    - [ ] Windows: the CLI's =--stdin= read is still a blocking read there, so
+      a writer that never closes the pipe holds the verb past =--timeout-ms=
+      (POSIX polls; Deviations, "Review"). Bound it when the Windows leg is built.
+
+*** Key Source Files
+    - Planned-Work/Desktop-Substrate.md - §6.1, §7.2, §7.3, §7.5, §7.7, §8.3, §9.2
+    - src/gui_assert/core/contract.nim - serializers, reasons, features, withFeature
+    - src/gui_assert/core/keys.nim - the key table
+    - src/gui_assert/core/mp4.nim - recording measurement
+    - src/gui_assert/cli/verbs.nim - featured, verbFeature, the new flags
+    - src/gui_assert/backends/session/fixture.nim - readiness, names, launches
+    - tests/contract/tcontract_decisions.nim - the C1–C17 contract tests
+
 ** GS3: Agent Harbor consumer spec and backend crate (companion)
    :PROPERTIES:
    :status: in_progress
    :status_note: Part A (Agent Harbor's consumer spec, and the review of spec §7–§8 against what Agent Harbor uses today) is in progress on the companion Linux host since 2026-10-20. Part B (the backend crate, its contract tests and the Nix packaging) waits for GS2 to publish the guiassert-fixture binary.
-   :depends_on: GS2
+   :depends_on: GS2 GS2.1
    :owner: companion/linux
    :complexity: large
    :END:
+
+   Part B binds contract guiassert-desktop/1.0 as frozen by GS2.1 (spec §7.7):
+   the decisions on C1–C17 are recorded under GS0's Outstanding Tasks.
 
    All work in this milestone lands in Agent Harbor, not in GuiAssert. It is
    listed here so both campaigns see one ordering.
@@ -743,7 +1172,7 @@
 ** GS4: Vision verbs in the CLI
    :PROPERTIES:
    :status: planned
-   :depends_on: GS2
+   :depends_on: GS2 GS2.1
    :owner: substrate/macos
    :complexity: small
    :END:
@@ -853,6 +1282,18 @@
     - test_name: just test-live-macos
       description: The macOS live capture suite on a host holding the Screen Recording grant.
       status: pending
+    - test_name: test_live_recording_metadata_measured_and_killed_recorder_is_exit_5
+      file: tests/live/tcapture_<os>.nim
+      description: (GS2.1 obligation) C12, per platform recorder (SCStream; wf-recorder, portal/PipeWire, ffmpeg x11grab; the Windows recorder): record and record-stop report frames, duration and size equal to ffprobe's count of the file; a recorder killed before finalizing yields exit 5 / capture-failed with details.recording state failed, never stopped.
+      status: pending
+    - test_name: test_capture_backends_report_their_features_and_name_them_on_exit_4_6
+      file: tests/live/tcapture_<os>.nim
+      description: (GS2.1 obligation) C7: capabilities with each capture backend selected lists the capture features of spec §7.5 with probed states (window-crop and titles-redacted degradations where they apply); an unsupported capture (--own-pixels on linux-wlr) and a missing grant name their feature in details.feature.
+      status: pending
+    - test_name: test_capture_backends_keep_captured_content_off_stderr
+      file: tests/live/tcapture_<os>.nim
+      description: (GS2.1 obligation) C15: a recorder's or helper's own stderr is not passed through when it could carry window titles or captured text; GuiAssert's stderr during a capture holds no captured content. C4: windows reports document null on the backends that have no equivalent (macOS document comes from AX, GS7).
+      status: pending
 
 ** GS6: OCR backends
    :PROPERTIES:
@@ -894,6 +1335,10 @@
     - test_name: test_windows_media_ocr_reads_rendered_label
       file: tests/live/tocr_windows.nim
       description: Windows.Media.Ocr reads the rendered label with a bbox within tolerance.
+      status: pending
+    - test_name: test_ocr_text_never_on_stderr_and_features_named
+      file: tests/live/tocr_<engine>.nim
+      description: (GS2.1 obligation) C15 and C7: OCR of a frame with a planted word leaves the word out of GuiAssert's stderr (tesseract's own diagnostics are not echoed with recognized text), and an option the engine lacks (--psm on apple-vision) names feature ocr in details.feature; capabilities reports the engine's ocr feature with a probed state.
       status: pending
 
 ** GS7: Accessibility tree backends
@@ -947,6 +1392,22 @@
     - test_name: test_uia_tree_of_win32_fixture
       file: tests/live/ttree_windows.nim
       description: The Win32 fixture's UIA tree contains its golden names.
+      status: pending
+    - test_name: test_tree_bounds_are_desktop_coordinates
+      file: tests/live/ttree_<os>.nim
+      description: (GS2.1 obligation) C1: every node's bounds are desktop coordinates (AT-SPI on Wayland converted through the compositor's window placement; AX and UIA as reported), checked by clicking the centre of the fixture's button and seeing its effect; a node that cannot be mapped reports bounds null.
+      status: pending
+    - test_name: test_tree_text_protected_document_accessible
+      file: tests/live/ttree_<os>.nim
+      description: (GS2.1 obligation) C2, C3, C4, C5: a label's and a text area's text come from AT-SPI Text / the AX static-text value / UIA TextPattern, distinct from name and value; the fixture's password field (AXSecureTextField, ROLE_PASSWORD_TEXT, UIA IsPassword) carries protected with value and text null after typing into it; macOS windows report the fixture's open document (AXDocument), null elsewhere; apps reports accessible true for the fixture, false for an application without an accessibility tree, null without the permission.
+      status: pending
+    - test_name: test_tree_matching_rules_and_set_value_empty
+      file: tests/live/ttree_<os>.nim
+      description: (GS2.1 obligation) C13 and C16: find --name is case-sensitive, --ignore-case folds case, two fixture instances make --app ambiguous (exit 2 with details.pids); element-action set-value --value "" clears the fixture's field (read back through the tree).
+      status: pending
+    - test_name: test_tree_backends_name_features_on_exit_4_6
+      file: tests/live/ttree_<os>.nim
+      description: (GS2.1 obligation) C7: tree-read and element-actions are reported with probed states, and a missing Accessibility grant / disabled AT-SPI names its feature in details.feature.
       status: pending
 
 ** GS8: Input backends
@@ -1015,6 +1476,18 @@
       file: tests/live/tinput_windows.nim
       description: SendInput click on the Win32 fixture's button changes its status label.
       status: pending
+    - test_name: test_every_key_of_the_table_is_delivered
+      file: tests/live/tinput_<os>.nim
+      description: (GS2.1 obligation) C8: every named key, function key, modifier and alias of the spec §7.5 key table is delivered by each input backend to the fixture's key logger as that key (aliases indistinguishable from their canonical spelling, letters case-insensitive).
+      status: pending
+    - test_name: test_drag_path_waypoints_reach_the_fixture_in_order
+      file: tests/live/tinput_<os>.nim
+      description: (GS2.1 obligation) C17: drag --path over the fixture's drawing canvas delivers every waypoint in order with the button held (the canvas records the pointer trail), and the report's path equals the requested vertices.
+      status: pending
+    - test_name: test_input_backends_name_features_on_exit_4_6
+      file: tests/live/tinput_<os>.nim
+      description: (GS2.1 obligation) C7: pointer-input, keyboard-input and window-management are reported with probed states, and a missing grant or device access names its feature in details.feature.
+      status: pending
 
 ** GS9: macOS off-screen sessions
    :PROPERTIES:
@@ -1072,6 +1545,10 @@
       file: tests/live/tsession_macos.nim
       description: Records whether a SkyLight-created session yields a usable gui domain; the test asserts the recorded result matches what it measures.
       status: pending
+    - test_name: test_macos_sessions_readiness_names_env_and_dead_host
+      file: tests/live/tsession_macos.nim
+      description: (GS2.1 obligation) C6, C9, C10, C11: session-start returns a running session whose app-launch works at once (or exit 5 / session-failed within --timeout-ms); a name in use is exit 2 / name-in-use; env and envUnset reproduce what app-launch gives a process; killing the session host makes every verb exit 4 / session-not-running; --wait-window-ms expiry of a windowless launch is exit 7 with details.app and the app still running; --env reaches the launched process.
+      status: pending
 
 ** GS10: Linux off-screen sessions (companion)
    :PROPERTIES:
@@ -1115,6 +1592,10 @@
       file: tests/live/tsession_linux.nim
       description: Killing the session host makes session-info report state error with a reason, never running.
       status: pending
+    - test_name: test_linux_session_readiness_env_and_dead_host
+      file: tests/live/tsession_linux.nim
+      description: (GS2.1 obligation) C6, C9, C10, C11: session-start returns only once the compositor answers and the AT-SPI bus is up (an AT-SPI query right after it succeeds), else exit 5 / session-failed within --timeout-ms; a name in use is exit 2 / name-in-use; Session.env carries WAYLAND_DISPLAY/DISPLAY, XDG_RUNTIME_DIR, DBUS_SESSION_BUS_ADDRESS and AT_SPI_BUS_ADDRESS and envUnset the host variables a client must not inherit, so a GTK client spawned with only them appears in the session's windows and tree; after the host dies every verb is exit 4 / session-not-running; a windowless launch with --wait-window-ms is exit 7 with details.app; --env reaches the launched process.
+      status: pending
 
 ** GS11: Windows off-screen sessions
    :PROPERTIES:
@@ -1141,6 +1622,10 @@
     - test_name: test_windows_desktop_session_reports_posted_delivery_and_shared_clipboard
       file: tests/live/tsession_windows.nim
       description: The Session object reports isolation.clipboard false, and every input verb on the session reports delivery posted.
+      status: pending
+    - test_name: test_windows_desktop_session_readiness_env_and_dead_host
+      file: tests/live/tsession_windows.nim
+      description: (GS2.1 obligation) C6, C9, C10, C11 on windows-desktop: readiness or exit 5 / session-failed, name-in-use, envUnset honoured by app-launch, exit 4 / session-not-running after the host dies, the --wait-window-ms expiry with details.app, and capabilities reporting posted-delivery for input (C7).
       status: pending
 
 ** GS12: macOS parity evidence

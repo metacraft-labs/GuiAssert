@@ -13,10 +13,17 @@
 ##   recording sleeps through its duration and streams `progress` events; a
 ##   started one is finished by `stopRecording`, its duration taken from the
 ##   fixture's logical clock, so the result is deterministic.
+## * Every finished recording is **measured from the file it wrote** (spec
+##   §7.5, "Recordings"): an MP4's frames, duration and size come from its
+##   container (`core/mp4`), a PNG sequence's from its frames. A file that
+##   does not measure (an MP4 without its index, a frame that does not
+##   decode) fails the verb with `backend-error` / `capture-failed`, and the
+##   recording is recorded as `failed`, never `stopped`.
+##   `GUIASSERT_FIXTURE_RECORDING=unfinalized` writes such a file on purpose.
 
 import std/[json, options, os, osproc, streams, strutils, math]
 
-import ../../core/[geometry, image, png, contract, desktop_types, interfaces,
+import ../../core/[geometry, image, png, mp4, contract, desktop_types, interfaces,
                    sha256]
 import ../../[cancel, state_store]
 import ../fixture_desktop
@@ -94,7 +101,7 @@ proc checkScreenRecording(cfg: FixtureConfig) =
   if cfg.env.denyScreenRecording: raise denied(screenRecording = true)
 
 proc writeOutputs(cfg: FixtureConfig, pngBytes: string, frames: int, fps: float,
-                  outPath: string): tuple[format: RecordingFormat, width, height: int] =
+                  outPath: string): RecordingFormat =
   ## Write a recording of `frames` identical frames: a PNG directory without
   ## the media backend, an MP4 through ffmpeg with it.
   let img = decodePng(pngBytes)
@@ -120,7 +127,7 @@ proc writeOutputs(cfg: FixtureConfig, pngBytes: string, frames: int, fps: float,
       elif fileExists(outPath):
         raise badArgs("invalid-value", "--out " & outPath & " exists and is a file")
       moveDir(tmp, outPath)
-      return (rfPngSequence, img.width, img.height)
+      return rfPngSequence
     if cfg.ffmpegExe.len == 0:
       raise unavailable(fixtureBackendName, "missing-tool",
         "MP4 recordings need ffmpeg, which was not found (set FFMPEG_BIN)")
@@ -140,12 +147,57 @@ proc writeOutputs(cfg: FixtureConfig, pngBytes: string, frames: int, fps: float,
         output.strip)
     moveFile(tmpMp4, outPath)
     removeDir(tmp)
-    return (rfMp4, img.width + img.width mod 2, img.height + img.height mod 2)
+    discard img
+    return rfMp4
   except OSError, IOError:
     raise failed("capture-failed", "cannot write the recording " & outPath & ": " &
       getCurrentExceptionMsg())
   finally:
     if dirExists(tmp): removeDir(tmp)
+
+proc spoilRecording(format: RecordingFormat, outPath: string) =
+  ## GUIASSERT_FIXTURE_RECORDING=unfinalized: leave the output as a recorder
+  ## that died mid-way would, an MP4 without its `moov` index or a PNG
+  ## sequence whose last frame is cut short.
+  try:
+    case format
+    of rfMp4:
+      let bytes = readFile(outPath)
+      let i = bytes.find("moov")
+      if i >= 4: writeFile(outPath, bytes[0 ..< i - 4])
+    of rfPngSequence:
+      let frames = sortedNames(outPath, ".png")
+      if frames.len > 0:
+        let last = readFile(frames[^1])
+        writeFile(frames[^1], last[0 ..< last.len div 2])
+  except IOError, OSError:
+    raise failed("capture-failed", "cannot write the recording " & outPath & ": " &
+      getCurrentExceptionMsg())
+
+proc measureRecording(format: RecordingFormat, outPath: string, fps: float):
+    tuple[ok: bool, why: string, width, height, frames, durationMs: int] =
+  ## What the finished output measures (module doc). `ok` is false, with
+  ## the reason, when it is not a complete recording.
+  case format
+  of rfMp4:
+    try:
+      let i = probeMp4File(outPath)
+      (true, "", i.width, i.height, i.frames, i.durationMs)
+    except Mp4Error, IOError:
+      (false, getCurrentExceptionMsg(), 0, 0, 0, 0)
+  of rfPngSequence:
+    let frames = sortedNames(outPath, ".png")
+    if frames.len == 0: return (false, "the PNG sequence holds no frames", 0, 0, 0, 0)
+    var w, h = 0
+    for i, f in frames:
+      try:
+        let img = decodePng(readFileCapped(f, maxImageFileBytes))
+        if i == 0: (w, h) = (img.width, img.height)
+        elif img.width != w or img.height != h:
+          return (false, f & " differs in size from the first frame", 0, 0, 0, 0)
+      except CatchableError:
+        return (false, f & " does not decode: " & getCurrentExceptionMsg(), 0, 0, 0, 0)
+    (true, "", w, h, frames.len, int(round(float(frames.len) * 1000.0 / fps)))
 
 proc saveRecording(cfg: FixtureConfig, r: Recording, priv: JsonNode) =
   writeRecord(cfg.recordingPath(r.id), recordingSchema,
@@ -164,6 +216,32 @@ proc loadRecording(cfg: FixtureConfig, id: string): tuple[r: Recording, priv: Js
 
 proc framesFor(durationMs: int, fps: float): int =
   max(1, int(round(float(durationMs) * fps / 1000.0)))
+
+proc finish(cfg: FixtureConfig, r: var Recording, priv: JsonNode, bytes: string,
+            frames: int) =
+  ## Write the output of a finished recording, measure it, and record the
+  ## recording as `stopped` with what it measures, or as `failed` and raise
+  ## `backend-error` / `capture-failed` (details: the failed recording).
+  r.format = cfg.writeOutputs(bytes, frames, r.fps, r.path)
+  if cfg.env.recordingFault == "unfinalized": spoilRecording(r.format, r.path)
+  let m = measureRecording(r.format, r.path, r.fps)
+  cfg.transact(t):
+    if r.stoppedAt.isNone: r.stoppedAt = some(t.nowStamp())
+    if m.ok:
+      r.state = rsStopped
+      r.width = m.width
+      r.height = m.height
+      r.frames = some(m.frames)
+      r.durationMs = some(m.durationMs)
+    else:
+      r.state = rsFailed
+      r.frames = none(int)
+      r.durationMs = none(int)
+    cfg.saveRecording(r, priv)
+  if not m.ok:
+    raise newContractError(ekBackendError, "capture-failed", "recording '" & r.id &
+      "' at " & r.path & " is not a finalized recording: " & m.why,
+      details = %*{"recording": r.toJson})
 
 proc newFixtureCapture*(cfg: FixtureConfig): CaptureBackend =
   ## The fixture capture backend. Raises `backend-unavailable` when
@@ -247,26 +325,14 @@ proc newFixtureCapture*(cfg: FixtureConfig): CaptureBackend =
         done = i + 1
         cfg.emit("progress", %*{"elapsedMs": due, "frames": done})
     except ContractError:
+      # Cancelled or past the deadline: finalize what was recorded so the
+      # partial file stays valid (spec §8.6), then report the interruption.
+      let interruption = getCurrentException()
       if done > 0:
-        let o = cfg.writeOutputs(bytes, done, req.fps, outPath)
-        result.format = o.format
-        result.state = rsStopped
-        result.frames = some(done)
-        result.durationMs = some(int(round(float(done) * 1000.0 / req.fps)))
-        cfg.transact(t):
-          result.stoppedAt = some(t.nowStamp())
-          cfg.saveRecording(result, priv)
-      raise
-    let o = cfg.writeOutputs(bytes, total, req.fps, outPath)
-    result.format = o.format
-    result.width = o.width
-    result.height = o.height
-    result.state = rsStopped
-    result.frames = some(total)
-    result.durationMs = some(req.durationMs.get)
-    cfg.transact(t):
-      result.stoppedAt = some(t.nowStamp())
-      cfg.saveRecording(result, priv)
+        try: cfg.finish(result, priv, bytes, done)
+        except ContractError: discard   # recorded as failed; the interruption wins
+      raise interruption
+    cfg.finish(result, priv, bytes, total)
 
   result.stopRecording = proc (id: string): Recording =
     var priv: JsonNode
@@ -286,15 +352,7 @@ proc newFixtureCapture*(cfg: FixtureConfig): CaptureBackend =
     let a = resolveArea(d, priv["session"].getStr, target, false)
     let (bytes, _) = cfg.renderTarget(d, a, true)
     let frames = framesFor(durationMs, result.fps)
-    let o = cfg.writeOutputs(bytes, frames, result.fps, result.path)
-    result.format = o.format
-    result.width = o.width
-    result.height = o.height
-    result.state = rsStopped
-    result.frames = some(frames)
-    result.durationMs = some(durationMs)
-    cfg.withFixtureLock:
-      cfg.saveRecording(result, priv)
+    cfg.finish(result, priv, bytes, frames)
 
   result.recordings = proc (): seq[Recording] =
     let dir = cfg.stateDir / "recordings"
@@ -305,22 +363,30 @@ proc newFixtureCapture*(cfg: FixtureConfig): CaptureBackend =
         result.add cfg.loadRecording(id).r
 
   result.features = proc (probe: bool): seq[Feature] =
+    # Without Screen Recording the fixture still enumerates windows, with
+    # their titles redacted; every capture feature is unavailable.
     let denied = cfg.env.denyScreenRecording
     proc f(name: string, state = fsSupported, reason = ""): Feature =
       var st = state
       var r = reason
-      if denied and name != "window-enumeration":
-        st = fsUnavailable
-        r = "tcc-screen-recording"
+      var remedy = none(string)
+      if denied:
+        if name == "window-enumeration":
+          st = fsDegraded
+          r = "titles-redacted"
+        else:
+          st = fsUnavailable
+          r = "tcc-screen-recording"
+        remedy = some("unset GUIASSERT_FIXTURE_DENY")
       Feature(feature: name, backend: fixtureBackendName, state: st,
-              reason: (if r.len > 0: some(r) else: none(string)),
-              remedy: (if denied and name != "window-enumeration":
-                         some("unset GUIASSERT_FIXTURE_DENY") else: none(string)))
+              reason: (if r.len > 0: some(r) else: none(string)), remedy: remedy)
     let scen = loadScenario(cfg.scenarioPath)
+    let crop = scen.windowCapture == "crop"
     result = @[f("window-enumeration"), f("display-capture"),
-               (if scen.windowCapture == "crop":
-                  f("window-capture", fsDegraded, "window-crop")
+               (if crop: f("window-capture", fsDegraded, "window-crop")
                 else: f("window-capture")),
                f("region-capture"),
-               (if cfg.mediaAvailable: f("recording-mp4")
-                else: f("recording-png-sequence"))]
+               (if crop: f("own-pixels-capture", fsUnavailable, "unsupported-option")
+                else: f("own-pixels-capture")),
+               (if cfg.mediaAvailable: f("recording")
+                else: f("recording", fsDegraded, "png-sequence"))]

@@ -15,6 +15,13 @@ type
   EventSink* = proc (event: string, data: JsonNode) {.closure.}
     ## Receives the streaming events of a verb (spec §8.4).
 
+  StdinSource* = proc (maxBytes: int): string {.closure.}
+    ## Reads the invocation's standard input whole, for `type --stdin` and
+    ## `element-action --value-stdin` (spec §7.5): the CLI's own stdin, or
+    ## the `stdin` of a serve `run` request (spec §8.3). Raises
+    ## `FileTooLargeError` beyond `maxBytes` and `IOError` when it cannot be
+    ## read.
+
   RunContext* = object
     env*: Table[string, string]
       ## The environment the invocation sees (never read from the process
@@ -35,6 +42,13 @@ type
       ## own (the `serve` daemon's flags).
     nested*: bool
       ## True under `serve`: a `serve` verb is refused.
+    stdin*: StdinSource
+      ## The invocation's standard input; nil when it has none (a serve
+      ## request without a `stdin` key).
+    stdinOffered*: bool
+      ## True when the caller handed over input explicitly (a serve request's
+      ## `stdin` key), so a verb that reads none of it is refused rather than
+      ## the input silently dropped.
 
   Outcome* = object
     ## The result of one invocation: the exit code, the one stdout line, the

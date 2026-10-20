@@ -75,6 +75,8 @@ type
 
   WorkerArg = object
     argv: seq[string]
+    stdin: string     ## the request's `stdin`
+    hasStdin: bool
     env: seq[(string, string)]
     defaults: seq[(string, string)]
     cwd, selfExe, owner, reqId: string
@@ -105,6 +107,8 @@ type
     id: string
     conn: int
     argv: seq[string]
+    stdin: string     ## the request's `stdin` key (spec §8.3)
+    hasStdin: bool
     key: string       ## "" = may run alongside anything
     state: ReqState
     token: CancelToken
@@ -159,7 +163,20 @@ proc workerMain(a: WorkerArg) {.thread.} =
   let chan = a.chan
   let conn = a.conn
   let reqId = a.reqId
+  let input = a.stdin
+  # The request's `stdin` is what `type --stdin` / `--value-stdin` read; a
+  # request without one has no standard input (the daemon's own stdin is the
+  # protocol stream, never a verb's input).
+  let source: StdinSource =
+    if a.hasStdin:
+      proc (maxBytes: int): string =
+        if input.len > maxBytes:
+          raise newException(FileTooLargeError, "the request's stdin is " & $input.len &
+            " bytes, larger than the limit of " & $maxBytes)
+        input
+    else: nil
   let ctx = RunContext(env: env, cwd: a.cwd, selfExe: a.selfExe, token: a.token,
+    stdin: source, stdinOffered: a.hasStdin,
     emit: proc (event: string, data: JsonNode) =
       var text: string
       try:
@@ -391,7 +408,8 @@ proc startRequest(d: var Daemon, r: Request) =
   r.state = rsRunning
   r.thread = createShared(Thread[WorkerArg])
   createThread(r.thread[], workerMain, WorkerArg(
-    argv: r.argv, env: env, defaults: defaults, cwd: d.ctx.cwd,
+    argv: r.argv, stdin: r.stdin, hasStdin: r.hasStdin, env: env,
+    defaults: defaults, cwd: d.ctx.cwd,
     selfExe: d.ctx.selfExe, owner: "serve:" & $getCurrentProcessId() & ":" & $r.conn,
     reqId: r.id, conn: r.conn, token: r.token, chan: d.chan))
 
@@ -503,7 +521,7 @@ proc handleProbed(d: var Daemon, m: Msg) =
     d.writeSessionState(c, s)
 
 proc handleRun(d: var Daemon, c: Conn, id: string, n: JsonNode) =
-  expectObject(n, "request", ["v", "id", "op", "argv"], ["timeoutMs"])
+  expectObject(n, "request", ["v", "id", "op", "argv"], ["timeoutMs", "stdin"])
   var argv: seq[string]
   for i, a in readArray(n, "argv", "request"):
     if a.kind != JString:
@@ -513,8 +531,10 @@ proc handleRun(d: var Daemon, c: Conn, id: string, n: JsonNode) =
     let t = readInt(n, "timeoutMs", "request")
     if t < 1: raise newException(JsonShapeError, "request.timeoutMs: must be positive")
     argv.add @["--timeout-ms", $t]
+  let hasStdin = n.hasKey("stdin")
+  let input = if hasStdin: readStr(n, "stdin", "request") else: ""
   let r = Request(id: id, conn: c.id, argv: argv, key: d.requestKey(argv),
-                  token: newCancelToken())
+                  token: newCancelToken(), stdin: input, hasStdin: hasStdin)
   if d.shuttingDown:
     d.writeEnvelopeResult(c, id, cancelledEnvelope(argv, crShutdown))
     free(r.token)
@@ -785,7 +805,8 @@ proc parseServeArgs*(argv: seq[string], ctx: RunContext): ServeOptions =
     result.transport = "unix"
     when not defined(posix):
       raise newContractError(ekBackendUnavailable, "wrong-platform",
-        "serve --listen unix: is not available on Windows in this build; use --stdio")
+        "serve --listen unix: is not available on Windows in this build; use --stdio",
+        details = %*{"feature": nil})   # a transport, not a capability (spec §7.2)
     let stateDir = resolveStateDir(
       (if "state-dir" in result.defaults: some(result.defaults["state-dir"]) else: none(string)),
       ctx.env, ctx.cwd).dir

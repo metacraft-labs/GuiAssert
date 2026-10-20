@@ -24,7 +24,7 @@ const
     "internal": @["exception", "serialization"],
     "bad-args": @["unknown-verb", "unknown-flag", "missing-argument", "invalid-value",
                   "conflicting-arguments", "unknown-backend", "contract-unsupported",
-                  "invalid-name"],
+                  "invalid-name", "name-in-use"],
     "not-found": @["session", "display", "window", "app", "element", "recording",
                    "file", "request"],
     "backend-unavailable": @["not-compiled-in", "wrong-platform", "missing-tool",
@@ -40,8 +40,9 @@ const
     ## Spec §7.3, copied by hand from the table so the test does not trust
     ## the implementation's own copy.
 
-proc checkFailure(exit: int, e: JsonNode, line: string) =
-  ## The shape every failure envelope has (spec §7.2).
+template checkFailure(exit: int, e: JsonNode, line: string) =
+  ## The shape every failure envelope has (spec §7.2). A template, so its
+  ## checks fail the test that uses it (a `check` in a proc does not).
   check e["ok"].getBool == false
   check toSeq(e.keys) == @["ok", "verb", "error"]
   let err = e["error"]
@@ -56,6 +57,20 @@ proc checkFailure(exit: int, e: JsonNode, line: string) =
     check err["reason"].getStr in frozenReasons[err["kind"].getStr]
   check err["remedy"].kind in {JString, JNull}
   check err["details"].kind in {JObject, JNull}
+  # Exit 4 and exit 6 always name the feature they lacked (spec §7.2): a
+  # name of the spec's vocabulary, or null exactly for the reasons that are
+  # not about a capability.
+  if exit in {4, 6}:
+    check err["details"].kind == JObject
+    if err["details"].kind == JObject:
+      check err["details"].hasKey("feature")
+      let f = err["details"]{"feature"}
+      if f != nil:
+        check f.kind in {JString, JNull}
+        if f.kind == JString:
+          check specFeatures().anyIt(it[0] == f.getStr)
+          check err["reason"].getStr != "session-not-running"
+        if err["reason"].getStr == "session-not-running": check f.kind == JNull
   check $parseJson(line) == line      # compact, one line
 
 suite "CLI envelope":

@@ -5,7 +5,7 @@
 ## Actions an element does not list are refused (`backend-error` /
 ## `tree-failed`), as a platform accessibility API refuses them.
 
-import std/[options, strutils]
+import std/[json, options, strutils]
 
 import ../../core/[geometry, contract, desktop_types, tree_types, interfaces]
 import ../../cancel
@@ -23,11 +23,22 @@ proc targetTree(d: Desktop, target: TreeTarget):
     if ti < 0: raise notFound("app", "no application with pid " & $target.pid)
     (ti, @[])
   of ttkApp:
+    # `--app` matches App.name exactly; a name two running applications
+    # share is refused with their pids, never resolved to the first
+    # (spec §7.5, "Matching rules").
+    var pids: seq[int]
     for a in d.apps:
-      if a.name == target.app:
-        let ti = d.treeIndex(a.pid)
-        if ti >= 0: return (ti, @[])
-    raise notFound("app", "no application named '" & target.app & "'")
+      if a.name == target.app: pids.add a.pid
+    if pids.len > 1:
+      raise badArgs("conflicting-arguments", $pids.len &
+        " running applications are named '" & target.app & "'; select one with --pid",
+        details = %*{"pids": pids})
+    if pids.len == 0:
+      raise notFound("app", "no application named '" & target.app & "'")
+    let ti = d.treeIndex(pids[0])
+    if ti < 0:
+      raise notFound("app", "application " & $pids[0] & " exposes no accessibility tree")
+    (ti, @[])
   of ttkWindow:
     let wi = d.windowIndex(target.windowId)
     if wi < 0: raise notFound("window", "no window '" & target.windowId & "'")
@@ -129,7 +140,7 @@ proc newFixtureTree*(cfg: FixtureConfig): TreeBackend =
   result.features = proc (probe: bool): seq[Feature] =
     let st = if cfg.env.denyAccessibility: fsUnavailable else: fsSupported
     let r = if cfg.env.denyAccessibility: some("tcc-accessibility") else: none(string)
-    @[Feature(feature: "tree", backend: fixtureBackendName, state: st, reason: r,
+    @[Feature(feature: "tree-read", backend: fixtureBackendName, state: st, reason: r,
               remedy: none(string)),
       Feature(feature: "element-actions", backend: fixtureBackendName, state: st,
               reason: r, remedy: none(string))]
