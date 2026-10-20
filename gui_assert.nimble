@@ -30,6 +30,7 @@ task test, "Run tests":
   exec "nim c -r --hints:off tests/tocr_vision.nim"
   exec "nim c -r --hints:off tests/tocr_backends.nim"
   exec "nim c -r --hints:off tests/tcore_types.nim"
+  exec "nim c -r --hints:off tests/tcore_contract.nim"
   exec "nim c -r --hints:off tests/tcore_png.nim"
   exec "nim c -r --hints:off tests/tcore_purity.nim"
   exec "nim c -r --hints:off tests/tcore_shims.nim"

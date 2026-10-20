@@ -27,6 +27,7 @@ type
     ## the contract's machine-readable reason (spec §7.3).
     backend*: string
     reason*: string
+    remedy*: string          ## what the operator can do; "" when nothing
 
   BackendUnavailableError* = object of BackendError
     ## The backend cannot perform the operation on this host: reasons
@@ -91,6 +92,8 @@ type
     capture*: proc (req: CaptureRequest): ImageRef {.closure.}
     startRecording*: proc (req: RecordRequest): Recording {.closure.}
     stopRecording*: proc (id: string): Recording {.closure.}
+    recordings*: proc (): seq[Recording] {.closure.}
+    features*: proc (probe: bool): seq[Feature] {.closure.}
 
   OcrRequest* = object
     imagePath*: string
@@ -106,6 +109,7 @@ type
     ## (`unsupported-option`) instead of ignoring it.
     name*: string
     recognize*: proc (req: OcrRequest): OcrResult {.closure.}
+    features*: proc (probe: bool): seq[Feature] {.closure.}
 
   TreeTargetKind* = enum
     ttkPid, ttkApp, ttkWindow, ttkFocused
@@ -133,6 +137,7 @@ type
     element*: proc (session, path: string): Node {.closure.}
     perform*: proc (session, path: string, action: NodeAction,
                     value: Option[string]): Node {.closure.}
+    features*: proc (probe: bool): seq[Feature] {.closure.}
 
   MouseButton* = enum
     mbLeft = "left"
@@ -157,6 +162,13 @@ type
     typeText*: proc (session: string, text: string,
                      intervalMs: int): InputReport {.closure.}
     key*: proc (session: string, combo: string): InputReport {.closure.}
+      ## `combo` is already normalized (`core/keys.normalizeCombo`).
+    focusWindow*: proc (session, windowId: string): Window {.closure.}
+    setWindowBounds*: proc (session, windowId: string,
+                            bounds: Rect): Window {.closure.}
+      ## Returns the window with the bounds the window server reports after
+      ## the change, which may differ from `bounds`.
+    features*: proc (probe: bool): seq[Feature] {.closure.}
 
   SessionSpec* = object
     ## A `session-start` request.
@@ -169,13 +181,41 @@ type
     vnc*: bool
     account*: Option[string]
 
+  LaunchKind* = enum
+    lkBundleId, lkAppPath, lkArgv
+
+  LaunchSpec* = object
+    ## An `app-launch` request.
+    case kind*: LaunchKind
+    of lkBundleId: bundleId*: string
+    of lkAppPath: appPath*: string
+    of lkArgv: argv*: seq[string]
+    waitWindowMs*: Option[int]   ## wait this long for the first window
+
+  LaunchReport* = object
+    app*: App
+    window*: Option[Window]      ## none when no window appeared in time
+
+  QuitReport* = object
+    pid*: int
+    exited*: bool
+    exitCode*: Option[int]
+
   SessionBackend* = object
-    ## Starting, listing and stopping sessions.
+    ## Starting, listing and stopping sessions, and the applications and
+    ## permissions of a session.
     name*: string
     start*: proc (spec: SessionSpec): Session {.closure.}
     list*: proc (): seq[Session] {.closure.}
     info*: proc (id: string): Session {.closure.}
     stop*: proc (id: string, force: bool): Session {.closure.}
+    apps*: proc (session: string): seq[App] {.closure.}
+    launch*: proc (session: string, spec: LaunchSpec): LaunchReport {.closure.}
+    quit*: proc (session: string, pid: int, force: bool): QuitReport {.closure.}
+    permissions*: proc (request: Option[string]): Permissions {.closure.}
+      ## The current permission states; `request` names a permission whose
+      ## operating-system prompt to show first (never bypassed).
+    features*: proc (probe: bool): seq[Feature] {.closure.}
 
 proc newBackendError*[T: BackendError](_: typedesc[T], backend, reason,
                                        msg: string): ref T =

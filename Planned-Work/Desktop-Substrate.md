@@ -1,7 +1,8 @@
 # GuiAssert Desktop Substrate
 
-Status: **planned** (GS0, the specification and contract, written; nothing in
-this document is implemented yet unless a section says so) · Execution:
+Status: **in progress** (GS0, the specification and contract, written; GS1,
+the core split, and GS2, the `guiassert` CLI, `serve`, the fixture backend
+and the contract suite, implemented; the platform backends of §4 are not) · Execution:
 [[Desktop-Substrate.milestones.org]] · Related:
 [[Vision-Understanding.md]], [[../src/gui_assert/image_math.nim]],
 [[../src/gui_assert/ocr.nim]], [[../src/gui_assert/screen_capture.nim]],
@@ -736,7 +737,21 @@ Every accepted request receives zero or more `event` messages and then
 - Event types in contract 1.0: `progress` (`record`), `poll` (`wait`:
   `{"attempt", "elapsedMs", "observed"}`), `windows-changed` and `frame`
   (`watch`), `session-state` (a session owned by this connection changed
-  state).
+  state; below).
+- `session-state` is the one **connection** event: a session outlives the
+  `session-start` request that created it, so the event belongs to no
+  request. It carries `"id": null` and its own `seq`, counted per connection
+  from 0 without gaps (separately from every request's `seq`), and
+  `data: {"session": Session}`, the session as `session-info` reports it.
+  The daemon sends it for the `lifetime: owner` sessions of the connection,
+  and only for changes that no request on the connection reported itself:
+  when the session's state changes on its own (its host exited: `state:
+  "error"`), which the daemon checks at least once a second, and when the
+  daemon stops the session because the connection closes or the daemon
+  shuts down (`state: "stopped"`, before the `shutdown` line). A session
+  whose record another client removed (`session-stop` on another
+  connection) is no longer owned by this one and gets no event; the
+  stopping client's own result reports it.
 
 ### 8.5 Concurrency and ordering
 

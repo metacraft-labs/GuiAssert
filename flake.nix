@@ -22,6 +22,62 @@
       pkgsFor = system: import nixpkgs { inherit system; };
     in
     {
+      # The `guiassert` program, built twice from one main (spec §3.4, §9.2):
+      # `guiassert` with every backend for the target OS (its fixture
+      # recordings encode MP4 with the pinned ffmpeg), and `guiassert-fixture`
+      # (-d:guiassertMinimal: the pure core and the fixture backends only, no
+      # platform code), which consumers' contract tests pin by revision.
+      packages = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          version = builtins.head (
+            builtins.match ''.*version *= *"([^"]+)".*'' (builtins.readFile ./gui_assert.nimble)
+          );
+          src = lib.fileset.toSource {
+            root = ./.;
+            fileset = lib.fileset.unions [
+              ./src
+              ./gui_assert.nimble
+              ./config.nims
+            ];
+          };
+          mkGuiassert =
+            name: defines: wrap:
+            pkgs.stdenv.mkDerivation {
+              pname = name;
+              inherit version src;
+              nativeBuildInputs = [ pkgs.nim ] ++ lib.optional wrap pkgs.makeWrapper;
+              buildPhase = ''
+                runHook preBuild
+                export HOME="$TMPDIR"
+                nim c --hints:off -d:release ${defines} \
+                  --nimcache:"$TMPDIR/nimcache" -o:"$TMPDIR/${name}" src/guiassert.nim
+                runHook postBuild
+              '';
+              installPhase = ''
+                runHook preInstall
+                install -Dm755 "$TMPDIR/${name}" "$out/bin/${name}"
+                runHook postInstall
+              '';
+              postFixup = lib.optionalString wrap ''
+                wrapProgram "$out/bin/${name}" \
+                  --set-default FFMPEG_BIN "${pkgs.ffmpeg}/bin/ffmpeg"
+              '';
+              meta = {
+                description = "GuiAssert desktop substrate CLI (contract guiassert-desktop/1)";
+                license = lib.licenses.mit;
+                mainProgram = name;
+              };
+            };
+        in
+        rec {
+          guiassert = mkGuiassert "guiassert" "" true;
+          guiassert-fixture = mkGuiassert "guiassert-fixture" "-d:guiassertMinimal" false;
+          default = guiassert;
+        }
+      );
+
       devShells = forAllSystems (
         system:
         let

@@ -47,3 +47,9 @@ tests/tcore_purity
 tests/tcore_shims
 tests/legacy_api
 *.exe
+build/bin/
+tests/contract/tcli_envelope
+tests/contract/tcli_state
+tests/contract/tcontract_schema
+tests/contract/tserve_protocol
+tests/tcore_contract

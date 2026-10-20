@@ -1,0 +1,7 @@
+# The contract suite: `just test-contract` and the Windows CI job run exactly
+# these test files (tests/contract/<name>.nim), in this order, once against
+# build/bin/guiassert and once against build/bin/guiassert-fixture.
+tcli_envelope
+tcli_state
+tcontract_schema
+tserve_protocol

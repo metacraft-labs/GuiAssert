@@ -175,6 +175,38 @@ type
     delivery*: Delivery
     session*: string
 
+  PermissionState* = enum
+    ## What the operating system says about one permission.
+    psGranted = "granted"
+    psDenied = "denied"
+    psNotDetermined = "not-determined"
+    psNotApplicable = "not-applicable"
+    psUnknown = "unknown"
+
+  Permissions* = object
+    ## The permissions the substrate's work depends on, and the code
+    ## identity (bundle or binary) the operating system evaluates them for.
+    screenRecording*: PermissionState
+    accessibility*: PermissionState
+    inputSynthesis*: PermissionState
+    desktopAccess*: PermissionState
+    identity*: Option[string]
+
+  FeatureState* = enum
+    ## How far a backend can provide a feature on this host.
+    fsSupported = "supported"      ## probed and working
+    fsAvailable = "available"      ## present, not actively probed
+    fsDegraded = "degraded"        ## works with a stated limitation
+    fsUnavailable = "unavailable"  ## cannot be used here
+
+  Feature* = object
+    ## One entry of the `capabilities` report.
+    feature*: string
+    backend*: string
+    state*: FeatureState
+    reason*: Option[string]
+    remedy*: Option[string]
+
 const
   hostSessionId* = "host"
     ## The reserved id of the caller's own session, which always exists.

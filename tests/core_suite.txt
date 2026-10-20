@@ -1,5 +1,6 @@
 # The core suite: `just test-core` and the Windows CI job both run exactly
 # these test files (tests/<name>.nim), in this order.
 tcore_types
+tcore_contract
 tcore_png
 tcore_purity

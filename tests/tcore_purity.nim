@@ -45,6 +45,11 @@ const
                   "unicode", "bitops", "endians", "streams", "strformat"]
     ## Spec §3.2. `streams` is for in-memory streams only.
 
+  importFreeCoreModules = ["sha256"]
+    ## Core modules with no import statement at all, so they show no import
+    ## edges; `test_core_imports_only_stdlib_allowlist` checks that they
+    ## really import nothing.
+
 proc comparable(p: string): string =
   ## `p` absolute and normalised, case-folded with one separator on Windows,
   ## so paths reported by different tools compare equal.
@@ -333,7 +338,23 @@ suite "core purity":
     for m in modules:
       let r = analyseImports("gui_assert/core/" & m, inCore, m)
       checkpoint "core/" & m & ": " & $r.edges & " import edges"
-      check r.edges > 0
+      # Every module must show its import edges (a sanity check that the
+      # analysis saw the module at all), except the ones named here, which
+      # import nothing: for those the source must carry no import, from or
+      # include statement, so the exemption cannot hide a module the
+      # analysis failed to read.
+      if m in importFreeCoreModules:
+        var statements: seq[string]
+        for line in readFile(coreDir / m & ".nim").splitLines:
+          let l = line.strip
+          if l.startsWith("import ") or l.startsWith("from ") or
+             l.startsWith("include "):
+            statements.add l
+        checkpoint "core/" & m & " import statements: " & $statements
+        check statements.len == 0
+        check r.edges == 0
+      else:
+        check r.edges > 0
       if r.nonCoreFiles.len > 0 or r.forbiddenStd.len > 0:
         checkpoint "core/" & m & " reaches outside the allowlist:\n" &
           indent(r.nonCoreFiles.join("\n") & "\n" & r.forbiddenStd.join("\n"))

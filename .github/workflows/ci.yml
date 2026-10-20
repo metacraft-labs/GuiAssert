@@ -5,7 +5,7 @@
 # one command:
 #
 #   nix develop --command just lint
-#   nix develop --command just test        # default suite (incl. core unit tests)
+#   nix develop --command just test        # default suite, then the contract suite
 #   nix develop --command just test-core   # core unit + purity checks
 #
 # Triggers. Only pushes to, and pull requests into, `dev` and `stable`. No
@@ -14,8 +14,12 @@
 # the promotion pull request into `dev` (ci-workflow-standards.md, "No CI on
 # `agents`").
 #
+# `just test` ends by running `just test-contract` (it builds build/bin/
+# guiassert and guiassert-fixture and runs the contract suite against both),
+# so the Test step covers the contract suite; it is not run a second time.
+#
 # Runner legs. The Nix job runs on the three Nix-capable legs. The Windows
-# job builds and runs the core suite with a non-Nix toolchain
+# job builds and runs the core and contract suites with a non-Nix toolchain
 # (ci/windows/provision-toolchain.ps1); it is `continue-on-error` and not a
 # required check, because Windows capacity is scarce and the job may queue.
 #
@@ -124,7 +128,7 @@ jobs:
             || echo "::warning title=S3 artifact mirror::upload failed (non-blocking)"
 
   windows:
-    name: Windows core (${{ join(matrix.runner, '-') }})
+    name: Windows core and contract (${{ join(matrix.runner, '-') }})
     # Not a required check: Windows runner capacity is scarce, and this job
     # may queue or be cancelled by a newer push before it starts.
     continue-on-error: true
@@ -151,6 +155,14 @@ jobs:
           # A child pwsh, so an uncaught failure becomes its exit code.
           pwsh -NoProfile -File ./ci/windows/run-core-suite.ps1 2>&1 |
             Tee-Object -FilePath test-logs/test-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test contract
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-logs | Out-Null
+          pwsh -NoProfile -File ./ci/windows/run-contract-suite.ps1 2>&1 |
+            Tee-Object -FilePath test-logs/test-contract.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload logs

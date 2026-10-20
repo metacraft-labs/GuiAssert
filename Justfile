@@ -8,14 +8,20 @@
 #                    (import allowlist, no FFI, links only the C runtime).
 #                    The list lives in tests/core_suite.txt so the Windows CI
 #                    job, which has no `just` recipe shell, runs the same one.
+# `just build-cli` - build/bin/guiassert (every backend for this OS) and
+#                    build/bin/guiassert-fixture (-d:guiassertMinimal: the core
+#                    and the fixture backends only).
+# `just test-contract` - the contract suite (tests/contract_suite.txt) against
+#                    the REAL built binaries, run once per binary.
 # `just lint`      - placeholder; required by the workspace pre-commit
 #                    hook.  Add real linters here as they come online.
 
 default: test
 
-# Run every default unit test against the local nim toolchain.
-test:
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_png tcore_shims; do \
+# Run every default unit test against the local nim toolchain, then the
+# contract suite against the built binaries.
+test: && test-contract
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_shims; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -26,6 +32,26 @@ test-core:
     @for f in $(grep -v '^#' tests/core_suite.txt); do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
+    done
+
+# The `guiassert` program, built twice from one main (spec §3.4, §9.2). Each
+# build keeps its own nimcache so the two defines do not invalidate each other.
+build-cli:
+    @mkdir -p build/bin
+    nim c --hints:off -d:release --nimcache:.nimcache/build-cli/guiassert -o:build/bin/guiassert src/guiassert.nim
+    nim c --hints:off -d:release -d:guiassertMinimal --nimcache:.nimcache/build-cli/guiassert-fixture -o:build/bin/guiassert-fixture src/guiassert.nim
+
+# The contract suite: the real `guiassert` and `guiassert serve` with the
+# fixture backend selected below them (spec §9.1). It runs once against each
+# binary (GUIASSERT_CONTRACT_BIN), so `guiassert-fixture` -- the binary
+# consumers' own contract tests use -- is held to the same contract. The list
+# lives in tests/contract_suite.txt so the Windows CI job runs the same one.
+test-contract: build-cli
+    @for bin in guiassert guiassert-fixture; do \
+      for f in $(grep -v '^#' tests/contract_suite.txt); do \
+        echo "===== $f ($bin) ====="; \
+        GUIASSERT_CONTRACT_BIN="$PWD/build/bin/$bin" nim c -r --hints:off tests/contract/$f.nim || exit 1; \
+      done; \
     done
 
 # The desktop-environment targets against REAL compositors (Linux, inside

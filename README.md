@@ -61,6 +61,34 @@ nim c -r --hints:off tests/tgui_assert.nim
 
 Or via `nimble test`.
 
+## The `guiassert` program
+
+`guiassert` is the desktop substrate as a program with a fixed JSON contract
+(`guiassert-desktop/1`, `Planned-Work/Desktop-Substrate.md` §7–§8): one verb
+per invocation, exactly one JSON envelope line on stdout, and a frozen exit
+code (0 ok, 1 internal, 2 bad-args, 3 not-found, 4 backend-unavailable,
+5 backend-error, 6 permission-denied, 7 timeout, 8 cancelled). `guiassert
+serve` speaks the same verbs as NDJSON over stdio or an owner-only Unix
+socket. The CLI is a thin `main` over `gui_assert/cli/run.runInvocation`, so a
+Nim program can run verbs without a subprocess.
+
+```sh
+just build-cli                     # build/bin/guiassert and build/bin/guiassert-fixture
+export GUIASSERT_BACKEND=fixture   # the deterministic fixture desktop (no OS access)
+build/bin/guiassert type Ada
+build/bin/guiassert click --at 190,278
+build/bin/guiassert find --role label --name-contains submitted
+# EOF on stdin cancels whatever is in flight; a draining shutdown lets it finish
+printf '%s\n' '{"v":1,"id":"r1","op":"run","argv":["displays"]}' \
+  '{"v":1,"id":"s1","op":"shutdown","drain":true}' | build/bin/guiassert serve
+just test-contract                 # the contract suite, against both binaries
+```
+
+`guiassert-fixture` (built `-d:guiassertMinimal`) contains only the pure core
+and the fixture backends; consumers' contract tests run against it. The
+platform backends (spec §4) answer `backend-unavailable` / `not-implemented`
+until their milestones land.
+
 ## Desktop-environment targets
 
 `gui_assert/desktop_env` drives a GUI application inside a real desktop

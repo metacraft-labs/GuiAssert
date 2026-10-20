@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS1 implemented on macOS (core/ split, shims, purity and PNG tests, CI workflow written and actionlint-clean) and independently verified on macOS; its Linux and Windows CI legs have not run yet (they run on the first pull request into dev). NEXT: GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary. GS3 part A (consumer spec, contract review) is in progress on companion/linux; its contract change requests C1–C17 are recorded under GS0's Outstanding Tasks for folding into the spec before GS2 freezes contract 1.0.
+  :next_steps: GS2 landed on macOS (guiassert CLI and serve, fixture backends, contract suite against both binaries, flake packages), independently verified. Contract 1.0 is not frozen: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) go to a dedicated follow-up milestone, and GS2's Outstanding Tasks list which of them the build already satisfies. GS3 part B can start against build/bin/guiassert-fixture (or the flake's guiassert-fixture). GS1 and GS2 Linux/Windows legs run on the first pull request into dev.
   :last_updated: 2026-10-20
-  :current_milestone: GS1
+  :current_milestone: GS2
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec and contract complete.
   :END:
 
@@ -55,7 +55,7 @@
   |-----------+-----------------+--------------------------------+---------+---------+---------|
   | GS0       | substrate/macos | completed                      | —       | —       | —       |
   | GS1       | substrate/macos | partially_completed            | completed | planned | planned |
-  | GS2       | substrate/macos | planned                        | —       | —       | —       |
+  | GS2       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | planned                        | —       | —       | —       |
   | GS5       | split           | planned                        | planned | planned | planned |
@@ -239,8 +239,10 @@
           transport (Agent Harbor reaches remote hosts through its own).
           Cadenced typing and curved pointer moves are composed by Agent
           Harbor from per-step =type= / =key= / =move= requests over =serve=.
-    - [ ] That the contract written here is the contract implemented is checked
+    - [X] That the contract written here is the contract implemented is checked
       by =test_every_documented_verb_is_implemented=, which lands in GS2.
+      (Landed in GS2 with =test_fixture_emits_every_documented_data_key=;
+      both read this spec's text.)
 
 ** GS1: GuiAssert CI and the core/opt-in module split
    :PROPERTIES:
@@ -403,133 +405,300 @@
 
 ** GS2: guiassert CLI, serve skeleton, fixture backend, contract tests
    :PROPERTIES:
-   :status: planned
+   :status: partially_completed
+   :status_note: Implemented 2026-10-20 from origin/agents at 221249df (merged forward to 3748eb24, which changed only this file) and independently verified the same day on that base: every GS2 test green on macOS (aarch64-darwin, inside nix develop), against both build/bin/guiassert and build/bin/guiassert-fixture, the contract suite three times in a row. The review decided the session-state event in spec §8.4 and implemented it, bounded every file read, made scenario strictness and the tcore_purity exemption tested (see Deviations). Linux and Windows have not run (CI runs on the pull request into dev). Contract 1.0 is NOT frozen yet: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) arrived while GS2 was being built and are not in the spec; GS2 implements the spec as written, and a dedicated follow-up milestone takes the requests (see Outstanding Tasks for which ones the build already satisfies).
    :depends_on: GS1
    :owner: substrate/macos
+   :platform_status: macos=completed linux=planned windows=planned
    :complexity: large
    :END:
 
 *** Deliverables
-    - [ ] =src/gui_assert/core/contract.nim=: envelope, exit codes, kinds,
+    - [X] =src/gui_assert/core/contract.nim=: envelope, exit codes, kinds,
       reasons, and the single =toJson= / strict =fromJson= of every object in
-      spec §7.5.
-    - [ ] =src/guiassert.nim= and =src/gui_assert/cli/= (=args=, =verbs=,
-      =registry=, =state=, =serve=): every verb of spec §7.5 parsed and
-      dispatched; verbs whose platform backend is not yet implemented answer
-      exit 4 / =not-implemented=.
-    - [ ] Fixture backends for every module (=backends/*/fixture.nim=), the
-      built-in =fixture-form= scenario, strict scenario parsing, cross-
-      invocation state under =<state-dir>/fixture/=, and the failure-injection
-      variables of spec §9.2.
-    - [ ] =guiassert serve= over =--stdio= and =--listen unix:<path>=: ready
+      spec §7.5. (Also =finiteJson=: =std/json= writes NaN and infinities as
+      the strings "nan"/"inf", so every contract float goes through a checked
+      constructor. New pure core modules beside it: =sha256= (ImageRef.sha256;
+      the stdlib has none), =keys= (the fixed key table of =key=) and =raster=
+      (the fixture's frames and its built-in 5x7 font).)
+    - [X] =src/guiassert.nim= and =src/gui_assert/cli/= (=args=, =verbs=,
+      =registry=, =state=, =serve=, plus =context= and =run=): every verb of
+      spec §7.5 parsed and dispatched; verbs whose platform backend is not yet
+      implemented answer exit 4 / =not-implemented= (=not-compiled-in= in
+      =guiassert-fixture=, =wrong-platform= for another OS's backend). The
+      library entry point is =gui_assert/cli/run.runInvocation= (argv and a
+      =RunContext= in, exit code and envelope line out); =src/guiassert.nim= is
+      a thin main holding the program's one global (the signal handler's
+      token).
+    - [X] Fixture backends for every module (=backends/*/fixture.nim=, over
+      the shared =backends/fixture_desktop.nim=), the built-in =fixture-form=
+      scenario, strict scenario parsing, cross-invocation state under
+      =<state-dir>/fixture/= (per-session desktops, a logical clock so output
+      is deterministic, the words drawn on every frame), and the
+      failure-injection variables of spec §9.2. Fixture sessions are owned by
+      a real detached session-host process (=guiassert __session-host=).
+    - [X] =guiassert serve= over =--stdio= and =--listen unix:<path>=: ready
       line, =run= / =hello= / =cancel= / =shutdown=, events with =seq=,
-      per-session ordering, deadlines, owner-lifetime sessions.
-    - [ ] Builds: =just build-cli= (=build/bin/guiassert=,
+      per-session ordering, deadlines, owner-lifetime sessions, and the
+      =session-state= connection event (=id= null, a per-connection =seq=;
+      decided in spec §8.4 during the review, see Deviations).
+    - [X] Builds: =just build-cli= (=build/bin/guiassert=,
       =build/bin/guiassert-fixture= with =-d:guiassertMinimal=), flake
       packages =guiassert= and =guiassert-fixture=, =just test-contract=.
+      (=just test= now ends with =just test-contract=; the Windows CI job runs
+      =ci/windows/run-contract-suite.ps1=, the same list,
+      =tests/contract_suite.txt=. =nix build path:.#guiassert-fixture= and
+      =.#guiassert= built 2026-10-20 on aarch64-darwin; the fixture binary
+      links only libSystem. =nix build .#…= from git needs the new files
+      tracked, i.e. after the commit.)
 
 *** Verification
+    All results below: macOS 26 (aarch64-darwin), inside =nix develop=,
+    working tree based on origin/agents at 221249df (fast-forwarded to
+    3748eb24, a milestone-file-only change), 2026-10-20. Every contract test
+    runs the REAL built binary as a subprocess (=tests/contract/harness.nim=)
+    and ran twice: against =build/bin/guiassert= and against
+    =build/bin/guiassert-fixture=. Linux and Windows have not run yet.
+    Every =falsifying_mutation= below was applied to the source, the binary
+    rebuilt, the named test seen red, and the mutation reverted.
     - test_name: test_envelope_success_is_one_line_with_ok_verb_data
       file: tests/contract/tcli_envelope.nim
       description: Every successful verb prints exactly one compact JSON line with ok/verb/data and exits 0; stderr is ignored.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: runs one successful invocation of every verb (=everyVerbScenario=, which tcontract_schema checks covers the spec's verb list) and requires the line to re-render byte-for-byte from its own parse.
+      falsifying_mutation: Rendering the envelope with ", " separators turns it red (tried 2026-10-20).
     - test_name: test_envelope_failure_carries_code_kind_message_and_matching_exit
       file: tests/contract/tcli_envelope.nim
       description: For each injected failure the envelope's code equals the exit code and the kind matches the frozen table.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also natural failures (unknown verb, missing session, missing file, the unimplemented platform default); the error object's keys are exactly code/kind/message/reason/remedy/details, reasons are checked against a hand copy of the §7.3 table, and keys that do not apply are null.
+      falsifying_mutation: Writing an empty object instead of null for absent details turns it red (tried 2026-10-20).
     - test_name: test_fixture_failure_injection_maps_every_exit_code
       file: tests/contract/tcli_envelope.nim
       description: GUIASSERT_FIXTURE_FAIL drives exits 1 through 8, each with its kind and reason.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: every code with its default reason and with every one of its kind's reasons; a reason of another kind is refused (exit 2); GUIASSERT_FIXTURE_DENY gives exit 6 with a remedy (and =windows= reports titlesVisible false instead of dropping titles); GUIASSERT_FIXTURE_UNAVAILABLE gives exit 4.
+      falsifying_mutation: Mapping injected code 6 to backend-error turns it red (tried 2026-10-20).
     - test_name: test_unknown_verb_and_unknown_flag_are_bad_args
       file: tests/contract/tcli_envelope.nim
       description: An unknown verb, an unknown flag and an unknown backend name all exit 2 with the documented reason.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Accepting an unknown verb flag turns it red (tried 2026-10-20).
     - test_name: test_reject_dont_drop_unsupported_option_is_exit_4
       file: tests/contract/tcli_envelope.nim
       description: A known option the selected backend cannot honour (e.g. --own-pixels on a crop-only fixture configuration, --lifetime owner from the CLI) exits 4 / unsupported-option instead of being ignored.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also --vnc, and the Tesseract-only OCR knobs (--psm, --invert, --upscale) and an unlisted --lang on the fixture OCR; controls: the crop scenario without --own-pixels answers source.kind "window-crop", the default scenario answers "window".
+      falsifying_mutation: Letting the crop configuration ignore --own-pixels turns it red (tried 2026-10-20).
     - test_name: test_every_documented_verb_is_implemented
       file: tests/contract/tcontract_schema.nim
       description: The verb table parsed from Planned-Work/Desktop-Substrate.md equals the CLI registry.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also every documented verb resolves in the built binary (no unknown-verb), an undocumented one is refused, the binary's contract name/major is the one the spec's §7 heading names, and the every-verb scenario covers exactly the spec's verbs.
+      falsifying_mutation: Dropping =recordings= from the registry turns it red (tried 2026-10-20).
     - test_name: test_fixture_emits_every_documented_data_key
       file: tests/contract/tcontract_schema.nim
       description: For every verb, the fixture's data object contains every key the spec documents, with the documented JSON type.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: parses each verb's data schema and the common-objects block from the spec text (unions, literals, maps, tuples, ImageRef.source; Permissions from its prose in the permissions row) and also refuses undocumented keys (lossy excepted). A control test checks the checker reports a missing, a mistyped and an extra key.
+      falsifying_mutation: Dropping =minimized= from Window's serializer turns it red (tried 2026-10-20).
     - test_name: test_state_dir_precedence_flag_env_default
       file: tests/contract/tcli_state.nim
       description: --state-dir beats GUIASSERT_STATE_DIR beats the platform default; records are mode 0600.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also directories 0700 (state root, sessions/, fixture/); on Linux XDG_STATE_HOME is checked too.
+      falsifying_mutation: Letting GUIASSERT_STATE_DIR beat --state-dir turns it red (tried 2026-10-20).
     - test_name: test_backend_selection_precedence
       file: tests/contract/tcli_state.nim
       description: Module flag beats --backend beats module env beats GUIASSERT_BACKEND beats session and platform default; no fallback from an explicit selection.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: observed through =capabilities.selected=; the session rule uses a real session whose record names non-fixture backends; no fallback: an explicit backend that cannot run is exit 4 with details.backend / selectedBy, and the platform default is reported not-implemented (guiassert) or not-compiled-in (guiassert-fixture), never replaced.
+      falsifying_mutation: Swapping the module-env and GUIASSERT_BACKEND rules turns it red (tried 2026-10-20).
     - test_name: test_fixture_state_persists_across_invocations
       file: tests/contract/tcli_state.nim
       description: Separate processes: type into the fixture text field, click Submit, then tree and ocr both show the status label.
-      status: pending
-      negative_control: Without the click, neither tree nor ocr contains the status label.
+      status: passing (macOS, both binaries)
+      negative_control: Without the click, neither tree nor ocr contains the status label (and both show the typed text, so the control is not vacuous). Passing.
+      falsifying_mutation: Disabling the Submit button's press effect turns it red (tried 2026-10-20).
     - test_name: test_session_lifecycle_start_list_info_stop_via_fixture
       file: tests/contract/tcli_state.nim
       description: session-start/list/info/stop round-trip through the state directory; stopping host is bad-args; a session whose host pid died reports state error.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: the host process is real (SIGKILLed by the test); a verb in the dead session is exit 4 / session-not-running; a session's desktop is its own (typing in it leaves host's untouched).
+      falsifying_mutation: Reporting a dead host's session as running turns it red (tried 2026-10-20).
     - test_name: test_wait_condition_not_met_exits_7_with_attempts
       file: tests/contract/tcli_envelope.nim
       description: wait --wait-ms on a fixture condition that never holds exits 7 / condition-not-met with details.attempts > 0; --timeout-ms not larger than --wait-ms is bad-args / conflicting-arguments.
-      status: pending
-      negative_control: The same wait on a condition the fixture satisfies exits 0 with matched true.
+      status: passing (macOS, both binaries)
+      negative_control: The same wait on a condition the fixture satisfies exits 0 with matched true (attempts 1, the matched element returned). Passing.
+      falsifying_mutation: Stopping one attempt early (>= instead of >) turns it red (tried 2026-10-20).
     - test_name: test_invalid_name_is_bad_args_never_sanitized
       file: tests/contract/tcli_state.nim
       description: session-start --name with a slash, a leading dot or 65 characters exits 2 / invalid-name and writes no record.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also --session and record-stop ids; control: the longest valid name (64) is kept as given.
+      falsifying_mutation: Checking only the length of a name turns it red (tried 2026-10-20).
     - test_name: test_contract_flag_and_hello_reject_unknown_major
       file: tests/contract/tserve_protocol.nim
       description: --contract 2 on the CLI and hello with contract [2] over serve both answer exit 2 / contract-unsupported; --contract 1 and hello [1] are accepted.
-      status: pending
+      status: passing (macOS, both binaries)
     - test_name: test_sigterm_exits_8_with_envelope
       file: tests/contract/tcli_envelope.nim
       description: SIGTERM during a delayed fixture verb yields one envelope with code 8 / signal.
-      status: pending
+      status: passing (macOS, both binaries); POSIX only (not compiled on Windows, which has no SIGTERM)
+      falsifying_mutation: A signal handler that does not cancel turns it red (tried 2026-10-20).
     - test_name: test_serve_ready_line_then_results_by_id
       file: tests/contract/tserve_protocol.nim
       description: The daemon writes the ready line first, and every request gets exactly one result with its id.
-      status: pending
+      status: passing (macOS, both binaries)
     - test_name: test_serve_cli_byte_parity_for_every_verb
       file: tests/contract/tserve_protocol.nim
       description: For every verb, the serve result envelope is byte-identical to the CLI stdout line for the same argv and state, and the exit codes match.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: the state directory is snapshotted before each CLI run and restored before the serve run, so both see the same state; four failure cases are compared too. =session-start= is compared with =hostPid= masked: it is the pid of a newly started process and cannot be equal between two starts (see Deviations); every other byte is compared.
+      falsifying_mutation: Re-rendering the envelope inside the serve result turns it red (tried 2026-10-20).
     - test_name: test_serve_cancel_running_request_exits_8
       file: tests/contract/tserve_protocol.nim
       description: Cancelling a delayed request yields exit 8 / request; cancelling an unknown id is exit 3.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also already-finished, and a queued request cancelled before it starts.
+      falsifying_mutation: Ignoring cancel for a running request turns it red (tried 2026-10-20).
     - test_name: test_serve_timeout_exits_7
       file: tests/contract/tserve_protocol.nim
       description: timeoutMs shorter than the injected delay yields exit 7 / deadline.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Not applying the deadline turns it red (tried 2026-10-20).
     - test_name: test_serve_duplicate_inflight_id_is_protocol_error
       file: tests/contract/tserve_protocol.nim
       description: A second request with an in-flight id is a protocol-error and does not run; malformed lines and unknown keys keep the connection open.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: the duplicate is a =type= whose effect is checked absent afterwards; nine malformed lines (incl. a >1 MiB line) each answer protocol-error and a later hello still answers.
+      falsifying_mutation: Removing the in-flight id check turns it red (tried 2026-10-20).
     - test_name: test_serve_same_session_requests_run_in_order
       file: tests/contract/tserve_protocol.nim
       description: Input requests for one session execute in arrival order even when a later one is faster; requests for different sessions overlap.
-      status: pending
+      status: passing (macOS, both binaries)
+      negative_control: Two delayed requests for one session take at least the sum of their delays (measured against the overlap of two sessions). Passing.
+      falsifying_mutation: Scheduling without the per-session key turns it red (tried 2026-10-20).
     - test_name: test_serve_events_seq_has_no_gaps
       file: tests/contract/tserve_protocol.nim
       description: record and wait stream progress/poll events numbered from 0 without gaps, followed by one result.
-      status: pending
+      status: passing (macOS, both binaries)
+      as_built: also watch --windows; the record checks its format (png-sequence in guiassert-fixture, mp4 otherwise).
+      falsifying_mutation: Advancing seq by 2 turns it red (tried 2026-10-20).
     - test_name: test_serve_shutdown_on_stdin_eof_stops_owner_sessions
       file: tests/contract/tserve_protocol.nim
       description: EOF on stdin cancels in-flight requests, stops owner-lifetime sessions, leaves detached ones, writes the shutdown line and exits 0.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Skipping the owner-session stop turns it red (tried 2026-10-20).
     - test_name: test_serve_socket_is_owner_only
       file: tests/contract/tserve_protocol.nim
       description: The unix socket is created 0600 in a 0700 directory and serves the same protocol as stdio.
-      status: pending
+      status: passing (macOS, both binaries); POSIX only
+      as_built: two independent connections; the CLI's bytes over the socket; closing a connection stops its owner sessions only; a socket directory open to others is refused (exit 2). The peer-uid check (getpeereid / SO_PEERCRED) cannot be exercised without a second user and is not tested.
+      falsifying_mutation: Creating the socket 0666 turns it red (tried 2026-10-20).
+    - test_name: test_serve_session_state_events_for_owner_sessions
+      file: tests/contract/tserve_protocol.nim
+      description: (Added in the GS2 review.) The connection event session-state (spec §8.4): id null, its own seq from 0, data.session as session-info reports it; sent when an owner session's host dies (state error) and for each owner session stopped at shutdown, before the shutdown line.
+      status: passing (macOS, both binaries)
+      negative_control: Nothing is sent while nothing changes; a detached session of the same connection whose host dies produces no event, and the dead owner session is reported once. Passing.
+      falsifying_mutation: Not advancing the connection seq turns it red (tried 2026-10-20).
     - test_name: nix develop --command just test-contract
       description: The whole contract suite on Linux and macOS.
-      status: pending
+      status: passing on macOS (52 OK: 26 tests x 2 binaries, 0 FAILED; run three times in a row in the review); Linux pending its first CI run
+    - test_name: nix develop --command just test
+      description: (Added in GS2.) The default suite still green, now followed by the contract suite.
+      status: passing (macOS; 253 OK, 0 FAILED, contract suite included)
+    - test_name: nix develop --command just test-core
+      description: (Added in GS2.) The core suite with the new core modules.
+      status: passing (macOS; 29 OK, 0 FAILED)
+    - test_name: nix develop --command nim c -r --hints:off tests/tcore_contract.nim
+      description: (Added in GS2.) Unit tests of core/contract (round-trips of every object, strict parsing, UTF-8 repair, timestamps, non-finite floats, 53-bit integers, reason validation), core/sha256 (FIPS 180-4 vectors and block boundaries), core/keys and core/raster.
+      status: passing (macOS; 12 OK)
+    - test_name: nix shell nixpkgs#actionlint nixpkgs#shellcheck -c actionlint .github/workflows/ci.yml
+      description: The workflow stays valid with the Windows contract step.
+      status: passing 2026-10-20
+
+*** Deviations
+    - =session-state= (spec §8.4) was not emitted as implemented: the spec
+      did not say which id or =seq= it carries, since a session outlives the
+      request that started it. Resolved in the review: §8.4 now makes it the
+      one connection event (=id= null, a per-connection =seq=,
+      =data.session=), sent when an owner session changes state on its own
+      (checked every 250 ms by a prober thread running =session-info=) and
+      when the daemon stops it at disconnect or shutdown; implemented and
+      covered by =test_serve_session_state_events_for_owner_sessions=.
+    - Byte parity of =session-start= masks =hostPid=, the pid of the newly
+      started session host: two starts cannot have equal pids.
+    - The vision verbs are implemented in GS2 over the pure core (their =data=
+      is needed by =test_fixture_emits_every_documented_data_key=), except
+      =vision-segment <video>=, which answers exit 4 (=not-implemented=;
+      =not-compiled-in= in =guiassert-fixture=). GS4 implements video input
+      and owns the vision tests.
+    - =serve --listen unix:= is POSIX-only for now: Nim's standard library has
+      no AF_UNIX on Windows, so there it answers exit 4 / =wrong-platform=;
+      =--stdio= works everywhere. Follow-up with the Windows backends (GS11).
+    - =--listen unix:= with an empty path means the default
+      =<state-dir>/serve.sock= (the spec names the default, not its spelling).
+      The state directory is made 0700 as every state directory is; a custom
+      socket directory must already be 0700 and is refused otherwise rather
+      than having its mode changed.
+    - =ocr --image= reports the file as an =ImageRef= with =source.kind=
+      ="file"=, its own size and SHA-256, =capturedAt= from its modification
+      time, and =origin [0,0]= / =scale 1= (a file carries no desktop
+      placement).
+    - =wait= reports =elapsedMs= as the scheduled time of the matching attempt
+      (=(attempt-1) * interval=), so the same wait yields the same envelope;
+      the polls are paced by real time.
+    - =session-stop= removes the record (a later =session-info= is exit 3);
+      the returned =Session= says =stopped=.
+    - In =guiassert-fixture= nothing is selected implicitly: with no selection
+      the platform default applies and answers =not-compiled-in= (consumers
+      set =GUIASSERT_BACKEND=fixture=).
+    - =core/interfaces= gained what the verbs need: =BackendError.remedy=,
+      =features= on every backend, =recordings= (capture), =focusWindow= /
+      =setWindowBounds= (input), and =apps= / =launch= / =quit= /
+      =permissions= (session). =core/desktop_types= gained =Permissions= and
+      =Feature=.
+    - =tests/tcore_purity.nim=: the per-module "the analysis saw import edges"
+      sanity check exempts the modules named in =importFreeCoreModules=
+      (=core/sha256=, which imports nothing). The review replaced a text
+      probe for ="import "= (which a =from= import would have slipped past)
+      with that explicit list, and the test now requires an exempt module to
+      have zero edges and no import, from or include statement; every other
+      core module must still show edges, and the allowlist check itself
+      applies to all. The control on =image_math= still proves edge
+      detection.
+    - Review additions: every file GuiAssert reads on a caller's behalf is
+      bounded (=state_store.readFileCapped=: records and scenarios 4 MiB,
+      =type --text-file= 1 MiB, PNG files 256 MiB); an oversized file is
+      =bad-args= / =invalid-value=. Scenario strictness (unknown keys at the
+      top and nested) is now exercised by
+      =test_unknown_verb_and_unknown_flag_are_bad_args=, with the oversized
+      inputs.
+    - Windows: the session host cannot fork; the starter keeps its own
+      standard handles out of the host instead. Neither that nor any Windows
+      leg has run yet.
+
+*** Outstanding Tasks
+    - [X] Independent verification of this implementation (2026-10-20, on
+      origin/agents 3748eb24; committed on green).
+    - [ ] Decide the companion campaign's contract requests C1–C17 (GS0
+      Outstanding Tasks) in the spec, then implement them (C1–C16 before
+      contract 1.0 is called frozen; C17 in any 1.x minor). Out of GS2's
+      scope: a dedicated follow-up milestone takes them; none is decided or
+      implemented yet. As built today: C9 (a dead session's verbs answer
+      exit 4 / =session-not-running=) and C16 (=set-value --value ""= clears)
+      already hold; C8's key table differs (case-sensitive, no aliases such as
+      =Enter= / =Esc= / =control= / =option= / =command= / =meta= / =super= /
+      =win=, no =Pause=; it is =gui_assert/core/keys.nim=); C10's duplicate
+      =--name= is exit 2 / =conflicting-arguments=, not =name-in-use=;
+      C7's =capabilities= already honours =--session= but its feature names
+      are not a closed set yet; the others are not implemented.
+    - [X] Spec: say which id and =seq= a =session-state= event carries, then
+      emit it (decided in §8.4 and implemented in the review; Deviations).
+    - [ ] First CI run of the contract suite on Linux x64/arm64 and on the
+      Windows job; record the results above.
 
 *** Modules to Study & Entry Points
     - =src/gui_assert_vision.nim= (=parseVisionArgs=, =main=) — existing pure argv parser style.
