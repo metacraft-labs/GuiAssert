@@ -57,4 +57,8 @@ tests/tcore_mp4
 tests/contract/tcontract_decisions
 tests/contract/tvision_verbs
 tests/tmacos_capture
+tests/tswift_helper_cache
 tests/live/tcapture_macos
+tests/contract/tocr_verbs
+tests/live/tocr_macos
+tests/live/tocr_tesseract

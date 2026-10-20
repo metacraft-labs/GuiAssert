@@ -11,7 +11,8 @@
 ## `guiassertNoFixture`) omits one backend.
 ##
 ## **Implemented.** The platform backends of spec §4 are filled in by later
-## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`.
+## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`,
+## GS6 the OCR engines `apple-vision` and `tesseract`.
 ## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
@@ -85,8 +86,10 @@ const
     KnownBackend(module: modCapture, name: "windows-gdi", platforms: {hpWindows}),
     KnownBackend(module: modCapture, name: "fixture", platforms: allPlatforms,
                  implemented: true),
-    KnownBackend(module: modOcr, name: "apple-vision", platforms: {hpMacos}),
-    KnownBackend(module: modOcr, name: "tesseract", platforms: allPlatforms),
+    KnownBackend(module: modOcr, name: "apple-vision", platforms: {hpMacos},
+                 implemented: true),
+    KnownBackend(module: modOcr, name: "tesseract", platforms: allPlatforms,
+                 implemented: true),
     KnownBackend(module: modOcr, name: "windows-media", platforms: {hpWindows}),
     KnownBackend(module: modOcr, name: "fixture", platforms: allPlatforms,
                  implemented: true),
@@ -150,6 +153,14 @@ const
     ## Whether the macOS capture backends' code is linked into this binary
     ## (either of them needs the module; `compiledIn` decides which one is
     ## selectable).
+
+const
+  appleVisionCompiledIn* = not minimalBuild and defined(macosx) and
+    not defined(guiassertNoOcr) and not defined(guiassertNoAppleVision)
+    ## Whether the `apple-vision` OCR engine's code is linked into this binary.
+  tesseractCompiledIn* = not minimalBuild and not defined(guiassertNoOcr) and
+    not defined(guiassertNoTesseract)
+    ## Whether the `tesseract` OCR engine's code is linked into this binary.
 
 proc knownIndex(module: Module, name: string): int =
   for i, b in knownBackends:

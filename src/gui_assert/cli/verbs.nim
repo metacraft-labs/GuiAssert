@@ -38,6 +38,12 @@ when macosCaptureCompiledIn:
   import ../backends/capture/macos_sck
   import ../backends/capture/macos_cgwindow
 
+when appleVisionCompiledIn:
+  import ../backends/ocr/apple_vision
+
+when tesseractCompiledIn:
+  import ../backends/ocr/tesseract
+
 proc fromBackendError*(e: ref BackendError): ref ContractError =
   ## The contract error for a backend error: not found (3), unavailable (4),
   ## permission denied (6) or failed (5), carrying the backend's reason and
@@ -303,9 +309,15 @@ proc captureBackend*(e: VerbEnv): CaptureBackend =
 proc ocrBackend*(e: VerbEnv): OcrEngine =
   ## The selected OCR engine.
   e.ensureAvailable(modOcr)
-  case e.selection[modOcr].name
-  of fixtureBackendName: newFixtureOcr(e.fixtureCfg)
-  else: raise noConstructor(modOcr, e.selection[modOcr].name)
+  let name = e.selection[modOcr].name
+  if name == fixtureBackendName: return newFixtureOcr(e.fixtureCfg)
+  when appleVisionCompiledIn:
+    if name == appleVisionName:
+      return newAppleVisionOcr(AppleVisionConfig(token: e.ctx.token))
+  when tesseractCompiledIn:
+    if name == tesseractName:
+      return newTesseractOcr(TesseractConfig(token: e.ctx.token))
+  raise noConstructor(modOcr, name)
 
 proc treeBackend*(e: VerbEnv): TreeBackend =
   ## The selected accessibility-tree backend.
@@ -714,23 +726,35 @@ proc verbRecordings(e: VerbEnv): JsonNode =
 # ---------------------------------------------------------------------------
 
 proc verbOcr(e: VerbEnv): JsonNode =
+  ## `ocr` of an image file, or of a frame it captures to `--out` first. The
+  ## engine's option checks run before the capture, so a refused option
+  ## leaves no frame behind; a frame whose recognition then fails is removed
+  ## too, because a failure reports no image (spec §7.5, "Captured content").
   if e.inv.has("image"):
     e.inv.refuse(["out", "display", "window", "region"],
                  "with --image (it reads an existing file)")
     let path = e.resolvePath(e.inv.value("image").get)
     let req = e.ocrRequest(path)
+    let ocr = e.ocrBackend()
+    if ocr.validate != nil: ocr.validate(req)
     let img = fileImageRef(path)
-    return ocrDataJson(img, e.ocrBackend().recognize(req))
+    return ocrDataJson(img, ocr.recognize(req))
   if not (e.inv.has("display") or e.inv.has("window") or e.inv.has("region")):
     raise badArgs("missing-argument", "ocr needs --image, or --display, --window " &
       "or --region with --out")
   let outPath = e.resolvePath(e.inv.require("out"))
   let req = e.ocrRequest(outPath)
   let ocr = e.ocrBackend()
+  if ocr.validate != nil: ocr.validate(req)
   let img = featured(captureFeatureOf(e.inv)):
     e.captureBackend().capture(CaptureRequest(session: e.session,
       target: e.captureTarget(), outPath: outPath, cursor: false))
-  ocrDataJson(img, ocr.recognize(req))
+  try:
+    result = ocrDataJson(img, ocr.recognize(req))
+  except CatchableError:
+    try: removeFile(outPath)
+    except OSError: discard
+    raise
 
 # ---------------------------------------------------------------------------
 # Accessibility tree

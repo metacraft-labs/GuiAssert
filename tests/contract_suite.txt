@@ -7,3 +7,4 @@ tcontract_schema
 tserve_protocol
 tcontract_decisions
 tvision_verbs
+tocr_verbs

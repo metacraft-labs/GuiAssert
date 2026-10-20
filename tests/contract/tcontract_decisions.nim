@@ -395,7 +395,7 @@ suite "contract 1.0 decisions":
       (@["ocr", "--image", shot, "--psm", "6"], env, 4, "unsupported-option", "ocr"),
       (@["--capture-backend", "linux-x11", "ocr", "--region", "0,0,10,10", "--out",
          work / "b.png"], env, 4, "", "region-capture"),
-      (@["--ocr-backend", "tesseract", "ocr", "--region", "0,0,10,10", "--out",
+      (@["--ocr-backend", foreignOcrBackend, "ocr", "--region", "0,0,10,10", "--out",
          work / "c.png"], env, 4, "", "ocr"),
       (@["session-start", "--kind", "headless", "--vnc"], env, 4, "unsupported-option",
        "session-vnc"),

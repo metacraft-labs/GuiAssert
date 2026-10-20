@@ -11,7 +11,10 @@
 # `just build-cli` - build/bin/guiassert (every backend for this OS) and
 #                    build/bin/guiassert-fixture (-d:guiassertMinimal: the core
 #                    and the fixture backends only).
-# `just test-live-macos` - the TCC-gated macOS live capture suite (GS5).
+# `just test-live-macos` - the macOS live suites: capture (GS5, TCC-gated)
+#                    and OCR (GS6: Apple Vision over files, and over captures).
+# `just test-live-tesseract` - the tesseract OCR engine against the pinned
+#                    tesseract (GS6; Linux and macOS, inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
 #                    the REAL built binaries, run once per binary.
 # `just lint`      - placeholder; required by the workspace pre-commit
@@ -22,7 +25,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tswift_helper_cache; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -62,14 +65,27 @@ test-desktop-env:
     nim c -r --hints:off tests/tdesktop_env_targets.nim
     nim c -r --hints:off tests/tdesktop_env_attach.nim
 
-# The macOS live capture suite (GS5): the real `guiassert` with the
+# The macOS live suites. Capture (GS5): the real `guiassert` with the
 # macos-sck / macos-cgwindow backends against the real window server, the
 # signed helper bundle and an AppKit fixture app built at test time. Needs
 # an unlocked GUI session and the one-time Screen Recording grant for
 # ~/Library/Application Support/GuiAssert/GuiAssertCapture.app; without
 # them the gated tests FAIL with a BLOCKED line (spec §9.4), never skip.
+# OCR (GS6): the apple-vision engine over invented image files (no
+# permission needed) and over a capture of a fixture window (gated as above).
+# Both suites run even when the first fails (a BLOCKED capture suite must not
+# hide the OCR results); the recipe fails when either does.
 test-live-macos: build-cli
-    nim c -d:tccLive -r --hints:off tests/live/tcapture_macos.nim
+    @status=0; for f in tcapture_macos tocr_macos; do \
+      echo "===== $f ====="; \
+      nim c -d:tccLive -r --hints:off tests/live/$f.nim || status=1; \
+    done; exit $status
+
+# The tesseract OCR engine (GS6) through the real `guiassert`, against the
+# tesseract and ffmpeg the flake pins (run inside `nix develop`). Needs no
+# permission and no display.
+test-live-tesseract: build-cli
+    nim c -r --hints:off tests/live/tocr_tesseract.nim
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:

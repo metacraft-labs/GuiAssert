@@ -33,6 +33,12 @@ const foreignCaptureBackend* =
   ## unavailable backend without failure injection select it, now that the
   ## platform defaults are implemented (GS5 onwards).
 
+const foreignOcrBackend* =
+  when defined(windows): "apple-vision" else: "windows-media"
+  ## An OCR engine of another platform: selecting it is exit 4 in every build
+  ## (`wrong-platform`, or `not-compiled-in` in guiassert-fixture), now that
+  ## `tesseract` and `apple-vision` are implemented (GS6).
+
 proc contractBin*(): string =
   ## The binary under test. Fails loudly when it has not been built.
   result = getEnv("GUIASSERT_CONTRACT_BIN")

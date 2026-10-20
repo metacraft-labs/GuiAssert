@@ -60,9 +60,15 @@
                 install -Dm755 "$TMPDIR/${name}" "$out/bin/${name}"
                 runHook postInstall
               '';
+              # The packaged program carries its external tools: ffmpeg for the
+              # media backend and tesseract (with its default English
+              # traineddata) for the `tesseract` OCR engine, the Linux default
+              # (spec §4.2, "Pinned by the flake"). `--set-default` keeps a
+              # caller's own FFMPEG_BIN / TESSERACT_BIN.
               postFixup = lib.optionalString wrap ''
                 wrapProgram "$out/bin/${name}" \
-                  --set-default FFMPEG_BIN "${pkgs.ffmpeg}/bin/ffmpeg"
+                  --set-default FFMPEG_BIN "${pkgs.ffmpeg}/bin/ffmpeg" \
+                  --set-default TESSERACT_BIN "${pkgs.tesseract}/bin/tesseract"
               '';
               meta = {
                 description = "GuiAssert desktop substrate CLI (contract guiassert-desktop/1)";
@@ -75,6 +81,31 @@
           guiassert = mkGuiassert "guiassert" "" true;
           guiassert-fixture = mkGuiassert "guiassert-fixture" "-d:guiassertMinimal" false;
           default = guiassert;
+        }
+      );
+
+      # The packaged `guiassert` finds its tesseract with no dev shell and no
+      # PATH: run from an empty environment, its probed `tesseract` OCR
+      # feature must be `supported` (the program ran and listed its default
+      # language), so a package whose wrapper lost TESSERACT_BIN fails here.
+      checks = forAllSystems (
+        system:
+        let
+          pkgs = pkgsFor system;
+          guiassert = self.packages.${system}.guiassert;
+        in
+        {
+          guiassert-packaged-tesseract =
+            pkgs.runCommand "guiassert-packaged-tesseract" { nativeBuildInputs = [ pkgs.jq ]; }
+              ''
+                export HOME="$TMPDIR"
+                env -i HOME="$HOME" ${guiassert}/bin/guiassert --state-dir "$TMPDIR/state" \
+                  --ocr-backend tesseract capabilities --probe > caps.json
+                jq -e '.ok == true and ([.data.features[]
+                         | select(.feature == "ocr" and .backend == "tesseract"
+                                  and .state == "supported")] | length == 1)' caps.json
+                touch "$out"
+              '';
         }
       );
 

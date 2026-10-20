@@ -20,8 +20,8 @@ import std/[os, osproc, strtabs, strutils, streams, math, tempfiles]
 
 import ./media
 import ./image_math
-import ./swift_helper
-import ./core/ocr_types
+import ./core/[ocr_types, interfaces]
+import ./backends/ocr/apple_vision
 
 # The OCR types (`OcrWord`, `OcrOptions`, the backend enums, the two error
 # types) and the pure helpers (`initOcrOptions`, `concatenatedText`,
@@ -357,56 +357,24 @@ proc parsePixelTsv(output: string): seq[OcrWord] =
 
 # --- Apple Vision (macOS) --------------------------------------------------
 
-proc appleVisionHelperSource(): string =
-  ## Path to the bundled Swift helper source. Honors
-  ## `GUIASSERT_VISION_HELPER_SRC`; otherwise resolves relative to this module.
-  let envSrc = getEnv("GUIASSERT_VISION_HELPER_SRC")
-  if envSrc.len > 0:
-    return envSrc
-  result = currentSourcePath().parentDir / "helpers" / "vision_ocr.swift"
-
 proc appleVisionProbablyAvailable(): bool =
-  ## Cheap probe (no compilation): macOS + a resolvable swiftc + the helper
-  ## source (or a prebuilt binary via `GUIASSERT_VISION_HELPER`).
-  when hostOS != "macosx":
-    return false
-  else:
-    let prebuilt = getEnv("GUIASSERT_VISION_HELPER")
-    if prebuilt.len > 0 and fileExists(prebuilt):
-      return true
-    return resolveSwiftc().len > 0 and fileExists(appleVisionHelperSource())
+  ## Cheap probe (no compilation): macOS and a prebuilt helper
+  ## (`GUIASSERT_VISION_HELPER`) or a `swiftc` to build one.
+  visionHelperProbablyAvailable()
 
 proc resolveAppleVisionHelper*(): string =
-  ## macOS-only. Return the path to a compiled Apple Vision OCR helper binary,
-  ## compiling the bundled Swift source on demand with `swiftc` into a cache dir
-  ## (recompiled only when missing or older than the source). Honors
+  ## macOS-only. Return the path to a compiled Apple Vision OCR helper binary.
+  ## The helper is the one the `apple-vision` engine of the `guiassert`
+  ## program runs (`backends/ocr/apple_vision.visionHelperBinary`): it honors
   ## `GUIASSERT_VISION_HELPER` (prebuilt binary), `GUIASSERT_VISION_HELPER_SRC`
-  ## (source override) and `SWIFTC`. Raises `OcrBackendUnavailable` when the
-  ## platform, toolchain, or source is missing — never `OcrError`.
-  when hostOS != "macosx":
-    raise newException(OcrBackendUnavailable,
-      "Apple Vision backend is macOS-only")
-  else:
-    let prebuilt = getEnv("GUIASSERT_VISION_HELPER")
-    if prebuilt.len > 0:
-      if fileExists(prebuilt): return prebuilt
-      raise newException(OcrBackendUnavailable,
-        "GUIASSERT_VISION_HELPER points at " & prebuilt &
-        " but no file exists there.")
-    let src = appleVisionHelperSource()
-    if not fileExists(src):
-      raise newException(OcrBackendUnavailable,
-        "Apple Vision helper source not found: " & src &
-        " (set GUIASSERT_VISION_HELPER_SRC or GUIASSERT_VISION_HELPER).")
-    # The swiftc lookup, the SDKROOT / DEVELOPER_DIR sanitization and the
-    # mtime-keyed recompile all live in `swift_helper` now, because the
-    # ScreenCaptureKit still-capture helper needs exactly the same treatment.
-    # `SwiftHelperError` is remapped so this proc's contract is unchanged: it
-    # raises `OcrBackendUnavailable`, never `OcrError`.
-    try:
-      return compileSwiftHelper("gui_assert_vision_helper", "vision_ocr", src)
-    except SwiftHelperError as e:
-      raise newException(OcrBackendUnavailable, e.msg)
+  ## (source override) and `SWIFTC`, and otherwise builds the source embedded
+  ## at build time, caching the binary. This path runs the helper's original
+  ## line-level mode. Raises `OcrBackendUnavailable` when the platform,
+  ## toolchain, or source is missing — never `OcrError`.
+  try:
+    return visionHelperBinary()
+  except BackendUnavailableError as e:
+    raise newException(OcrBackendUnavailable, e.msg)
 
 proc runAppleVision(imagePath: string, opts: OcrOptions): seq[OcrWord] =
   ## Run the macOS Apple Vision helper on `imagePath`. `opts` is accepted for API

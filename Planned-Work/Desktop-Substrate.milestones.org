@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
+  :next_steps: GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
   :last_updated: 2026-10-20
-  :current_milestone: GS5
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends (live evidence pending an unlocked session).
+  :current_milestone: GS6
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
   :END:
 
 * Introduction
@@ -60,7 +60,7 @@
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
-  | GS6       | split           | planned                        | planned | planned | planned |
+  | GS6       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
   | GS8       | split           | planned                        | planned | planned | planned |
   | GS9       | substrate/macos | planned                        | planned | —       | —       |
@@ -1551,21 +1551,53 @@
 
 ** GS6: OCR backends
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
+   :status_note: macOS parts implemented 2026-10-20 from origin/agents at ece9b24 (apple-vision and tesseract engines behind the ocr verb, over files and captures). Every GS6 test that needs no screen passes; the capture-then-read test is BLOCKED on a locked GUI session (GS5's blocker). Awaiting independent verification.
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=planned linux=planned windows=planned
+   :platform_status: macos=in_progress linux=planned windows=planned
    :platform_prereqs: GS5=macos (capture-then-OCR on macOS only)
    :complexity: medium
    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
-      - [ ] =backends/ocr/apple_vision.nim= behind the =ocr= verb (confidence
+      - [X] =backends/ocr/apple_vision.nim= behind the =ocr= verb (confidence
         normalized to 0–100); Tesseract-only knobs refused.
-      - [ ] =backends/ocr/tesseract.nim= (shared by every OS) behind the =ocr= verb.
+        (As built: word boxes from Vision's per-range boxes
+        (=VNRecognizedText.boundingBox(for:)=), a line Vision gives no word
+        boxes for reported as one word with the line's box; rows of text
+        regrouped across Vision observations for reading order; accurate
+        level, language correction off; =--lang= takes Vision's own codes
+        (=en-US=, =zh-Hans=) and an unsupported one is exit 4 /
+        =unsupported-option=; the helper is built from a source copy embedded
+        at build time, so an installed =guiassert= needs no checkout.)
+      - [X] =backends/ocr/tesseract.nim= (shared by every OS) behind the =ocr= verb.
+        (As built: =--lang= takes tesseract's codes, default =eng=, checked
+        against =tesseract --list-langs=; =--psm= passed through;
+        =--invert= decided by GuiAssert with tesseract's own inversion off;
+        =--upscale= nearest-neighbour in the pure core, boxes mapped back to
+        the original image; =line= numbers distinct (block, paragraph, line)
+        triples; result written to a private temporary file, diagnostics
+        never on GuiAssert's stderr. Compiled for Linux and Windows too
+        (=nim check --os:linux= / =--os:windows= clean); its Linux live run is
+        the companion's.)
+      - [X] Shared: =backends/ocr/engine_process.nim= (bounded, cancellable
+        engine subprocess, results through a private file);
+        =OcrEngine.validate= (core interface addition) so =ocr= refuses an
+        option before it captures; a frame whose recognition fails is
+        removed; the legacy =ocr.obAppleVision= path builds the same helper.
     - Linux (claimable by =companion/linux=)
       - [ ] Tesseract default on Linux sessions, language packs from the flake.
+        (The engine is implemented and marked implemented on every platform,
+        and =linux-*= already defaults to it; what remains is the Linux live
+        run of =tests/live/tocr_tesseract.nim=. The packaged =guiassert= now
+        pins tesseract (the review, 2026-10-20: its wrapper sets
+        =TESSERACT_BIN= by default beside =FFMPEG_BIN=, and the flake check
+        =guiassert-packaged-tesseract= runs the package from an empty
+        environment and requires its probed =tesseract= =ocr= feature to be
+        =supported=; green on aarch64-darwin, red with the wrapper line
+        removed). The check's Linux run is the companion's.)
     - Windows (=later/windows=)
       - [ ] =backends/ocr/windows_media.nim=.
 
@@ -1573,19 +1605,23 @@
     - test_name: test_apple_vision_ocr_reads_rendered_label_with_bbox
       file: tests/live/tocr_macos.nim
       description: A PNG with known text rendered at a known position is read with the right word and a bbox within tolerance.
-      status: pending
+      status: passing 2026-10-20 at base ece9b24 (macOS 26.5, aarch64; locked session, no permission needed)
+      as_built: labels drawn with the core bitmap font at scale 6 (exact glyph rects); each word within one 36 px cell of its glyph rect on every edge and IoU >= 0.6 (tolerance measured and justified in the file header); text in reading order; controls: swapped labels read swapped, a blank image reads no words; --lang fr-FR reported. Mutations tried: word boxes replaced by line boxes in the helper, and row grouping disabled, each turned it red.
     - test_name: test_ocr_unsupported_psm_on_apple_vision_is_exit_4
       file: tests/contract/tocr_verbs.nim
       description: --psm with the apple-vision backend exits 4 / unsupported-option.
-      status: pending
+      status: passing 2026-10-20 at base ece9b24 (guiassert and guiassert-fixture, macOS)
+      as_built: also --upscale and --invert; feature ocr and backend apple-vision named; the capture form (fixture capture) refuses before capturing (no frame registered, no file); in guiassert-fixture / off macOS the same calls are exit 4 not-compiled-in / wrong-platform; positive control on macOS guiassert: without the knob Vision reads the label. Mutations tried: dropping the --psm refusal, and dropping the validate-before-capture call, each turned it red.
     - test_name: test_tesseract_ocr_verb_reads_rendered_text
       file: tests/live/tocr_tesseract.nim
       description: The ocr verb with the pinned tesseract reads ffmpeg-rendered text, on Linux and macOS.
-      status: pending
+      status: passing 2026-10-20 at base ece9b24 on macOS (pinned tesseract 5.5.1, ffmpeg 8.0, DejaVu Sans); Linux run pending (companion)
+      as_built: word boxes match the ink rects measured from the rendered pixels within 3 px (measured: exact); controls: swapped lines, blank frame; --upscale 2 keeps original-image boxes, --psm 7, --invert always/auto on light-on-dark, --lang deu --lang eng. Mutation tried: removing the upscale box mapping turned it red.
     - test_name: test_ocr_capture_then_read_maps_bbox_to_desktop
       file: tests/live/tocr_macos.nim
       description: ocr --window returns words whose bbox, mapped through origin and scale, lands on the fixture label's on-screen rect.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: implemented; the AppKit fixture (solid_window.swift) gained --label / --label-at / --label-size and reports the label's desktop rect; negative control: the same window without a label reads no words. Fails with "BLOCKED: the GUI session is locked" on 2026-10-20 (ScreenCaptureKit lists no display while the screen is locked; Screen Recording is granted).
     - test_name: test_windows_media_ocr_reads_rendered_label
       file: tests/live/tocr_windows.nim
       description: Windows.Media.Ocr reads the rendered label with a bbox within tolerance.
@@ -1593,7 +1629,57 @@
     - test_name: test_ocr_text_never_on_stderr_and_features_named
       file: tests/live/tocr_<engine>.nim
       description: (GS2.1 obligation) C15 and C7: OCR of a frame with a planted word leaves the word out of GuiAssert's stderr (tesseract's own diagnostics are not echoed with recognized text), and an option the engine lacks (--psm on apple-vision) names feature ocr in details.feature; capabilities reports the engine's ocr feature with a probed state.
-      status: pending
+      status: passing 2026-10-20 at base ece9b24 on macOS, in tests/live/tocr_macos.nim (apple-vision) and tests/live/tocr_tesseract.nim (tesseract)
+      as_built: planted word PLANTED+5 random digits; positive control: data holds it; stderr empty (CLI) and free of it (serve daemon, serve events); refusals (--psm/--upscale/--invert, unknown --lang, a --lang joining two) exit 4 naming feature ocr and the engine; a failing tesseract (stand-in script, justified in the header) is exit 5 ocr-failed with nothing on stderr; a missing one exit 4 missing-tool; capabilities --probe reports ocr supported from the engine, available without --probe, unavailable missing-tool without tesseract. Mutation tried: passing the engine's diagnostics to stderr turned it red.
+
+*** Key Source Files
+    - src/gui_assert/backends/ocr/apple_vision.nim - the apple-vision engine
+    - src/gui_assert/backends/ocr/tesseract.nim - the tesseract engine
+    - src/gui_assert/backends/ocr/engine_process.nim - engine subprocesses
+    - src/gui_assert/helpers/vision_ocr.swift - the Vision helper (--json, --languages)
+    - tests/live/macos_live.nim - shared macOS live support (extracted from tcapture_macos)
+
+*** Outstanding Tasks
+    - [ ] GS6 BLOCKED: the macOS GUI session was locked for the whole run
+      (2026-10-20), so =test_ocr_capture_then_read_maps_bbox_to_desktop=
+      could not run (the same blocker as GS5; Screen Recording is granted to
+      =com.metacraft-labs.guiassert.capture=). Re-run =just test-live-macos=
+      on an unlocked session.
+    - [X] Independent verification of every GS6 macOS part that needs no
+      unlocked screen (2026-10-20, from origin/agents at ece9b24). Re-run:
+      =just lint=, =build-cli=, =test=, =test-core=, =test-contract=,
+      =test-live-tesseract= green; =test-live-macos= red only on its seven
+      gated tests, each with the locked-session =BLOCKED:= line (six GS5,
+      plus =test_ocr_capture_then_read_maps_bbox_to_desktop=). Review
+      mutations, each red then reverted: the Vision helper giving each word
+      of a line another word's box (PELICAN/DOCK IoU 0, so the 36 px
+      tolerance does not admit a neighbouring word's box). The review
+      hardened the Swift helper cache directory (=swift_helper.ensurePrivateCacheDir=:
+      created 0700, an existing one others can reach tightened, a symlink or
+      another user's directory refused, since without =TMPDIR= it lies in the
+      shared =/tmp=; =tests/tswift_helper_cache.nim= in =just test=, with the
+      owner and symlink checks each mutated red), and pinned tesseract in the
+      flake package (Deliverables, Linux). The capture-then-read test still
+      needs its unlocked run before GS6 macOS is done.
+    - [ ] Linux (=companion/linux=): the Linux live run of
+      =tests/live/tocr_tesseract.nim= and of the flake check
+      =guiassert-packaged-tesseract= (see Deliverables). Windows (=later/windows=): =windows_media.nim=.
+    - Notes for the verifier (deviations, each deliberate):
+      - =tests/contract/tcontract_decisions.nim= C7 case: =--ocr-backend
+        tesseract= no longer fails (tesseract is implemented), so the exit-4
+        =ocr= case selects =foreignOcrBackend= (new in the harness, like
+        =foreignCaptureBackend=) instead. Same assertion, different
+        unavailable engine.
+      - The contract has no recognition-level flag (§7.5 is frozen), so
+        apple-vision always runs at the accurate level; nothing was added.
+      - =tests/live/tcapture_macos.nim='s environment, fixture-launch, run and
+        gate helpers moved verbatim to =tests/live/macos_live.nim= so the OCR
+        suite shares them; =test-live-macos= now runs both suites and fails
+        if either fails.
+      - =swift_helper.compileSwiftHelper= now compiles to a temporary name and
+        renames it into place, so concurrent GuiAssert processes never run a
+        half-written helper; its raised effects are unchanged (legacy API
+        test green).
 
 ** GS7: Accessibility tree backends
    :PROPERTIES:

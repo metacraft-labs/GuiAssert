@@ -117,6 +117,12 @@ type
     ## (`unsupported-option`) instead of ignoring it.
     name*: string
     recognize*: proc (req: OcrRequest): OcrResult {.closure.}
+    validate*: proc (req: OcrRequest) {.closure.}
+      ## Raise for an option of `req` the engine cannot honour, running
+      ## nothing and reading no image, so a verb can refuse it before it
+      ## captures the frame to read (added with the platform engines, GS6).
+      ## `recognize` checks the same options itself. Nil: every option is
+      ## checked only by `recognize`.
     features*: proc (probe: bool): seq[Feature] {.closure.}
 
   TreeTargetKind* = enum

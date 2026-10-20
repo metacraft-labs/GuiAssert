@@ -22,17 +22,21 @@ proc newFixtureOcr*(cfg: FixtureConfig): OcrEngine =
   ## GUIASSERT_FIXTURE_UNAVAILABLE names `ocr`.
   cfg.checkModuleAvailable(fmOcr)
   result.name = fixtureBackendName
-  result.recognize = proc (req: OcrRequest): OcrResult =
+  let validate = proc (req: OcrRequest) =
     if req.psm.isSome: raise unsupported("the fixture OCR has no --psm")
     if req.upscale.isSome: raise unsupported("the fixture OCR has no --upscale")
     if req.invert.isSome: raise unsupported("the fixture OCR has no --invert")
     let scen = loadScenario(cfg.scenarioPath)
-    var langs = req.languages
-    if langs.len == 0: langs = scen.languages
-    for l in langs:
+    for l in req.languages:
       if l notin scen.languages:
         raise unsupported("the fixture OCR reads only " & scen.languages.join(", ") &
           ", not '" & l & "'")
+  result.validate = validate
+  result.recognize = proc (req: OcrRequest): OcrResult =
+    validate(req)
+    let scen = loadScenario(cfg.scenarioPath)
+    var langs = req.languages
+    if langs.len == 0: langs = scen.languages
     if not fileExists(req.imagePath):
       raise notFound("file", "no image at " & req.imagePath)
     var bytes: string
