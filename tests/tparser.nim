@@ -80,7 +80,11 @@ const fourKeyframeJson = """
 }
 """
 
-proc assertSampleScript(s: Script) =
+# A template, not a proc: std/unittest's `check` marks the *enclosing test*
+# failed only when it expands inside that test's body. Inside a top-level
+# proc it merely sets the process exit code, and the test still prints [OK].
+template assertSampleScript(script: Script) =
+  let s = script
   check s.metadata.title == "CodeTracer Hot Code Reloading Tutorial"
   check s.metadata.resolution == "1920x1080"
   check s.metadata.fps == 30
