@@ -41,3 +41,9 @@ build/linux-helpers/
 tests/tdesktop_env
 tests/tdesktop_env_targets
 tests/tdesktop_env_attach
+tests/tcore_types
+tests/tcore_png
+tests/tcore_purity
+tests/tcore_shims
+tests/legacy_api
+*.exe

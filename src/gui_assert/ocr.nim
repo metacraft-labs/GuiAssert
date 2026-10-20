@@ -21,77 +21,13 @@ import std/[os, osproc, strtabs, strutils, streams, math, tempfiles]
 import ./media
 import ./image_math
 import ./swift_helper
+import ./core/ocr_types
 
-type
-  OcrError* = object of CatchableError
-    ## Raised when Tesseract is missing, exits non-zero, or its TSV output
-    ## cannot be parsed.
-
-  OcrBackendUnavailable* = object of CatchableError
-    ## Raised when an OPTIONAL OCR/element backend cannot be used on this host
-    ## (wrong platform, missing toolchain, or unconfigured). Distinct from
-    ## `OcrError` so callers can catch it and fall back to the reproducible
-    ## Tesseract default (see `runOcrBestEffort`) instead of treating it as a
-    ## hard failure. The default (`obTesseract`) backend NEVER raises this.
-
-  OcrBackend* = enum
-    ## Selects which OCR engine `runOcrWithBackend` dispatches to.
-    obTesseract    ## Tesseract via `runOcrEx` — the reproducible DEFAULT.
-    obAppleVision  ## macOS Vision (`VNRecognizeTextRequest`) via bundled helper.
-    obRapidOcr     ## RapidOCR / PP-OCR ONNX runner (external, opt-in).
-
-  ElementBackend* = enum
-    ## Selects a semantic UI-element detector for `detectElements`. Only the
-    ## no-op `ebNone` ships by default; `ebOmniParser` is a documented,
-    ## intentionally-unimplemented stub (see `detectElements`).
-    ebNone        ## No element detection; returns an empty seq.
-    ebOmniParser  ## OmniParser-class ONNX detector (requires pinned weights).
-
-  DetectedElement* = object
-    ## A semantic UI element produced by an element backend (OmniParser-class).
-    ## Populated only by ML backends; the shipped code returns none of these.
-    label*: string          ## semantic label, e.g. "Save button"
-    kind*: string           ## coarse element kind, e.g. "button" / "text"
-    confidence*: float      ## detector confidence (0..100)
-    bbox*: array[4, int]    ## [x, y, w, h] in pixels
-
-  OcrWord* = object
-    ## A single recognised word.
-    text*: string
-    confidence*: float
-    bbox*: array[4, int]  ## [x, y, w, h] in pixels
-    lineNum*: int
-    blockNum*: int
-
-  OcrInvert* = enum
-    ## Dark-mode inversion policy for `runOcrEx`. Tesseract expects
-    ## dark-on-light text; light-on-dark UI frames must be inverted first.
-    oiAuto     ## decide from region mean luma (invert dark backgrounds)
-    oiNever    ## never invert
-    oiAlways   ## always invert (`ffmpeg negate`)
-
-  OcrOptions* = object
-    ## Preprocessing knobs for `runOcrEx` / `runOcrMultiPsm` (VU9).
-    psm*: int         ## tesseract page-segmentation mode (default 6)
-    upscale*: float   ## Lanczos upscale factor before OCR (default 1.0)
-    invert*: OcrInvert  ## dark-mode inversion policy (default oiAuto)
-    contrast*: bool   ## apply a light contrast stretch (default false)
-
-const
-  ## Auto-invert luma threshold: a decoded grayscale whose MEAN pixel value is
-  ## below this (0-255 scale) is treated as a dark background and inverted
-  ## before OCR. 110 sits below a neutral mid-gray (128) so ordinary
-  ## light/white document backgrounds (mean ~200+) are never touched, while
-  ## typical dark editor/terminal chrome (mean ~20-70) is caught.
-  autoInvertLumaThreshold* = 110.0
-
-proc initOcrOptions*(psm = 6, upscale = 1.0, invert = oiAuto,
-                     contrast = false): OcrOptions =
-  ## Construct `OcrOptions` with the VU9 defaults (psm 6, no upscale, auto
-  ## inversion, no contrast stretch). Prefer this over a raw object
-  ## constructor so omitted fields get the intended defaults rather than
-  ## Nim's zero values (`psm=0` is tesseract's orientation-only mode).
-  OcrOptions(psm: psm, upscale: upscale, invert: invert, contrast: contrast)
+# The OCR types (`OcrWord`, `OcrOptions`, the backend enums, the two error
+# types) and the pure helpers (`initOcrOptions`, `concatenatedText`,
+# `wordsToReadingOrderText`) live in the pure core; they are re-exported here
+# so `import gui_assert/ocr` keeps offering them.
+export ocr_types
 
 proc resolveTesseractBinary*(): string =
   ## Locate the Tesseract binary. Honors `TESSERACT_BIN`, then `$PATH`.
@@ -374,15 +310,6 @@ proc runOcrMultiPsm*(imagePath: string, psms: seq[int],
           break
       if not dup:
         result.add(w)
-
-proc concatenatedText*(words: seq[OcrWord]): string =
-  ## Join all detected words with spaces. Convenience helper for substring
-  ## matching used by `waitForText`.
-  var pieces: seq[string] = @[]
-  for w in words:
-    if w.text.len > 0:
-      pieces.add(w.text)
-  result = pieces.join(" ")
 
 # ---------------------------------------------------------------------------
 # VU11: pluggable OCR backends (Tesseract DEFAULT; Apple Vision / RapidOCR

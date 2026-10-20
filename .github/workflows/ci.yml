@@ -1,0 +1,163 @@
+# GuiAssert CI.
+#
+# Every step runs a `just` recipe (or, on Windows, the PowerShell script that
+# runs the same test list), so anything CI does a developer reproduces with
+# one command:
+#
+#   nix develop --command just lint
+#   nix develop --command just test        # default suite (incl. core unit tests)
+#   nix develop --command just test-core   # core unit + purity checks
+#
+# Triggers. Only pushes to, and pull requests into, `dev` and `stable`. No
+# workflow runs on `agents` or `agents-to-dev-*`: that branch is gated
+# locally (`just test`, later `just test-contract`), and the full CI runs on
+# the promotion pull request into `dev` (ci-workflow-standards.md, "No CI on
+# `agents`").
+#
+# Runner legs. The Nix job runs on the three Nix-capable legs. The Windows
+# job builds and runs the core suite with a non-Nix toolchain
+# (ci/windows/provision-toolchain.ps1); it is `continue-on-error` and not a
+# required check, because Windows capacity is scarce and the job may queue.
+#
+# Documented exception (ci-workflow-standards.md, "Required self-hosted
+# coverage matrix"): the `[self-hosted, windows, arm64]` leg is omitted.
+# Owner: later/windows. Follow-up: Desktop-Substrate milestone GS11, which
+# measures the Windows backends and adds the arm64 leg once they run there.
+#
+# No macOS TCC permission is granted to CI runners; the default suites
+# contain no TCC-gated test (Planned-Work/Desktop-Substrate.md §9.4).
+
+name: CI
+
+on:
+  push:
+    branches: [dev, stable]
+  pull_request:
+    branches: [dev, stable]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nix:
+    name: Nix (${{ join(matrix.runner, '-') }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - [self-hosted, linux, x64]
+          - [self-hosted, linux, arm64]
+          - [self-hosted, macos, arm64]
+    runs-on: ${{ matrix.runner }}
+    # The suite takes a few minutes on a warm store; the margin covers a cold
+    # `nix develop` (ffmpeg, tesseract, the Linux compositors).
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Workflow triggers name the mainline
+        uses: metacraft-labs/metacraft-github-actions/assert-workflow-triggers@dev
+        with:
+          mainline: dev
+
+      # Configures nix.conf unconditionally and verifies the experimental
+      # features are live (cachix/install-nix-action silently no-ops on these
+      # runner classes; see ci-workflow-standards.md, "Nix-Based Projects").
+      - uses: metacraft-labs/devops-modules/.github/setup-nix@dev
+
+      - uses: cachix/cachix-action@v15
+        with:
+          name: metacraft-labs
+          skipPush: true
+
+      - name: Lint
+        shell: bash
+        run: |
+          mkdir -p test-logs
+          nix develop --command just lint 2>&1 | tee test-logs/lint.log
+
+      - name: Test
+        shell: bash
+        run: |
+          mkdir -p test-logs
+          nix develop --command just test 2>&1 | tee test-logs/test.log
+
+      - name: Test core
+        shell: bash
+        run: |
+          mkdir -p test-logs
+          nix develop --command just test-core 2>&1 | tee test-logs/test-core.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ join(matrix.runner, '-') }}
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Mirror logs to S3 (non-blocking)
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          MCL_S3_ARTIFACTS_ENDPOINT: ${{ vars.MCL_S3_ARTIFACTS_ENDPOINT }}
+          MCL_S3_ARTIFACTS_BUCKET: ${{ vars.MCL_S3_ARTIFACTS_BUCKET }}
+          MCL_S3_ARTIFACTS_REGION: ${{ vars.MCL_S3_ARTIFACTS_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.MCL_S3_ARTIFACTS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.MCL_S3_ARTIFACTS_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
+          S3_OBJECT_PREFIX: test-logs/${{ github.run_id }}/${{ join(matrix.runner, '-') }}
+        run: |
+          set -u
+          if [[ -z "${AWS_ACCESS_KEY_ID:-}" || -z "${MCL_S3_ARTIFACTS_ENDPOINT:-}" ]]; then
+            echo "S3 artifact store not configured for this repo; skipping mirror."
+            exit 0
+          fi
+          nix shell nixpkgs#awscli2 -c \
+            aws --endpoint-url "$MCL_S3_ARTIFACTS_ENDPOINT" \
+                --region "${MCL_S3_ARTIFACTS_REGION:-garage}" \
+                s3 cp --recursive test-logs/ \
+                "s3://${MCL_S3_ARTIFACTS_BUCKET:-ci-artifacts}/$S3_OBJECT_PREFIX/" \
+            || echo "::warning title=S3 artifact mirror::upload failed (non-blocking)"
+
+  windows:
+    name: Windows core (${{ join(matrix.runner, '-') }})
+    # Not a required check: Windows runner capacity is scarce, and this job
+    # may queue or be cancelled by a newer push before it starts.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          # `dev-env-ready`: selects the persistent Windows runners that carry the shared DIY dev env.
+          - [self-hosted, windows, x64, dev-env-ready]
+    runs-on: ${{ matrix.runner }}
+    # A cold run downloads the pinned toolchain (about 400 MB) first.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Provision toolchain (pinned, SHA-256 verified)
+        shell: pwsh
+        run: ./ci/windows/provision-toolchain.ps1
+
+      - name: Test core
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path test-logs | Out-Null
+          # A child pwsh, so an uncaught failure becomes its exit code.
+          pwsh -NoProfile -File ./ci/windows/run-core-suite.ps1 2>&1 |
+            Tee-Object -FilePath test-logs/test-core.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ join(matrix.runner, '-') }}
+          path: test-logs/
+          if-no-files-found: ignore
+          retention-days: 1
