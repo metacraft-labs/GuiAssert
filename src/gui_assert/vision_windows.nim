@@ -57,11 +57,13 @@ proc buildCropArgv*(framePath: string, x, y, w, h: int,
                     outPng: string): seq[string] =
   ## Pure builder for the ffmpeg argv (no leading binary token) that crops the
   ## rectangle `(x, y, w, h)` out of `framePath` to a single PNG at `outPng`.
+  ## The input is `media.ffmpegInputUrl(framePath)`, so a name starting with
+  ## `-` or naming a protocol is read as a file.
   @[
     "-hide_banner",
     "-loglevel", "error",
     "-y",
-    "-i", framePath,
+    "-i", ffmpegInputUrl(framePath),
     "-vf", "crop=" & $w & ":" & $h & ":" & $x & ":" & $y,
     "-frames:v", "1",
     outPng

@@ -11,6 +11,8 @@ import std/[unittest, os, osproc, streams, strtabs, strutils, tempfiles, json]
 
 import ../src/gui_assert/video_analysis
 import ../src/gui_assert/ocr
+import ../src/gui_assert/image_math
+from ../src/gui_assert/media import ffmpegInputUrl
 
 # ---------------------------------------------------------------------------
 # Helpers for the e2e fixture
@@ -120,14 +122,21 @@ suite "video_analysis pure":
     check segmentBoundaries(@[], 0.12) == @[0]
 
   test "test_build_argv_shapes":
+    # Every input is put behind the `file:` protocol (`ffmpegInputUrl`), so
+    # the raw name never reaches ffmpeg as an argument of its own.
+    let url = ffmpegInputUrl("/tmp/in.mp4")
+    check url == "file:/tmp/in.mp4"
+    check ffmpegInputUrl("-a.mp4") == "file:-a.mp4"
     let probe = buildProbeArgv("/tmp/in.mp4")
-    check "/tmp/in.mp4" in probe
+    check url in probe
+    check "/tmp/in.mp4" notin probe
     check "-of" in probe
     check "json" in probe
 
     let sample = buildSampleFramesArgv("/tmp/in.mp4", 2.0, 320,
       "/tmp/out/f_%05d.png")
-    check "/tmp/in.mp4" in sample
+    check url in sample
+    check "/tmp/in.mp4" notin sample
     check "/tmp/out/f_%05d.png" in sample
     var hasFps = false
     var hasScale = false
@@ -140,7 +149,8 @@ suite "video_analysis pure":
     let extract = buildExtractFrameArgv("/tmp/in.mp4", 1.5, "/tmp/frame.png")
     check "-ss" in extract
     check "/tmp/frame.png" in extract
-    check "/tmp/in.mp4" in extract
+    check url in extract
+    check "/tmp/in.mp4" notin extract
 
 # ---------------------------------------------------------------------------
 # End-to-end against real ffmpeg
@@ -171,6 +181,51 @@ suite "video_analysis e2e":
     # The first segment starts at 0 with a full change score by convention.
     check segments[0].tStart == 0.0
     check segments[0].changeScore == 1.0
+
+  test "test_legacy_inputs_named_like_options_or_protocols":
+    # (GS4 follow-up.) A file name is a file name: one that starts with `-`
+    # or looks like an ffmpeg protocol (`concat:`) reaches ffmpeg behind
+    # `file:` and is read as that file, by `segmentByChange` (ffmpeg frame
+    # sampling), `probeVideo` (ffprobe) and by `decodeGray` /
+    # `probeImageSize` (ffprobe + ffmpeg).
+    # Relative names, so the name reaches ffmpeg as the caller wrote it.
+    let ffmpeg = resolveFfmpegForFixture()
+    let tmp = createTempDir("tvideo_names_", "")
+    defer: removeDir(tmp)
+    let fixture = tmp / "two_state.mp4"
+    generateTwoStateVideo(ffmpeg, fixture, ffmpegSupportsDrawtext(ffmpeg))
+    let expected = segmentByChange(fixture)
+    check expected.len >= 1
+    let info0 = probeVideo(fixture)
+    check info0.width == 320
+    let still = tmp / "still.png"
+    let p = startProcess(ffmpeg, args = @["-hide_banner", "-loglevel", "error", "-y",
+      "-f", "lavfi", "-i", "testsrc=size=64x48:rate=1:duration=1", "-frames:v", "1",
+      still], env = sanitizedEnvFor(ffmpeg), options = {poStdErrToStdOut})
+    let output = p.outputStream().readAll()
+    check p.waitForExit() == 0
+    p.close()
+    if not fileExists(still): checkpoint output
+    let expectedGray = decodeGray(still)
+    check expectedGray.width == 64 and expectedGray.height == 48
+    let here = getCurrentDir()
+    setCurrentDir(tmp)
+    try:
+      # ffmpeg's own `-i` takes the next word whatever it starts with, so a
+      # leading `-` misleads ffprobe (whose input is positional) and a
+      # protocol prefix misleads both: raw, `concat:absent.mp4` would be read
+      # as the concatenation of a file `absent.mp4`, which does not exist.
+      for name in ["-two-state.mp4", "concat:absent.mp4"]:
+        copyFile(fixture, tmp / name)
+        check segmentByChange(name) == expected
+      for name in ["-two-state.mp4", "concat:absent.mp4"]:
+        check probeVideo(name).width == info0.width
+      for name in ["-still.png", "concat:absent.png"]:
+        copyFile(still, tmp / name)
+        check probeImageSize(name) == (64, 48)
+        check decodeGray(name) == expectedGray
+    finally:
+      setCurrentDir(here)
 
 # ---------------------------------------------------------------------------
 # VU2 pure procs

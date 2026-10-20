@@ -1047,6 +1047,9 @@ proc visionSegmentVideo(e: VerbEnv, fps: Option[float], threshold: float,
       raise newContractError(ekBackendUnavailable, "missing-tool", x.msg, details = details)
     except VideoDecodeError as x:
       raise badArgs("invalid-value", x.msg)
+    except FrameTooLargeError as x:
+      # The video at this --scale-width exceeds `maxImagePixels` (spec §7.5).
+      raise badArgs("invalid-value", x.msg)
     %*{"source": {"path": path,
                   "durationS": (if r.source.durationS.isSome:
                                   finiteJson(r.source.durationS.get, "the video duration")
@@ -1089,6 +1092,14 @@ proc verbVisionSegment(e: VerbEnv): JsonNode =
     if i == 0:
       srcW = g.width
       srcH = g.height
+      # The scaled frame obeys the same pixel cap as a decoded one (spec
+      # §7.5); refused before the first scaled buffer is allocated.
+      if scaleWidth.isSome and
+         not fitsPixelCap(scaleWidth.get, scaledHeight(srcW, srcH, scaleWidth.get)):
+        raise badArgs("invalid-value", "--scale-width " & $scaleWidth.get & " makes the " &
+          $srcW & "x" & $srcH & " frames " & $scaleWidth.get & "x" &
+          $scaledHeight(srcW, srcH, scaleWidth.get) & ", more than the limit of " &
+          $maxImagePixels & " pixels")
     elif g.width != srcW or g.height != srcH:
       raise badArgs("invalid-value", "the frames differ in size (" & f & " is " &
         $g.width & "x" & $g.height & ", the first frame " & $srcW & "x" & $srcH & ")")

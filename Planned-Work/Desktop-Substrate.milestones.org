@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS4 implemented on macOS (vision-segment video input through the media backend, the video-decode feature, tests/contract/tvision_verbs.nim green on both binaries); independently verified (review fixed a stderr-pipe hang on damaged videos and ffmpeg input-name handling). Contract guiassert-desktop/1.0 stays frozen and unchanged (spec §7.5 only writes down the vision-segment defaults). GS3 part B builds against 1.0. GS1, GS2, GS2.1 and GS4 Linux/Windows legs run on the first pull request into dev.
+  :next_steps: GS4 implemented on macOS (vision-segment video input through the media backend, the video-decode feature, tests/contract/tvision_verbs.nim green on both binaries); independently verified (review fixed a stderr-pipe hang on damaged videos and ffmpeg input-name handling); a follow-up added the 2^28-pixel frame cap, 50 ms cancel/deadline slices while ffmpeg decodes, and file: input names in every legacy ffmpeg call. Contract guiassert-desktop/1.0 stays frozen and unchanged (spec §7.5 only writes down the vision-segment defaults). GS3 part B builds against 1.0. GS1, GS2, GS2.1 and GS4 Linux/Windows legs run on the first pull request into dev.
   :last_updated: 2026-10-20
   :current_milestone: GS4
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs.
@@ -1241,6 +1241,28 @@
     - test_name: just lint && just test-core && just test
       description: The default, core and contract suites (the contract suite now includes tvision_verbs) on both binaries.
       status: passing 2026-10-20 (macOS, at 7608f89 plus this change, after the review fixes; test-contract also run three more times, plus the GS1 out-of-suite tests and nix build of guiassert and guiassert-fixture)
+    - test_name: test_vision_segment_frame_size_cap_is_refused_before_decoding
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in the GS4 follow-up.) A 16x2048 video at --scale-width 1449 (just over 2^28 pixels) or 16384 is exit 2 / invalid-value naming the limit, and segmentVideo raises FrameTooLargeError; on POSIX recording ffmpeg/ffprobe wrappers show ffprobe ran and ffmpeg did not (control: --scale-width 64 succeeds and runs both). --frames with a tall PNG at --scale-width 16384 is exit 2 too (control: 64 succeeds). The legacy decodeGray refuses a 20000x20000 PNG header before ffmpeg starts, as decodePngGray does with the same constant.
+      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      falsifying_mutation: Disabling the cap in segmentVideo turns it red (the verb dies with exit 1 / internal on the 34 GB read, and ffmpeg is started); disabling the --frames cap turns it red (the binary dies allocating the scaled frame, no envelope); disabling the decodeGray cap turns it red (ffmpeg is started and fails instead). All three tried 2026-10-20.
+    - test_name: test_vision_segment_low_fps_deadline_and_cancel_are_prompt
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in the GS4 follow-up.) A 200 000-frame video (32x32, 1000 fps, deterministic testsrc) at --fps 0.01 keeps ffmpeg busy for seconds between frames (control: ffmpeg alone takes at least 2.5 s, measured ~3.2 s). --timeout-ms 400 answers exit 7 / deadline within 1.4 s; a serve cancel sent after 600 ms (control: ffmpeg is still running) answers exit 8 within 1 s and ffmpeg is gone; segmentVideo with a checkpoint that raises after 300 ms stops within 1.3 s.
+      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      falsifying_mutation: Waiting for ffmpeg's output without the per-slice checkpoint (readOutput given nil) turns it red: the deadline run takes ~3 s and ends exit 2, the cancel takes ~2.5 s, the library ~2.8 s (tried 2026-10-20).
+    - test_name: test_legacy_inputs_named_like_options_or_protocols
+      file: tests/tvideo_analysis.nim
+      description: (Added in the GS4 follow-up; out of the default suite, like the rest of tvideo_analysis.) Relative names -two-state.mp4 and concat:absent.mp4 give segmentByChange the result of the original file and probeVideo its size; -still.png and concat:absent.png give probeImageSize and decodeGray the original image. test_build_argv_shapes now checks the builders put the input behind file:.
+      status: passing (macOS)
+      falsifying_mutation: ffmpegInputUrl returning the raw path turns it red (segmentByChange opens concat:absent.mp4 as the concatenation of a missing file; ffprobe reads -two-state.mp4 and -still.png as options). Tried 2026-10-20.
+    - test_name: the pixel cap of a decoded image
+      file: tests/tcore_types.nim
+      description: (Added in the GS4 follow-up.) maxImagePixels is 2^28; fitsPixelCap is exact at the bound (16384x16384, 1448x185344 fit; one more row or column does not), rejects non-positive sizes, and does not overflow for high(int).
+      status: passing (macOS)
+    - test_name: just lint && just test-core && just test (GS4 follow-up)
+      description: The default, core and contract suites on both binaries after the follow-up, plus the out-of-suite legacy tests it touches (tvideo_analysis, tvision_windows, tvision_cli, tscreen_capture, tchange_detect).
+      status: passing 2026-10-20 (macOS aarch64-darwin inside nix develop, at 96710e5 plus this change: just lint, just test-core, just test incl. test-contract on both binaries, rc 0; tvideo_analysis, tvision_windows, tvision_cli, tscreen_capture, tchange_detect all green)
 
 *** Deviations
     - =vision-segment --frames --scale-width= reported the scaled size as
@@ -1288,13 +1310,75 @@
       to RGB PNGs at =scale=W:-2= (even height) and converts to gray, the
       new one reads ffmpeg's gray plane at the rounded height. Not a defect;
       =segmentByChange= is unchanged and the CLI equals =segmentVideo=.
+    - Follow-up hardening (2026-10-20, from origin/agents at 96710e5; the
+      three items the GS4 review left open):
+      1. Frame-size cap. One constant, =core/image.maxImagePixels= (2^28),
+         now backs the PNG decoder (=maxPngPixels= is an alias) and caps the
+         frame =segmentVideo= decodes (=FrameTooLargeError=, a =ValueError=,
+         raised after ffprobe and before ffmpeg or any buffer), the scaled
+         =--frames= frame and the legacy =decodeGray=. The CLI maps it to the
+         existing exit 2 / =invalid-value=; no reason was added, and spec
+         §7.5 states the cap as a clarification of 1.0. Before, a 16x2048
+         video at =--scale-width 16384= asked for a 34 GB frame buffer and
+         died with exit 1 / internal.
+      2. Cancel granularity. =segmentVideo= now reads ffmpeg's stdout with
+         =readOutput=, which waits in 50 ms slices (=poll= on POSIX;
+         =PeekNamedPipe= and a 10 ms sleep on Windows, where an anonymous
+         pipe cannot be polled) and runs the checkpoint between them, so a
+         cancel or deadline is honoured within ~100 ms at any =--fps=. Spec
+         §7.5 says so. The Windows branch compiles (=nim check --os:windows=)
+         but has not run yet; it runs on the first Windows CI job.
+      3. Safe input names. The =file:= helper moved to
+         =media.ffmpegInputUrl= and every ffmpeg / ffprobe call in src/ that
+         reads a caller's file uses it: =segmentVideo=, =probeVideoSource=,
+         =probeImageSize=, =decodeGray=, the legacy =video_analysis= argv
+         builders (=buildProbeArgv=, =buildSampleFramesArgv=,
+         =buildExtractFrameArgv=, so =segmentByChange=, =probeVideo= and
+         keyframe extraction), =vision_windows.buildCropArgv=, the two
+         =media= composition argvs and the OCR preprocessing pass
+         (=ocr.preprocessToPng=, added by the review). Not changed, by
+         design: the editor backend (its =-i= inputs are TTS renders and
+         segments in its own cache), =capture= (its
+         =-i= values are device names such as =0:none= or =:0+100,50=, not
+         files), the fixture capture backend and =contactSheet= (inputs are
+         image2 patterns in GuiAssert's own temp directories). Output paths
+         are not wrapped (see Outstanding Tasks). Deviation from the brief:
+         the shared helper is =file:= & the path as given, not
+         =file:<absolute path>=. ffmpeg strips one =file:= and opens the rest
+         as a path, so a relative name is just as safe; making it absolute
+         reads the current directory, which added =OSError= and effect tags to
+         the legacy argv builders and broke their frozen API
+         (tcore_shims, =raises: []= / =tags: []=).
+      Found on the way: =probeImageSize= merged ffprobe's stderr into the
+      text it parsed, so any ffprobe warning (here, ffmpeg's own "Picture size
+      20000x20000 is invalid") made it fail to parse; and =decodeGray= never
+      read ffmpeg's stderr, so a chatty decode could block on a full pipe.
+      Both now run through =runCollecting= (stdout parsed alone, stderr
+      drained on a thread, its first line kept for the error message), the
+      helper =probeVideoSource= already used inline. The legacy API baseline
+      (tcore_shims) still holds: no new raises or tags.
 
 *** Outstanding Tasks
     - [X] Independent verification of this implementation (2026-10-20; the
       review fixes are listed under Deviations).
     - [ ] First CI run of tvision_verbs on Linux x64/arm64 and on the Windows
       job (the Windows job's provisioned ffmpeg essentials build carries
-      libx264, which the test videos are encoded with).
+      libx264, which the test videos are encoded with). This includes the
+      first run of =readOutput='s Windows branch.
+    - [X] Follow-up hardening of the three items the review left open
+      (frame-size cap, cancel granularity, safe input names in the legacy
+      ffmpeg calls); 2026-10-20, see Deviations.
+    - [X] Independent verification of the follow-up (2026-10-20, macOS, at
+      96710e5 plus the follow-up): the suites, the twelve out-of-suite tests,
+      the two new contract tests ten times (five per binary), and three
+      further mutations (an off-by-one in =fitsPixelCap=, the CLI not mapping
+      =FrameTooLargeError=, a 5 s read slice) each turned red. The review
+      also put the OCR preprocessing input behind =ffmpegInputUrl=.
+    - [ ] Output paths given to ffmpeg are still raw: an output named
+      =-out.png= (=extract-frame=, =contact-sheet=, composition) would be
+      read as an option. Inputs were in scope; outputs are a separate small
+      change (=file:= works for ffmpeg's muxers too, but each output path
+      needs its own test).
 
 ** GS5: Capture backends
    :PROPERTIES:

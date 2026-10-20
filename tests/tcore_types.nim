@@ -62,6 +62,17 @@ suite "core image":
     expect ImageMathError:
       validate(GrayImage(width: 2, height: 2, pixels: "abc"))
 
+  test "the pixel cap of a decoded image":
+    # (GS4 follow-up.) One cap for every decoded image; exact at the bound,
+    # and no overflow for operands whose product does not fit in an int.
+    check maxImagePixels == 1 shl 28
+    check fitsPixelCap(1 shl 14, 1 shl 14)
+    check not fitsPixelCap(1 shl 14, (1 shl 14) + 1)
+    check fitsPixelCap(1448, 185344) and not fitsPixelCap(1449, 185472)
+    check fitsPixelCap(1, maxImagePixels) and not fitsPixelCap(1, maxImagePixels + 1)
+    check not fitsPixelCap(high(int), 2) and not fitsPixelCap(2, high(int))
+    check not fitsPixelCap(0, 5) and not fitsPixelCap(5, 0) and not fitsPixelCap(-1, -1)
+
 suite "core segmentation":
   test "segments from a frame series":
     let a = gray(32, 32, proc (x, y: int): int = 20)

@@ -20,6 +20,13 @@
 ## two-window frame (`screenshot`) and is the OCR engine of `vision-windows
 ## --ocr`: it is the one OCR engine whose words are known exactly, because it
 ## reads back the words it drew. The vision maths below it is the real core.
+##
+## One more stand-in, on POSIX only: `test_vision_segment_frame_size_cap_is_
+## refused_before_decoding` points `FFMPEG_BIN` at a two-line shell script
+## that records its own name and then `exec`s the real ffmpeg (and one beside
+## it for ffprobe). The pinned tools still do all the work; the record is the
+## only way to observe from outside that the refusal came before ffmpeg was
+## started, not after a decode or an allocation.
 
 import std/[algorithm, json, options, os, osproc, sequtils, streams, strtabs, strutils, unittest,
             times, monotimes]
@@ -150,6 +157,47 @@ proc minimalBin(): string =
   if isMinimalBinary(): contractBin() else: siblingBin("guiassert-fixture")
 
 proc msSince(start: MonoTime): int64 = (getMonoTime() - start).inMilliseconds
+
+proc hugePng(w, h: uint32): string =
+  ## A PNG whose IHDR claims `w` x `h` 8-bit gray pixels and whose image data
+  ## is an empty zlib stream: a header that names a size and holds no pixels.
+  proc be32(v: uint32): string =
+    result = newString(4)
+    for i in 0 ..< 4: result[i] = char((v shr (24 - 8 * i)) and 0xff)
+  proc chunk(kind, body: string): string =
+    be32(uint32(body.len)) & kind & body & be32(crc32(kind & body))
+  "\x89PNG\r\n\x1a\n" & chunk("IHDR", be32(w) & be32(h) & "\x08\x00\x00\x00\x00") &
+    chunk("IDAT", "\x78\x9c\x03\x00\x00\x00\x00\x01") & chunk("IEND", "")
+
+proc recordingTools(dir: string): string =
+  ## POSIX: an `ffmpeg` and an `ffprobe` in `dir` that append their own name
+  ## to `dir/calls` and `exec` the pinned tool; returns the `ffmpeg` path, for
+  ## `FFMPEG_BIN` (the media backend takes ffprobe from beside it).
+  let real = ffmpegTool()
+  let realProbe = real.parentDir / "ffprobe"
+  doAssert fileExists(realProbe), "no ffprobe beside " & real
+  createDir(dir)
+  for (name, target) in [("ffmpeg", real), ("ffprobe", realProbe)]:
+    let script = dir / name
+    writeFile(script, "#!/bin/sh\necho " & name & " >> '" & dir / "calls" &
+              "'\nexec '" & target & "' \"$@\"\n")
+    setFilePermissions(script, {fpUserRead, fpUserWrite, fpUserExec})
+  dir / "ffmpeg"
+
+proc callsOf(dir: string): seq[string] =
+  ## The tool names `recordingTools` recorded, in order.
+  if fileExists(dir / "calls"): readFile(dir / "calls").splitLines.filterIt(it.len > 0)
+  else: @[]
+
+proc sparseVideo(work: string): string =
+  ## A video that keeps ffmpeg busy for seconds between two output frames at a
+  ## low `--fps`: 200 000 tiny frames (200 s at 1000 fps). Each costs ffmpeg a
+  ## demux and a decode, and at `--fps 0.01` it writes two frames for all of
+  ## them. Deterministic (`testsrc`, single-threaded x264).
+  result = work / "sparse.mp4"
+  runFfmpeg(@["-f", "lavfi", "-i", "testsrc=size=32x32:rate=1000:duration=200",
+              "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1",
+              "-pix_fmt", "yuv420p", result])
 
 suite "vision verbs":
   test "test_vision_compare_identical_is_one_and_changed_is_lower":
@@ -403,6 +451,151 @@ suite "vision verbs":
         checkSegmentsEqual(d["segments"], expected)
     finally:
       setCurrentDir(here)
+
+  test "test_vision_segment_frame_size_cap_is_refused_before_decoding":
+    # (GS4 follow-up.) A decoded frame holds at most `maxImagePixels` pixels
+    # (the PNG decoder's cap, spec §7.5). A tall video scaled wide would ask
+    # for a 16384 x 2 097 152 frame (34 GB); it is refused with exit 2 /
+    # invalid-value before ffmpeg starts, not by an allocation that fails.
+    let work = freshDir("vscap")
+    let tall = work / "tall.mp4"
+    runFfmpeg(@["-f", "lavfi", "-i", "testsrc=size=16x2048:rate=10:duration=1",
+                "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1",
+                "-pix_fmt", "yuv420p", tall])
+    let bin = mediaBin()
+    let env = baseEnv()
+    # 16x2048 at 1449 wide is 1449 x 185 472 = 268 748 928 pixels, just over
+    # the cap; at 16384 wide it is over it 128-fold.
+    check not fitsPixelCap(1449, scaledHeight(16, 2048, 1449))
+    for width in ["1449", "16384"]:
+      let err = failure(@["vision-segment", tall, "--scale-width", width], env, 2,
+                        "bad-args", "invalid-value", bin)
+      check $maxImagePixels in err["message"].getStr
+    expect FrameTooLargeError:
+      discard segmentVideo(tall, scaleWidth = 16384)
+    # Control: the same video at a width that fits is segmented.
+    let fits = ok(@["vision-segment", tall, "--scale-width", "64"], env, bin)
+    check fits["source"]["width"].getInt == 16 and fits["source"]["height"].getInt == 2048
+    check fits["segments"].len >= 1
+    when defined(posix):
+      # Refused after ffprobe, before ffmpeg: the recording tools see ffprobe
+      # only; the control run that fits sees both.
+      let rec = work / "tools"
+      let recEnv = baseEnv()
+      recEnv["FFMPEG_BIN"] = recordingTools(rec)
+      discard failure(@["vision-segment", tall, "--scale-width", "16384"], recEnv, 2,
+                      "bad-args", "invalid-value", bin)
+      check callsOf(rec) == @["ffprobe"]
+      discard ok(@["vision-segment", tall, "--scale-width", "64"], recEnv, bin)
+      check callsOf(rec) == @["ffprobe", "ffprobe", "ffmpeg"]
+    # --frames obeys the same cap after --scale-width.
+    let frames = work / "frames"
+    createDir(frames)
+    var tallFrame = newImage(RgbImage, 16, 2048)
+    tallFrame.fillRect(rect(0, 0, 16, 1024), (200, 200, 200))
+    writePng(frames / "f000.png", tallFrame)
+    writePng(frames / "f001.png", tallFrame)
+    let ferr = failure(@["vision-segment", "--frames", frames, "--scale-width", "16384"], env,
+                       2, "bad-args", "invalid-value")
+    check $maxImagePixels in ferr["message"].getStr
+    check ok(@["vision-segment", "--frames", frames, "--scale-width", "64"], env)["segments"].len == 1
+    # The legacy gray decode refuses a 20000x20000 header before ffmpeg
+    # decodes anything, as the pure PNG decoder does with the same constant.
+    # (ffprobe itself reports this header as 0x0, ffmpeg's own size check;
+    # the refusal is the size check in decodeGray either way.)
+    check maxPngPixels == maxImagePixels
+    let huge = work / "huge.png"
+    writeFile(huge, hugePng(20000, 20000))
+    expect PngError:
+      discard decodePngGray(readFile(huge))
+    try:
+      discard media_ffmpeg.decodeGray(huge)
+      check false   # must not decode
+    except ImageMathError as x:
+      check "limit" in x.msg
+    when defined(posix):
+      let rec2 = work / "tools2"
+      let saved = getEnv("FFMPEG_BIN")
+      putEnv("FFMPEG_BIN", recordingTools(rec2))
+      try:
+        expect ImageMathError:
+          discard media_ffmpeg.decodeGray(huge)
+        check callsOf(rec2) == @["ffprobe"]
+      finally:
+        if saved.len > 0: putEnv("FFMPEG_BIN", saved) else: delEnv("FFMPEG_BIN")
+
+  test "test_vision_segment_low_fps_deadline_and_cancel_are_prompt":
+    # (GS4 follow-up.) At a low --fps ffmpeg decodes seconds of video between
+    # two frames it writes; the wait for its output goes in ~50 ms slices, so
+    # --timeout-ms (exit 7) and a serve cancel (exit 8) are honoured promptly
+    # rather than at the next frame.
+    let work = freshDir("vslow")
+    let video = sparseVideo(work)
+    let bin = mediaBin()
+    # Control: ffmpeg itself takes seconds over this input at this rate, so a
+    # deadline honoured only between frames would answer seconds late.
+    let probeStart = getMonoTime()
+    let probe = startProcess(ffmpegTool(), args = @["-hide_banner", "-loglevel", "error",
+      "-nostdin", "-i", video, "-vf", "fps=0.01,scale=320:320", "-f", "rawvideo",
+      "-pix_fmt", "gray", "-"], options = {})
+    discard probe.outputStream.readAll()
+    check probe.waitForExit() == 0
+    probe.close()
+    let controlMs = msSince(probeStart)
+    checkpoint "ffmpeg alone took " & $controlMs & " ms"
+    check controlMs >= 2500
+    # The one-shot CLI: a 400 ms deadline answers exit 7 within ~1 s.
+    let start = getMonoTime()
+    let r = runCli(@["--timeout-ms", "400", "vision-segment", video, "--fps", "0.01"],
+                   baseEnv(), timeoutMs = 60_000, bin = bin)
+    let elapsed = msSince(start)
+    checkpoint "the --timeout-ms 400 run took " & $elapsed & " ms: " & r.stdout
+    check r.exit == 7
+    if r.exit == 7:
+      let e = envelopeOf(r)
+      check e.errorKind == "timeout" and e.errorReason == "deadline"
+    check elapsed < 1400
+    # Over serve: a cancel sent while ffmpeg is busy is answered within 1 s.
+    var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
+    d.send(runReq("seg", @["vision-segment", video, "--fps", "0.01"]))
+    sleep(600)
+    when defined(posix):
+      # Control: ffmpeg is still running, so the cancel is what ends it.
+      let kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
+                             options = {poUsePath}).strip
+      check kids.len > 0
+    let cancelAt = getMonoTime()
+    d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
+    var seg, c: JsonNode
+    while seg.isNil or c.isNil:
+      let m = d.recv(10_000)
+      if m["type"].getStr == "result":
+        if m["id"].getStr == "seg": seg = m
+        elif m["id"].getStr == "c": c = m
+    let cancelMs = msSince(cancelAt)
+    checkpoint "the cancel was answered in " & $cancelMs & " ms"
+    check cancelMs < 1000
+    check seg["exit"].getInt == 8
+    check seg["envelope"]["error"]["kind"].getStr == "cancelled"
+    check c["envelope"]["data"]["state"].getStr == "cancelled"
+    when defined(posix):
+      sleep(300)
+      let left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
+                             options = {poUsePath}).strip
+      check left.len == 0
+    d.closeInput()
+    while d.recv()["type"].getStr != "shutdown": discard
+    check d.finish() == 0
+    # The library: a checkpoint that raises once a deadline passes stops
+    # segmentVideo within the same bound.
+    let libStart = getMonoTime()
+    let libDeadline = libStart + initDuration(milliseconds = 300)
+    expect ValueError:
+      discard segmentVideo(video, fps = 0.01, checkpoint = proc () =
+        if getMonoTime() >= libDeadline: raise newException(ValueError, "deadline"))
+    let libMs = msSince(libStart)
+    checkpoint "segmentVideo stopped after " & $libMs & " ms"
+    check libMs < 1300
 
   test "test_vision_windows_two_window_frame":
     let st = freshDir("vw")

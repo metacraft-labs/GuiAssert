@@ -37,6 +37,11 @@ type
   VideoDecodeError* = object of CatchableError
     ## The file is not a video ffmpeg can read, or decoding it failed.
 
+  FrameTooLargeError* = object of ValueError
+    ## The frames `segmentVideo` would decode are larger than
+    ## `core/image.maxImagePixels` (the video's aspect ratio at the requested
+    ## `scaleWidth`). Raised before ffmpeg is started.
+
   VideoSource* = object
     ## Container-level facts about a video, as ffprobe reports them.
     path*: string
@@ -82,81 +87,6 @@ proc ffprobeBinaryFor(ffmpegPath: string): string =
     raise newException(ImageMathError,
       "ffprobe not found alongside ffmpeg at " & ffmpegPath)
   return p
-
-proc probeImageSize*(path: string): tuple[width, height: int] =
-  ## Use ffprobe to read the pixel dimensions of an image file. Any decoded
-  ## format ffmpeg understands works: PNG, JPEG, BMP, even single MP4 frames.
-  if not fileExists(path):
-    raise newException(ImageMathError, "Image not found: " & path)
-  let ffmpegPath = resolveFfmpegBinary()
-  let ffprobeBin = ffprobeBinaryFor(ffmpegPath)
-  let env = sanitizedEnv(ffprobeBin)
-  let p = startProcess(
-    command = ffprobeBin,
-    args = @[
-      "-hide_banner",
-      "-v", "error",
-      "-select_streams", "v:0",
-      "-show_entries", "stream=width,height",
-      "-of", "csv=p=0:s=x",
-      path
-    ],
-    env = env,
-    options = {poStdErrToStdOut}
-  )
-  let output = p.outputStream().readAll().strip()
-  let code = p.waitForExit()
-  p.close()
-  if code != 0:
-    raise newException(ImageMathError,
-      "ffprobe failed (" & $code & ") reading " & path & ": " & output)
-  # Output format: "1920x1080"
-  let parts = output.split('x')
-  if parts.len < 2:
-    raise newException(ImageMathError,
-      "Unexpected ffprobe size output for " & path & ": '" & output & "'")
-  try:
-    result.width = parseInt(parts[0])
-    result.height = parseInt(parts[1])
-  except ValueError:
-    raise newException(ImageMathError,
-      "Could not parse ffprobe dimensions: '" & output & "'")
-
-proc decodeGray*(path: string): GrayImage =
-  ## Decode `path` into an 8-bit grayscale raw buffer using ffmpeg.
-  ##
-  ## We first probe the dimensions with ffprobe (cheap, deterministic),
-  ## then pipe the rawvideo bytes out of ffmpeg. The resulting buffer is
-  ## exactly `width * height` bytes long.
-  let (w, h) = probeImageSize(path)
-  let ffmpegPath = resolveFfmpegBinary()
-  let env = sanitizedEnv(ffmpegPath)
-  let p = startProcess(
-    command = ffmpegPath,
-    args = @[
-      "-hide_banner",
-      "-loglevel", "error",
-      "-i", path,
-      "-vframes", "1",
-      "-f", "rawvideo",
-      "-pix_fmt", "gray",
-      "pipe:1"
-    ],
-    env = env,
-    options = {}
-  )
-  let buffer = p.outputStream().readAll()
-  let code = p.waitForExit()
-  p.close()
-  if code != 0:
-    raise newException(ImageMathError,
-      "ffmpeg decode failed (" & $code & ") for " & path)
-  let expected = w * h
-  if buffer.len != expected:
-    raise newException(ImageMathError,
-      "ffmpeg produced " & $buffer.len & " gray bytes but expected " &
-      $expected & " (" & $w & "x" & $h & ") for " & path)
-  result = GrayImage(width: w, height: h, pixels: buffer)
 
 # ---------------------------------------------------------------------------
 # Video: probing, frame sampling and segmentation
@@ -248,6 +178,58 @@ proc firstLine(diag: string): string =
   result = result.strip()
   if result.len > 200: result = result[0 ..< 200] & "…"
 
+const readSliceMs = 50
+  ## How long one wait for a child's output lasts before `readOutput` runs
+  ## its checkpoint again: a cancellation or deadline is noticed within about
+  ## this long, however rarely the child writes.
+
+proc readOutput(p: Process, buf: var string, offset, count: int,
+                checkpoint: proc () {.closure.}): int =
+  ## Read up to `count` bytes of `p`'s stdout into `buf[offset ..]` and return
+  ## how many were read, 0 at the end of the output. While nothing is ready
+  ## the wait goes in slices of `readSliceMs`, and `checkpoint` (when given)
+  ## runs between them, so an exception it raises (a cancellation, a deadline)
+  ## interrupts a child that is busy for a long time between two writes (at a
+  ## low sample rate, ffmpeg decodes a whole stretch of video per frame it
+  ## writes). On POSIX the wait is `poll(2)`; on Windows, where an anonymous
+  ## pipe cannot be polled, `PeekNamedPipe` reports what is buffered and the
+  ## wait is a short sleep. Raises `OSError` when the read itself fails.
+  when defined(windows):
+    const errorBrokenPipe = 109'i32
+      ## ERROR_BROKEN_PIPE: the write end is closed, the end of the output
+      ## (https://learn.microsoft.com/windows/win32/debug/system-error-codes--0-499-).
+  let handle = p.outputHandle
+  while true:
+    if checkpoint != nil: checkpoint()
+    when defined(windows):
+      var avail: int32 = 0
+      if not winlean.peekNamedPipe(winlean.Handle(handle), nil, 0, nil, addr avail, nil):
+        let err = winlean.getLastError()
+        if err == errorBrokenPipe: return 0   # the child closed stdout
+        raiseOSError(OSErrorCode(err))
+      if avail == 0:
+        sleep(readSliceMs div 5)
+        continue
+      var got: int32 = 0
+      if winlean.readFile(winlean.Handle(handle), addr buf[offset],
+                          int32(min(count, int(avail))), addr got, nil) == 0:
+        let err = winlean.getLastError()
+        if err == errorBrokenPipe: return 0
+        raiseOSError(OSErrorCode(err))
+      return int(got)
+    else:
+      var pfd = posix.TPollfd(fd: cint(handle), events: posix.POLLIN)
+      let ready = posix.poll(addr pfd, 1, readSliceMs)
+      if ready < 0:
+        if posix.errno == posix.EINTR: continue
+        raiseOSError(osLastError())
+      if ready == 0: continue
+      let n = posix.read(cint(handle), addr buf[offset], count)
+      if n < 0:
+        if posix.errno == posix.EINTR: continue
+        raiseOSError(osLastError())
+      return int(n)
+
 proc stopChild(p: Process) =
   ## Stop a child whose output is no longer wanted, and reap it so it does not
   ## linger as a zombie. It is killed outright: it has nothing to flush, and a
@@ -258,14 +240,6 @@ proc stopChild(p: Process) =
     discard p.waitForExit()
   except OSError, ValueError:
     discard
-
-proc inputUrl(path: string): string =
-  ## The input argument ffmpeg and ffprobe are given for `path`: an absolute
-  ## path behind the `file:` protocol, so a name that starts with `-` cannot
-  ## be read as an option and a name such as `concat:a|b`, `pipe:0` or
-  ## `http://…` cannot select another protocol
-  ## (https://ffmpeg.org/ffmpeg-protocols.html#file).
-  "file:" & absolutePath(path)
 
 proc checkVideoFile(path: string) =
   ## Raises `VideoDecodeError` unless `path` is a regular file (a FIFO or a
@@ -311,6 +285,40 @@ proc parseVideoProbe*(jsonText, path: string): VideoSource =
     else: discard
     if v == v and v >= 0.0 and v != Inf: result.durationS = some(v)
 
+proc runCollecting(bin: string, args: seq[string]):
+    tuple[output: string, code: int, diag: string] =
+  ## Run `bin` with `args` to its end: its stdout whole, its exit code and
+  ## the first `stderrTailBytes` of its stderr. The two streams stay apart
+  ## (ffprobe warns on stderr about a damaged stream it can still describe,
+  ## and those lines must not land in what is parsed), and stderr is drained
+  ## on a thread of its own so a child that logs a lot cannot block on it.
+  ## For a child whose stdout is bounded (ffprobe's report, one decoded
+  ## image within `maxImagePixels`). Raises `OSError` when the
+  ## child or the drain thread cannot be started, `IOError` when its output
+  ## cannot be read.
+  let p = startProcess(bin, args = args, env = sanitizedEnv(bin), options = {})
+  var tail = StderrTail(handle: p.errorHandle)
+  var drain: Thread[ptr StderrTail]
+  var finished = false
+  try:
+    try:
+      createThread(drain, drainStderr, addr tail)
+    except ResourceExhaustedError as e:
+      raise newException(OSError, "cannot start a thread to read the stderr of " &
+        bin & ": " & e.msg)
+    try:
+      p.inputStream.close()
+      result.output = p.outputStream.readAll()
+      result.code = p.waitForExit()
+      finished = true
+    finally:
+      if not finished: stopChild(p)
+      joinThread(drain)
+  finally:
+    if not finished: stopChild(p)   # also when the drain thread did not start
+    p.close()
+  result.diag = tail.text
+
 proc probeVideoSource*(path: string): VideoSource =
   ## Run ffprobe on `path`. Raises `MediaToolMissingError` without ffprobe and
   ## `VideoDecodeError` when `path` is missing, is not a regular file or is
@@ -319,40 +327,89 @@ proc probeVideoSource*(path: string): VideoSource =
     raise newException(VideoDecodeError, "no video at " & path)
   checkVideoFile(path)
   let tools = resolveMediaTools()
-  var p: Process
+  var r: tuple[output: string, code: int, diag: string]
   try:
-    p = startProcess(tools.ffprobe,
-      args = @["-hide_banner", "-v", "error", "-select_streams", "v:0",
-               "-show_entries", "stream=width,height:format=duration", "-of", "json",
-               inputUrl(path)],
-      env = sanitizedEnv(tools.ffprobe), options = {})
+    r = runCollecting(tools.ffprobe,
+      @["-hide_banner", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=width,height:format=duration", "-of", "json",
+        ffmpegInputUrl(path)])
   except OSError as e:
     raise newException(MediaToolMissingError, "cannot run " & tools.ffprobe & ": " & e.msg)
-  # stdout and stderr are separate: ffprobe warns on stderr about a damaged
-  # stream it can still describe, and those lines must not land in the JSON.
-  var tail = StderrTail(handle: p.errorHandle)
-  var drain: Thread[ptr StderrTail]
-  var output = ""
-  var code = -1
-  var finished = false
-  try:
-    createThread(drain, drainStderr, addr tail)
-    try:
-      p.inputStream.close()
-      output = p.outputStream.readAll()
-      code = p.waitForExit()
-      finished = true
-    finally:
-      if not finished: stopChild(p)
-      joinThread(drain)
-  finally:
-    if not finished: stopChild(p)   # also when the drain thread did not start
-    p.close()
-  if code != 0:
-    let diag = firstLine(tail.text)
+  if r.code != 0:
+    let diag = firstLine(r.diag)
     raise newException(VideoDecodeError, path & " is not a video ffprobe can read" &
       (if diag.len > 0: " (" & diag & ")" else: ""))
-  parseVideoProbe(output, path)
+  parseVideoProbe(r.output, path)
+
+# ---------------------------------------------------------------------------
+# Images: the legacy `image_math` decode
+# ---------------------------------------------------------------------------
+
+proc probeImageSize*(path: string): tuple[width, height: int] =
+  ## Use ffprobe to read the pixel dimensions of an image file. Any decoded
+  ## format ffmpeg understands works: PNG, JPEG, BMP, even single MP4 frames.
+  ## Only ffprobe's stdout is parsed; its stderr (a warning about a damaged
+  ## or oversized header) goes into the error message, not into the size.
+  if not fileExists(path):
+    raise newException(ImageMathError, "Image not found: " & path)
+  let ffmpegPath = resolveFfmpegBinary()
+  let ffprobeBin = ffprobeBinaryFor(ffmpegPath)
+  let (stdoutText, code, diag) = runCollecting(ffprobeBin, @[
+      "-hide_banner",
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "stream=width,height",
+      "-of", "csv=p=0:s=x",
+      ffmpegInputUrl(path)
+    ])
+  let output = stdoutText.strip()
+  if code != 0:
+    raise newException(ImageMathError,
+      "ffprobe failed (" & $code & ") reading " & path & ": " & firstLine(diag))
+  # Output format: "1920x1080"
+  let parts = output.split('x')
+  if parts.len < 2:
+    raise newException(ImageMathError,
+      "Unexpected ffprobe size output for " & path & ": '" & output & "'" &
+      (if diag.len > 0: " (" & firstLine(diag) & ")" else: ""))
+  try:
+    result.width = parseInt(parts[0])
+    result.height = parseInt(parts[1])
+  except ValueError:
+    raise newException(ImageMathError,
+      "Could not parse ffprobe dimensions: '" & output & "'")
+
+proc decodeGray*(path: string): GrayImage =
+  ## Decode `path` into an 8-bit grayscale raw buffer using ffmpeg.
+  ##
+  ## We first probe the dimensions with ffprobe (cheap, deterministic),
+  ## then pipe the rawvideo bytes out of ffmpeg. The resulting buffer is
+  ## exactly `width * height` bytes long. An image larger than
+  ## `core/image.maxImagePixels` is refused before ffmpeg is started.
+  let (w, h) = probeImageSize(path)
+  if not fitsPixelCap(w, h):
+    raise newException(ImageMathError, path & " has a frame size of " & $w & "x" &
+      $h & ", outside the limit of " & $maxImagePixels & " pixels of a decoded image")
+  let ffmpegPath = resolveFfmpegBinary()
+  let (buffer, code, diag) = runCollecting(ffmpegPath, @[
+      "-hide_banner",
+      "-loglevel", "error",
+      "-i", ffmpegInputUrl(path),
+      "-vframes", "1",
+      "-f", "rawvideo",
+      "-pix_fmt", "gray",
+      "pipe:1"
+    ])
+  if code != 0:
+    raise newException(ImageMathError,
+      "ffmpeg decode failed (" & $code & ") for " & path &
+      (if diag.len > 0: ": " & firstLine(diag) else: ""))
+  let expected = w * h
+  if buffer.len != expected:
+    raise newException(ImageMathError,
+      "ffmpeg produced " & $buffer.len & " gray bytes but expected " &
+      $expected & " (" & $w & "x" & $h & ") for " & path)
+  result = GrayImage(width: w, height: h, pixels: buffer)
 
 proc rateText(f: float): string =
   ## A sample rate as ffmpeg's `fps` filter reads it, without exponent.
@@ -365,9 +422,10 @@ proc buildRawFramesArgv*(path: string, fps: float, width, height: int): seq[stri
   ## each frame to exactly `width` x `height` and write raw 8-bit gray frames
   ## to stdout. `-noautorotate` keeps the frames in the coded orientation
   ## ffprobe reported the size of; `-nostdin` keeps ffmpeg from reading the
-  ## caller's input; the input goes behind the `file:` protocol (`inputUrl`).
+  ## caller's input; the input goes behind the `file:` protocol
+  ## (`media.ffmpegInputUrl`).
   @["-hide_banner", "-loglevel", "error", "-nostdin", "-noautorotate",
-    "-i", inputUrl(path),
+    "-i", ffmpegInputUrl(path),
     "-vf", "fps=" & rateText(fps) & ",scale=" & $width & ":" & $height,
     "-f", "rawvideo", "-pix_fmt", "gray", "pipe:1"]
 
@@ -381,10 +439,14 @@ proc segmentVideo*(path: string, fps = defaultVideoFps,
   ## with `frameSimilarity` and split with `segmentsFromSeries` at
   ## `threshold`. Only two frames are held at a time.
   ##
-  ## `checkpoint`, when given, runs before each frame is read; an exception it
-  ## raises (a cancellation) stops ffmpeg and propagates.
+  ## `checkpoint`, when given, runs before each frame is read and, while
+  ## ffmpeg has written nothing, every `readSliceMs` (about 50 ms) of the
+  ## wait, so it is honoured promptly whatever `fps` is; an exception it
+  ## raises (a cancellation, a deadline) stops ffmpeg and propagates.
   ##
   ## Raises `ValueError` for a non-positive `fps` or `scaleWidth`,
+  ## `FrameTooLargeError` (before ffmpeg is started) when a scaled frame
+  ## would hold more than `core/image.maxImagePixels` pixels,
   ## `MediaToolMissingError` without ffmpeg/ffprobe and `VideoDecodeError`
   ## when the file is missing, is not a video, fails to decode or yields no
   ## frame.
@@ -400,6 +462,12 @@ proc segmentVideo*(path: string, fps = defaultVideoFps,
   result.threshold = threshold
   let w = scaleWidth
   let h = result.scaledHeight
+  # A tall video scaled wide would make one frame buffer enormous; refuse it
+  # here, before ffmpeg runs or a buffer is allocated.
+  if not fitsPixelCap(w, h):
+    raise newException(FrameTooLargeError, path & " (" & $result.source.width & "x" &
+      $result.source.height & ") scaled to " & $w & " wide gives " & $w & "x" & $h &
+      " frames, more than the limit of " & $maxImagePixels & " pixels")
   let frameBytes = w * h
   var series: seq[float]
   var prev, cur: GrayImage
@@ -417,13 +485,12 @@ proc segmentVideo*(path: string, fps = defaultVideoFps,
     createThread(drain, drainStderr, addr tail)
     try:
       p.inputStream.close()
-      let output = p.outputStream
       while true:
         if checkpoint != nil: checkpoint()
         var buf = newString(frameBytes)
         var got = 0
         while got < frameBytes:
-          let n = output.readData(addr buf[got], frameBytes - got)
+          let n = readOutput(p, buf, got, frameBytes - got, checkpoint)
           if n <= 0: break
           got += n
         if got == 0: break

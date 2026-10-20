@@ -867,6 +867,20 @@ not a readable video is exit 2 / `invalid-value`; `capabilities` reports
 `video-decode` `available` when ffmpeg and ffprobe are found and `supported`
 only when `--probe` ran ffmpeg.
 
+Two further clarifications (GS4 follow-up; no shape, reason or meaning of 1.0
+changes). **Frame-size cap:** a frame `vision-segment` scores holds at most
+`core/image.maxImagePixels` = 2^28 pixels (268 435 456), the same cap the PNG
+decoder applies to a header (`core/png.maxPngPixels` is that constant). A
+video whose aspect ratio at `--scale-width` gives a larger frame (a 16x2048
+video at `--scale-width` 1449 or more), or `--frames` whose first frame
+scaled by `--scale-width` does, is exit 2 / `invalid-value`, refused after
+the size is known (ffprobe for a video, the first PNG for `--frames`) and
+before ffmpeg is started or a frame buffer is allocated. **Cancellation:**
+while ffmpeg is decoding, cancellation and the `--timeout-ms` / `timeoutMs`
+deadline are checked at least every 50 ms of waiting for its output, not only
+between frames, so at any `--fps` a cancel answers exit 8 and a deadline exit
+7 within about 100 ms (§8.6's frame-boundary safe point, made finer).
+
 The existing `gui-assert-vision` program (`analyze`, `find`, `extract-frame`,
 `contact-sheet`, `windows`) is unchanged; its pure parts become callable through
 these verbs.

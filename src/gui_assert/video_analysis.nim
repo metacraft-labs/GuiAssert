@@ -78,13 +78,14 @@ type
 
 proc buildProbeArgv*(path: string): seq[string] =
   ## ffprobe argv emitting JSON with the first video stream's width/height
-  ## and the container duration.
+  ## and the container duration. The input is `media.ffmpegInputUrl(path)`,
+  ## so a name starting with `-` or naming a protocol is read as a file.
   @[
     "-v", "error",
     "-select_streams", "v:0",
     "-show_entries", "stream=width,height:format=duration",
     "-of", "json",
-    path
+    ffmpegInputUrl(path)
   ]
 
 proc buildSampleFramesArgv*(path: string, fps: float, scaleW: int,
@@ -92,7 +93,8 @@ proc buildSampleFramesArgv*(path: string, fps: float, scaleW: int,
   ## ffmpeg argv extracting frames at `fps` fps, downscaled to width `scaleW`
   ## while preserving the aspect ratio (`scale=W:-2` keeps the height even, a
   ## requirement of most encoders and harmless for raw PNG output), written to
-  ## `outPattern` (e.g. `dir/f_%05d.png`).
+  ## `outPattern` (e.g. `dir/f_%05d.png`). The input is
+  ## `media.ffmpegInputUrl(path)`.
   let fpsStr = formatFloat(fps, ffDecimal, precision = 4).strip(
     leading = false, trailing = true, chars = {'0'}).strip(
     leading = false, trailing = true, chars = {'.'})
@@ -100,21 +102,22 @@ proc buildSampleFramesArgv*(path: string, fps: float, scaleW: int,
     "-hide_banner",
     "-loglevel", "error",
     "-y",
-    "-i", path,
+    "-i", ffmpegInputUrl(path),
     "-vf", "fps=" & fpsStr & ",scale=" & $scaleW & ":-2",
     outPattern
   ]
 
 proc buildExtractFrameArgv*(path: string, t: float, outPng: string): seq[string] =
   ## ffmpeg argv extracting one full-resolution PNG at timestamp `t`. `-ss`
-  ## precedes `-i` for a fast (keyframe-accurate) seek.
+  ## precedes `-i` for a fast (keyframe-accurate) seek. The input is
+  ## `media.ffmpegInputUrl(path)`.
   let tStr = formatFloat(t, ffDecimal, precision = 3)
   @[
     "-hide_banner",
     "-loglevel", "error",
     "-y",
     "-ss", tStr,
-    "-i", path,
+    "-i", ffmpegInputUrl(path),
     "-frames:v", "1",
     outPng
   ]
@@ -850,7 +853,10 @@ proc buildContactSheetArgv*(inPattern: string, cols, rows: int,
                             outPng: string): seq[string] =
   ## ffmpeg argv (no leading binary token) that tiles the image sequence
   ## `inPattern` (e.g. `dir/%05d.png`, numbered from 1) into a single
-  ## `cols` x `rows` grid PNG at `outPng`.
+  ## `cols` x `rows` grid PNG at `outPng`. `inPattern` is not a caller's
+  ## file name but the image2 sequence pattern `contactSheet` writes into a
+  ## temp directory of its own, and it is passed as is: the image2 demuxer
+  ## expands the `%05d` itself, so it is not put behind `ffmpegInputUrl`.
   @[
     "-hide_banner",
     "-loglevel", "error",

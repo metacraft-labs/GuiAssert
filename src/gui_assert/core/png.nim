@@ -56,10 +56,11 @@ type
     pixels*: string
 
 const
-  maxPngPixels* = 1 shl 28
-    ## The largest `width * height` this decoder accepts (268 million
-    ## pixels, about 1 GiB as RGBA). A larger header is refused before any
-    ## allocation, so a hostile file cannot exhaust memory by its header alone.
+  maxPngPixels* = maxImagePixels
+    ## The largest `width * height` this decoder accepts: the image-wide cap
+    ## `image.maxImagePixels` (268 million pixels, about 1 GiB as RGBA). A
+    ## larger header is refused before any allocation, so a hostile file
+    ## cannot exhaust memory by its header alone.
 
   pngSignature = "\x89PNG\r\n\x1a\n"
 

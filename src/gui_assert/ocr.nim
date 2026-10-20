@@ -209,7 +209,7 @@ proc preprocessToPng(imagePath: string, opts: OcrOptions,
     command = ffmpegBin,
     args = @[
       "-hide_banner", "-loglevel", "error", "-y",
-      "-i", imagePath,
+      "-i", ffmpegInputUrl(imagePath),
       "-vf", filter,
       "-frames:v", "1",
       tmpPath

@@ -232,6 +232,23 @@ proc resolveFfmpegBinary*(): string =
     )
   return p
 
+func ffmpegInputUrl*(path: string): string =
+  ## The argument to give ffmpeg or ffprobe for the input FILE at `path`:
+  ## the path behind the `file:` protocol
+  ## (https://ffmpeg.org/ffmpeg-protocols.html#file). Given raw, a name that
+  ## starts with `-` is read as an option (ffprobe's input is positional),
+  ## and a name such as `pipe:0`, `concat:a|b` or `http://…` selects another
+  ## protocol; behind `file:` each is read as the file it names, relative to
+  ## the current directory when `path` is relative (ffmpeg strips exactly one
+  ## `file:` and opens the rest as a path). Every ffmpeg / ffprobe invocation
+  ## in GuiAssert that reads a caller's file passes it through here.
+  ##
+  ## Deliberately not made absolute: that would read the current directory,
+  ## an effect (and an `OSError`) the pure argv builders of `video_analysis`
+  ## and `vision_windows` must not acquire (their signatures are part of the
+  ## frozen legacy API, `tests/tcore_shims.nim`).
+  "file:" & path
+
 proc sanitizedEnvForFfmpeg(ffmpegPath: string): StringTableRef =
   ## Build an environment for invoking the chosen ffmpeg. On macOS, when the
   ## binary lives in `/nix/store`, we strip `DYLD_LIBRARY_PATH` so the dynamic
@@ -518,9 +535,9 @@ proc buildComposeArgv*(
     "-y",
     "-hide_banner",
     "-loglevel", "error",
-    "-i", screencastPath,
-    "-i", narrationWavPath,
-    "-i", avatarVideoPath,
+    "-i", ffmpegInputUrl(screencastPath),
+    "-i", ffmpegInputUrl(narrationWavPath),
+    "-i", ffmpegInputUrl(avatarVideoPath),
     "-f", "lavfi", "-t", "3600",
     "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
     "-filter_complex", filter,
@@ -692,8 +709,8 @@ proc composeVideoWithAvatarTrack*(
                                       srcWidth, srcHeight)
   var argv = @[
     ffmpegBin, "-y", "-hide_banner", "-loglevel", "error",
-    "-i", screencastPath,
-    "-i", avatarVideoPath,
+    "-i", ffmpegInputUrl(screencastPath),
+    "-i", ffmpegInputUrl(avatarVideoPath),
     "-filter_complex", filter,
     "-map", "[vout]",
   ]

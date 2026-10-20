@@ -44,6 +44,23 @@ type
   AnyImage* = GrayImage | RgbImage | RgbaImage
     ## Any of the three layouts, for procs that work on all of them.
 
+const
+  maxImagePixels* = 1 shl 28
+    ## The largest `width * height` of any image GuiAssert decodes into
+    ## memory: a PNG (`png.maxPngPixels` is this value), a frame ffmpeg
+    ## decodes for `backends/media/ffmpeg` (a sampled video frame, a legacy
+    ## `decodeGray`), and a `vision-segment --frames` frame after
+    ## `--scale-width`. 268 million pixels: 256 MiB as gray, 1 GiB as RGBA.
+    ## A larger size is refused before anything is allocated (or a decoder
+    ## is started), so a hostile header or an extreme scale factor cannot
+    ## exhaust memory by its size alone.
+
+func fitsPixelCap*(width, height: int): bool =
+  ## True when a `width` x `height` image is positive in both dimensions and
+  ## holds at most `maxImagePixels` pixels. The product is never formed, so
+  ## the check cannot overflow whatever the operands.
+  width > 0 and height > 0 and height <= maxImagePixels div width
+
 func channels*(T: typedesc[GrayImage]): int = 1
   ## Bytes per pixel of the layout.
 func channels*(T: typedesc[RgbImage]): int = 3
