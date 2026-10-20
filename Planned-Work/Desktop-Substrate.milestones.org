@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS0 completed (spec + contract reviewed and committed). NEXT: GS1 (CI workflows for Linux/macOS plus a non-required Windows job; core/ opt-in module split with legacy shims and the purity test), then GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary.
+  :next_steps: GS0 completed (spec + contract reviewed and committed). NEXT: GS1 (CI workflows for Linux/macOS plus a non-required Windows job; core/ opt-in module split with legacy shims and the purity test), then GS2 (guiassert CLI + serve skeleton, fixture backend, contract tests). GS3 is the companion campaign's and can start as soon as GS2 publishes the fixture binary. GS3 part A (consumer spec, contract review) is in progress on companion/linux; its contract change requests C1–C17 are recorded under GS0's Outstanding Tasks for folding into the spec before GS2 freezes contract 1.0.
   :last_updated: 2026-10-20
   :current_milestone: GS1
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec and contract complete.
@@ -56,7 +56,7 @@
   | GS0       | substrate/macos | completed                      | —       | —       | —       |
   | GS1       | substrate/macos | planned                        | planned | planned | planned |
   | GS2       | substrate/macos | planned                        | —       | —       | —       |
-  | GS3       | companion/linux | planned                        | —       | —       | —       |
+  | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | planned                        | —       | —       | —       |
   | GS5       | split           | planned                        | planned | planned | planned |
   | GS6       | split           | planned                        | planned | planned | planned |
@@ -114,6 +114,131 @@
       GS5, GS8, GS10 and GS11.
     - [ ] The companion campaign reads spec §7–§8 before GS3 and records any
       contract change it needs here before GS2 freezes it.
+      - 2026-10-20, companion/linux: §5–§8 reviewed against every operation
+        of Agent Harbor's desktop provider, its MCP tool schemas and its
+        computer-use suites (the consumer mapping is Agent Harbor's
+        =specs/Computer-Use/GuiAssert-Substrate.md=). Requests C1–C16 change
+        a shape or a meaning, so they are wanted before GS2 freezes 1.0; C17 is
+        a pure addition and can land in any 1.x minor. Each names the Agent
+        Harbor need it serves.
+        - C1 =Node.bounds= coordinate space. State that =Node.bounds= is in
+          desktop coordinates (§5), converted by the tree backend where the
+          platform reports window-relative geometry (AT-SPI on Wayland), and
+          =null= when it cannot be mapped. Need: Agent Harbor clicks an
+          element's centre; today it correlates the AT-SPI window to the
+          compositor tree by pid and title itself, which is mechanism.
+        - C2 =Node.text=. Add =text: str|null= (AT-SPI Text interface, the AX
+          value of static text, UIA TextPattern), distinct from =value= and
+          =name=. Need: =desktop_get_text= returns the content of labels and
+          documents, which today comes from the Text interface, not from
+          =value=.
+        - C3 Protected fields. A node that is a password or secure text field
+          reports =value: null= and =text: null= and carries a new state
+          =protected=. Need: =type= never echoes text, but an =element= or
+          =element-action= re-read of the same field would otherwise return
+          the characters.
+        - C4 =Window.document=. Add =document: str|null= (macOS =AXDocument=;
+          =null= where the platform has no equivalent). Need: Agent Harbor's
+          =ah desktop windows --workspace= and its GUI launchers verify window
+          isolation by the window's open document, not only its title.
+        - C5 =App.accessible=. Add =accessible: bool|null=: whether the
+          application exposes an accessibility tree on the session's bus.
+          Need: =desktop_list_apps= is specified as listing applications with
+          their accessibility support status.
+        - C6 =Session.envUnset=. Add =envUnset: [str]=, the variables a process
+          spawned into the session must not inherit (for example =DISPLAY=,
+          =NO_AT_BRIDGE=, =GTK_A11Y=, =GDK_BACKEND=, =QT_QPA_PLATFORM=).
+          §6.1 lists the session bus and the AT-SPI bus among what
+          =app-launch= supplies; state that
+          =Session.env= carries them too. Need: Agent Harbor hands a
+          session's environment to an agent process that spawns
+          applications itself; =env= alone cannot reproduce what
+          =app-launch= does.
+        - C7 Capability vocabulary. Define the closed set of
+          =capabilities.features[].feature= names (at least display, window
+          and region capture, own-pixels capture, recording, OCR, tree read,
+          element actions, pointer input, keyboard input, each session kind),
+          make =capabilities= honour =--session= (report the features of that
+          session's backends), and add =details.feature= to every exit 4 and
+          exit 6 envelope. Need: Agent Harbor's =doctor= and its commands must
+          name the missing capability in a stable payload, without a lookup
+          table keyed on verb names.
+        - C8 Key table. Publish the fixed key table of =key= in §7.5 before the
+          freeze, case-insensitive, covering at least =Return= / =Enter=,
+          =Tab=, =Escape= / =Esc=, =BackSpace=, =Delete=, =Insert=, =Space=,
+          =Home=, =End=, =PageUp=, =PageDown=, =Pause=, the four arrows,
+          =F1=–=F12=, any single printable character, and the modifiers
+          =ctrl= / =control=, =shift=, =alt= / =option=, =cmd= / =command= /
+          =meta= / =super= / =win=. Need: the table is part of the frozen
+          contract, and these are the keys Agent Harbor's =key= verb and
+          =desktop_key= accept today (Agent Harbor translates its own spelling
+          variants, such as =page_up=, onto the table).
+        - C9 Dead session host. §6.1 already reports a session whose host died
+          with =state: "error"=; state the exit code too: any verb that
+          targets such a session answers exit 4 / =session-not-running= (not
+          exit 5 or exit 3).
+          Need: Agent Harbor tells "the session is gone, recreate it" apart
+          from "the operation failed" by exit code alone.
+        - C10 =session-start= readiness and names. =session-start= returns only
+          once the session is =running= (its display server answers and, for
+          kinds with a tree backend, its accessibility bus is up), or fails
+          with exit 5 / =session-failed= within =--timeout-ms=; a =--name= that
+          an existing, non-stopped session already uses is exit 2 with a new
+          reason =name-in-use=. Need: Agent Harbor launches applications
+          immediately after creating a session, and its session names are
+          unique.
+        - C11 =app-launch=. When =--wait-window-ms= expires with the process
+          still running, answer exit 7 / =condition-not-met= with
+          =details.app= (the =App=, including its pid), so the caller can
+          =app-quit= it instead of leaking it; add a repeatable ~--env
+          KEY=VALUE~ merged over =Session.env=. Need: Agent Harbor adds
+          per-application environment (for example ~ACCESSIBILITY_ENABLED=1~
+          for Chromium-based applications) as launch policy.
+        - C12 Recording finalization. =record= and =record-stop= report
+          =durationMs=, =frames=, =width= and =height= measured from the
+          finalized file, and a file whose container is not finalized (no
+          index, zero duration) is exit 5 / =capture-failed=, never state
+          =stopped=. Need: Agent Harbor rejects recordings that exist but do
+          not play, and archives only measured metadata.
+        - C13 Matching rules. State that =--name= and =--name-contains= of
+          =find= (and =wait --element=) are case-sensitive and add
+          =--ignore-case=; state that =--app <name>= matches =App.name= exactly
+          and that a name matching more than one running application is exit
+          2 / =conflicting-arguments= with the candidates' pids in
+          =details.pids=, never the first match. Need: Agent Harbor's =find
+          --name= is a case-insensitive substring match, and its =--app= must
+          not silently pick one of two applications.
+        - C14 Secret inputs off =argv=. Add =--stdin= to =type= (the text is
+          read from stdin) and =--value-stdin= to =element-action= (for
+          =set-value=). Need: on the one-shot CLI transport, a password typed
+          or set through =argv= is visible to other local users through the
+          process table, and =--text-file= puts it on disk.
+        - C15 No captured content outside =data=. Diagnostics on stderr and
+          serve =event= payloads never contain typed text, values of protected
+          fields, OCR text or element values; =wait --text= and =watch
+          --frames= list every image file they wrote (or remove all but the
+          ones they report). Need: Agent Harbor applies masking, encryption
+          and retention to every byte of captured content, so it must know
+          every place GuiAssert put some.
+        - C16 =set-value= with an empty value. State that =element-action <path>
+          set-value --value ""= is valid and clears the field. Need: Agent
+          Harbor's =action clear= maps onto it without a new action name.
+        - C17 (any 1.x minor) =drag --path x,y;x,y;…=: intermediate waypoints
+          between =--from= and =--to=, delivered in order with the button held.
+          Need: Agent Harbor's human-cadence drags follow a curved path, and a
+          drag cannot be composed from separate =move= requests because the
+          button must stay down.
+        - No change needed: the envelope (§7.2) and exit codes 0–8 (§7.3),
+          which Agent Harbor maps one to one; serialization rules (§7.4);
+          screenshot and OCR payloads (=ImageRef.origin= and =scale= are
+          exactly what Agent Harbor's OCR-to-click mapping lacks today);
+          session kinds, isolation reporting and lifetimes (§6.1); the state
+          directory (§7.6); versioning, =--contract= and =hello= (§7.7); serve
+          transports, framing, ids, events, ordering, cancellation and
+          shutdown (§8); the vision verbs; and the absence of a network
+          transport (Agent Harbor reaches remote hosts through its own).
+          Cadenced typing and curved pointer moves are composed by Agent
+          Harbor from per-step =type= / =key= / =move= requests over =serve=.
     - [ ] That the contract written here is the contract implemented is checked
       by =test_every_documented_verb_is_implemented=, which lands in GS2.
 
@@ -334,7 +459,8 @@
 
 ** GS3: Agent Harbor consumer spec and backend crate (companion)
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
+   :status_note: Part A (Agent Harbor's consumer spec, and the review of spec §7–§8 against what Agent Harbor uses today) is in progress on the companion Linux host since 2026-10-20. Part B (the backend crate, its contract tests and the Nix packaging) waits for GS2 to publish the guiassert-fixture binary.
    :depends_on: GS2
    :owner: companion/linux
    :complexity: large
