@@ -23,6 +23,22 @@ type
     ## Raised for parameters that cannot describe a frame series (a
     ## non-positive sample rate, a score series of the wrong length).
 
+const
+  defaultChangeThreshold* = 0.35
+    ## The default change threshold of `segmentFrames`, the media backend's
+    ## `segmentVideo` and `vision-segment`: the most-changed cell of the 4x4
+    ## grid must drop by more than 35% (see `segmentFrames`).
+
+proc scaledHeight*(width, height, scaleWidth: int): int =
+  ## The height a `width` x `height` frame has when it is scaled to
+  ## `scaleWidth` wide with its aspect ratio kept: rounded to the nearest
+  ## pixel, at least 1. `vision-segment --scale-width` uses it for PNG frames
+  ## and video alike. Raises `SegmentationError` for a non-positive size.
+  if width <= 0 or height <= 0 or scaleWidth <= 0:
+    raise newException(SegmentationError, "cannot scale a " & $width & "x" &
+      $height & " frame to " & $scaleWidth & " wide")
+  max(1, int(float(height) * float(scaleWidth) / float(width) + 0.5))
+
 proc segmentBoundaries*(ssims: seq[float], threshold: float): seq[int] =
   ## Given `ssims`, where `ssims[i]` is the SSIM between frame `i` and frame
   ## `i+1`, return the frame indices at which a *new* segment begins.
@@ -74,7 +90,7 @@ proc segmentsFromSeries*(series: seq[float], numFrames: int,
     result.add((float(b) / sampleFps, float(nb) / sampleFps, score))
 
 proc segmentFrames*(frames: seq[GrayImage], sampleFps: float,
-                    threshold = 0.35, useLocal = true,
+                    threshold = defaultChangeThreshold, useLocal = true,
                     gridX = 4, gridY = 4): seq[Segment] =
   ## Segment an in-memory frame series: score each consecutive pair with
   ## `frameSimilarity` and split with `segmentsFromSeries`. The default

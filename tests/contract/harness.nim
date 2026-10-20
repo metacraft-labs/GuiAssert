@@ -78,10 +78,21 @@ type
     stdout*: string
     stderr*: string
 
+proc siblingBin*(name: string): string =
+  ## The built binary `name` (`guiassert` or `guiassert-fixture`) beside the
+  ## binary under test, for the tests that need one particular build whichever
+  ## build the suite runs against. Fails loudly when it has not been built.
+  result = contractBin().parentDir / (name & ExeExt)
+  if not fileExists(result):
+    raise newException(IOError, "the " & name & " binary " & result &
+      " does not exist; run `just build-cli`")
+
 proc runCli*(args: seq[string], env: StringTableRef, workDir = "",
-             timeoutMs = cliTimeoutMs): CliRun =
-  ## Run the binary once and collect its exit code and both streams.
-  let p = startProcess(contractBin(), workingDir = workDir, args = args,
+             timeoutMs = cliTimeoutMs, bin = ""): CliRun =
+  ## Run the binary once (`bin`, else the binary under test) and collect its
+  ## exit code and both streams.
+  let exe = if bin.len > 0: bin else: contractBin()
+  let p = startProcess(exe, workingDir = workDir, args = args,
                        env = env, options = {})
   try:
     p.inputStream.close()
@@ -101,9 +112,10 @@ proc envelopeOf*(r: CliRun): JsonNode =
   doAssert r.stdout.count('\n') == 1, "stdout is not exactly one line: " & r.stdout
   parseJson(r.stdout)
 
-proc cli*(args: seq[string], env: StringTableRef): tuple[exit: int, env: JsonNode, line: string] =
+proc cli*(args: seq[string], env: StringTableRef, bin = ""):
+    tuple[exit: int, env: JsonNode, line: string] =
   ## Run and parse: the exit code, the envelope and the raw line.
-  let r = runCli(args, env)
+  let r = runCli(args, env, bin = bin)
   (r.exit, envelopeOf(r), r.stdout.strip(leading = false, chars = {'\n'}))
 
 proc data*(env: JsonNode): JsonNode = env["data"]
@@ -111,9 +123,10 @@ proc data*(env: JsonNode): JsonNode = env["data"]
 proc errorKind*(env: JsonNode): string = env["error"]["kind"].getStr
 proc errorReason*(env: JsonNode): string = env["error"]["reason"].getStr
 
-proc isMinimalBinary*(): bool =
-  ## True when the binary under test is `guiassert-fixture` (no media backend).
-  let (_, env, _) = cli(@["version"], baseEnv())
+proc isMinimalBinary*(bin = ""): bool =
+  ## True when the binary under test (or `bin`) is `guiassert-fixture` (no
+  ## media backend).
+  let (_, env, _) = cli(@["version"], baseEnv(), bin)
   env["data"]["compiled"]["media"].len == 0
 
 # ---------------------------------------------------------------------------
@@ -208,9 +221,11 @@ type
     reader*: LineReader
     ready*: JsonNode
 
-proc startServe*(args: seq[string], env: StringTableRef): Daemon =
-  ## Start `guiassert serve …` and read its ready line.
-  result.p = startProcess(contractBin(), args = args, env = env, options = {})
+proc startServe*(args: seq[string], env: StringTableRef, bin = ""): Daemon =
+  ## Start `guiassert serve …` (`bin`, else the binary under test) and read
+  ## its ready line.
+  result.p = startProcess(if bin.len > 0: bin else: contractBin(), args = args,
+                          env = env, options = {})
   result.reader = initLineReader(result.p)
   let first = result.reader.readLine(30_000)
   result.ready = parseJson(first)

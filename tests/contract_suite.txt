@@ -6,3 +6,4 @@ tcli_state
 tcontract_schema
 tserve_protocol
 tcontract_decisions
+tvision_verbs

@@ -852,6 +852,21 @@ caller's next `windows` / `tree` / `screenshot`.
 | `vision-segment` | `(<video> [--fps F] [--scale-width W] \| --frames <dir-of-png>) [--threshold T]` (video input needs the media backend) | `{"source": {"path": str, "durationS": float\|null, "width": int, "height": int}, "params": {"fps": float\|null, "scaleWidth": int\|null, "threshold": float}, "segments": [{"index": int, "tStart": float, "tEnd": float, "changeScore": float}]}` |
 | `vision-windows` | `<image.png> [--ocr]` | `{"image": {"path": str, "width": int, "height": int}, "windows": [{"bbox": Rect, "confidence": float, "titleText": str\|null, "text": str\|null}]}` (`titleText`/`text` are `null` without `--ocr`) |
 
+`vision-segment` defaults (written down in GS4; they fill in what the 1.0
+table leaves unstated and change no shape or meaning): `--threshold` 0.35, applied to the most-changed cell of a
+4x4 grid of tile SSIMs; `--frames` at `--fps` 1 and unscaled; a video sampled
+at `--fps` 2 and scaled to `--scale-width` 320 (ffmpeg samples and scales it,
+the pure core scores it). `params` reports the values applied, so a video's
+`scaleWidth` is never `null`; `source.width` / `height` are the source's own
+size (the first PNG frame's, or the video stream's) whatever the scaling, and
+`source.durationS` is the frame count over the rate for `--frames` and the
+container duration for a video (`null` when the container states none). A
+`--scale-width` keeps the aspect ratio, rounding the height to the nearest
+pixel. Video input without ffmpeg is exit 4 / `missing-tool`, a file that is
+not a readable video is exit 2 / `invalid-value`; `capabilities` reports
+`video-decode` `available` when ffmpeg and ffprobe are found and `supported`
+only when `--probe` ran ffmpeg.
+
 The existing `gui-assert-vision` program (`analyze`, `find`, `extract-frame`,
 `contact-sheet`, `windows`) is unchanged; its pure parts become callable through
 these verbs.

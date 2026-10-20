@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS2.1 implemented on macOS: the companion campaign's requests C1–C17 are decided (each decision under its request in GS0's Outstanding Tasks) and implemented, and contract guiassert-desktop/1.0 is FROZEN (spec §7.7); it awaits independent verification. Once committed, GS3 part B builds against the frozen 1.0 (build/bin/guiassert-fixture or the flake's guiassert-fixture), and GS4 starts. GS1, GS2 and GS2.1 Linux/Windows legs run on the first pull request into dev.
+  :next_steps: GS4 implemented on macOS (vision-segment video input through the media backend, the video-decode feature, tests/contract/tvision_verbs.nim green on both binaries); independently verified (review fixed a stderr-pipe hang on damaged videos and ffmpeg input-name handling). Contract guiassert-desktop/1.0 stays frozen and unchanged (spec §7.5 only writes down the vision-segment defaults). GS3 part B builds against 1.0. GS1, GS2, GS2.1 and GS4 Linux/Windows legs run on the first pull request into dev.
   :last_updated: 2026-10-20
-  :current_milestone: GS2.1
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17.
+  :current_milestone: GS4
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs.
   :END:
 
 * Introduction
@@ -58,7 +58,7 @@
   | GS2       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS2.1     | substrate/macos | partially_completed            | completed | planned | planned |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
-  | GS4       | substrate/macos | planned                        | —       | —       | —       |
+  | GS4       | substrate/macos | partially_completed            | completed | planned | planned |
   | GS5       | split           | planned                        | planned | planned | planned |
   | GS6       | split           | planned                        | planned | planned | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
@@ -1171,40 +1171,130 @@
 
 ** GS4: Vision verbs in the CLI
    :PROPERTIES:
-   :status: planned
+   :status: partially_completed
+   :status_note: Implemented 2026-10-20 from origin/agents at 7608f89 (no newer commit; no new request aimed at GS4 in this file) on macOS (aarch64-darwin, inside nix develop): vision-segment video input through the media backend (the library form is backends/media/ffmpeg.segmentVideo), the video-decode feature probed, and tests/contract/tvision_verbs.nim green against both build/bin/guiassert and build/bin/guiassert-fixture. No contract change: spec §7.5 gained a paragraph writing down the vision-segment defaults (see Deviations). Independently verified on macOS the same day (review fixes under Deviations); Linux and Windows run on the pull request into dev.
    :depends_on: GS2 GS2.1
    :owner: substrate/macos
+   :platform_status: macos=completed linux=planned windows=planned
    :complexity: small
    :END:
 
    Agent Harbor's use of these verbs belongs to the companion campaign.
 
 *** Deliverables
-    - [ ] =vision-compare=, =vision-segment= (=--frames= pure; video input via
+    - [X] =vision-compare=, =vision-segment= (=--frames= pure; video input via
       the media backend) and =vision-windows= (=--ocr= optional) over the core
-      modules, with the payloads of spec §7.5.
+      modules, with the payloads of spec §7.5. =vision-compare= and
+      =vision-windows= were built in GS2; GS4 adds video input
+      (=backends/media/ffmpeg.segmentVideo=: ffmpeg samples, scales and pipes
+      raw gray frames, the core scores them one pair at a time, cancellable
+      between frames), the =video-decode= feature (=available= / probed
+      =supported= / =missing-tool=), and the tests. Over =serve= the verbs give
+      the CLI's envelope byte for byte, and a running video decode is
+      cancellable (ffmpeg is stopped with the request).
 
 *** Verification
     - test_name: test_vision_compare_identical_is_one_and_changed_is_lower
       file: tests/contract/tvision_verbs.nim
       description: Identical PNGs give ssim 1.0 and phashDistance 0; a frame with a drawn box gives a lower ssim and a lower minimum tile.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: computeSsim without the identical-pixel shortcut and the clamp (the code as GS4 found it) turns it red (tried 2026-10-20).
     - test_name: test_vision_compare_size_mismatch_is_bad_args
       file: tests/contract/tvision_verbs.nim
       description: Images of different sizes exit 2 rather than being resized silently.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Removing the size check in vision-compare turns it red (tried 2026-10-20).
     - test_name: test_vision_segment_two_state_frames_finds_one_boundary
       file: tests/contract/tvision_verbs.nim
       description: A PNG frame sequence with two states yields exactly two segments with the boundary at the switch.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: segmentBoundaries placing the boundary one frame late turns it red, as it does the video test (tried 2026-10-20).
     - test_name: test_vision_segment_video_without_media_backend_is_exit_4
       file: tests/contract/tvision_verbs.nim
       description: guiassert-fixture (no media backend) refuses video input with exit 4 / not-compiled-in, and accepts --frames.
-      status: pending
+      status: passing (macOS; run against guiassert-fixture whichever binary the suite runs against)
+      falsifying_mutation: Giving the fixture build's video refusal reason not-implemented turns it red (tried 2026-10-20).
     - test_name: test_vision_windows_two_window_frame
       file: tests/contract/tvision_verbs.nim
       description: A synthetic two-window frame yields exactly two windows at the expected rects; with --ocr each carries its own label.
-      status: pending
+      status: passing (macOS, both binaries)
+      falsifying_mutation: Taking titleText from every word of the frame turns it red (tried 2026-10-20).
+    - test_name: test_vision_segment_video_damaged_or_oddly_named_input
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in GS4 review.) A video with an intact header and damaged frames (ffmpeg's diagnostics exceed 64 KiB, checked as a control) finishes with exit 0 rather than hanging, and a file named =-two-state.mp4= or =pipe:0= is read as that file, through segmentVideo and the CLI.
+      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      falsifying_mutation: Not draining stderr while frames are read turns it red (the verb hangs to the 60 s limit); passing the input without file: turns it red (ffprobe reads -two-state.mp4 as an option). Both tried in review, 2026-10-20.
+    - test_name: test_vision_segment_video_two_states_matches_library
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in GS4.) Video input on guiassert: a two-state H.264 video gives exactly two segments split at the switch, equal to segmentVideo on the same file, with default and explicit --fps / --scale-width / --threshold; a missing file is exit 3, a non-video exit 2, no ffmpeg exit 4 / missing-tool; capabilities reports video-decode available, supported with --probe, missing-tool without ffmpeg.
+      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      falsifying_mutation: Ignoring the video --fps turns it red (tried 2026-10-20); so does mapping a decode error to exit 3 not-found (tried in review, 2026-10-20).
+    - test_name: test_vision_verbs_over_serve_equal_the_cli
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in GS4.) Every vision verb's envelope over guiassert serve equals the one-shot CLI's byte for byte, on both builds.
+      status: passing (macOS)
+    - test_name: test_serve_cancels_a_running_video_segmentation
+      file: tests/contract/tvision_verbs.nim
+      description: (Added in GS4.) A running vision-segment of a long video is cancelled over serve with exit 8 within 5 s, and its ffmpeg child is gone afterwards (checked with pgrep on POSIX; the control checks it was running before the cancel).
+      status: passing (macOS)
+      falsifying_mutation: Removing the per-frame checkpoint in segmentVideo turns it red (tried 2026-10-20); so does not killing an abandoned ffmpeg (the cancel never answers; tried in review, 2026-10-20).
+    - test_name: just lint && just test-core && just test
+      description: The default, core and contract suites (the contract suite now includes tvision_verbs) on both binaries.
+      status: passing 2026-10-20 (macOS, at 7608f89 plus this change, after the review fixes; test-contract also run three more times, plus the GS1 out-of-suite tests and nix build of guiassert and guiassert-fixture)
+
+*** Deviations
+    - =vision-segment --frames --scale-width= reported the scaled size as
+      =source.width= / =height=; the spec names the source, so it now reports
+      the first frame's own size. A bug fix, not a contract change.
+    - The defaults of =vision-segment= were not written in the spec. §7.5 now
+      states them (threshold 0.35 on the most-changed cell of a 4x4 grid;
+      frames at fps 1, unscaled; video at fps 2, scaled to 320 wide), together
+      with what =source= and =params= report for a video and the video error
+      mapping (no ffmpeg: exit 4 / =missing-tool=; not a video: exit 2 /
+      =invalid-value=). These fill in what 1.0 left unstated; no shape or
+      meaning of 1.0 changes, so the contract stays =guiassert-desktop/1.0=.
+    - The video path decodes frames through ffmpeg's =gray= output rather
+      than =video_analysis.segmentByChange= (which spawns ffmpeg per frame and
+      imports =std/re=, whose PCRE library is loaded at program start).
+      =segmentByChange= is unchanged; =segmentVideo= is the API the CLI
+      equals.
+    - =core/ssim.computeSsim= returned 1.0000000000000002 for identical
+      images (its documentation promises exactly 1.0 and the range [-1, 1]);
+      it now returns 1.0 for identical pixels and clamps to the range.
+    - =tcontract_decisions= test_capabilities_vocabulary_and_details_feature:
+      its =vision-segment <video>= exit-4 case now sets =FFMPEG_BIN= to a
+      missing file, so the full binary answers exit 4 / =missing-tool= (it
+      decodes video now) and the fixture binary =not-compiled-in=, both with
+      feature =video-decode=.
+    - The harness gained =siblingBin= and a =bin= argument to =runCli= /
+      =cli= / =startServe= / =isMinimalBinary=, so a test can address one
+      particular build.
+    - Review fixes (2026-10-20): =segmentVideo= read ffmpeg's stderr only
+      after stdout ended, so a video whose frames are damaged (ffmpeg logs
+      every bad macroblock, ~130 KB for a 60 s clip) filled the stderr pipe
+      and hung the verb forever; and =probeVideoSource= merged ffprobe's
+      stderr into its JSON, so any warning turned a readable video into exit
+      2. Both now drain stderr on a thread of their own, keeping the first
+      4 KiB for the error message. The input is passed as
+      =file:<absolute path>=, so a name starting with =-= or naming an
+      ffmpeg protocol (=pipe:0=, =concat:=) is read as a file, and a path
+      that is not a regular file (a FIFO) is refused (exit 2) instead of
+      blocking ffprobe. An abandoned ffmpeg (cancel, deadline, decode error)
+      is killed and reaped rather than sent SIGTERM with a 2 s grace.
+    - =segmentVideo= and the legacy =video_analysis.segmentByChange= agree
+      on segment boundaries (checked on four videos: two-state, three-state
+      at an odd 334x210 size, a moving test pattern, a static one) but not
+      on =changeScore= to the last digit (about 1%): the legacy path samples
+      to RGB PNGs at =scale=W:-2= (even height) and converts to gray, the
+      new one reads ffmpeg's gray plane at the rounded height. Not a defect;
+      =segmentByChange= is unchanged and the CLI equals =segmentVideo=.
+
+*** Outstanding Tasks
+    - [X] Independent verification of this implementation (2026-10-20; the
+      review fixes are listed under Deviations).
+    - [ ] First CI run of tvision_verbs on Linux x64/arm64 and on the Windows
+      job (the Windows job's provisioned ffmpeg essentials build carries
+      libx264, which the test videos are encoded with).
 
 ** GS5: Capture backends
    :PROPERTIES:

@@ -32,6 +32,7 @@ import ./[args, context, registry, state]
 
 when mediaCompiledIn:
   import ../media
+  import ../backends/media/ffmpeg as media_ffmpeg
 
 proc fromBackendError*(e: ref BackendError): ref ContractError =
   ## The contract error for a backend error: not found (3), unavailable (4),
@@ -464,13 +465,11 @@ proc unavailableFeatures(m: Module, name: string, x: ref Exception): seq[Feature
                        reason: some(reason),
                        remedy: (if remedy.len > 0: some(remedy) else: none(string)))
 
-proc mediaFeatures(): seq[Feature] =
-  ## The media module's features: video input to `vision-segment`, which
-  ## GS4 implements (until then not implemented, or not compiled in).
-  if mediaCompiledIn:
-    @[Feature(feature: "video-decode", backend: "ffmpeg", state: fsUnavailable,
-              reason: some("not-implemented"),
-              remedy: some("decode the video to PNG frames and pass --frames <dir>"))]
+proc mediaFeatures(probe: bool): seq[Feature] =
+  ## The media module's features: video input to `vision-segment`, through
+  ## ffmpeg when the media backend is compiled in.
+  when mediaCompiledIn:
+    @[videoDecodeFeature(probe)]
   else:
     @[Feature(feature: "video-decode", backend: "ffmpeg", state: fsUnavailable,
               reason: some("not-compiled-in"),
@@ -493,7 +492,7 @@ proc verbCapabilities(e: VerbEnv): JsonNode =
     except ContractError, BackendUnavailableError:
       fs = unavailableFeatures(m, e.selection[m].name, getCurrentException())
     for f in fs: features.add f.toJson
-  for f in mediaFeatures(): features.add f.toJson
+  for f in mediaFeatures(probe): features.add f.toJson
   var perms = unknownPermissions()
   try: perms = e.sessionBackend().permissions(none(string))
   except ContractError, BackendUnavailableError: discard
@@ -1019,50 +1018,92 @@ proc verbVisionCompare(e: VerbEnv): JsonNode =
      "tiles": tiles, "phashDistance": hammingDistance(dctHash(a), dctHash(b)),
      "edgeChangeRatio": finiteJson(edgeChangeRatio(a, b), "the edge change ratio")}
 
+proc segmentsJson(segs: seq[Segment]): JsonNode =
+  result = newJArray()
+  for i, s in segs:
+    result.add %*{"index": i, "tStart": finiteJson(s.tStart), "tEnd": finiteJson(s.tEnd),
+                  "changeScore": finiteJson(s.changeScore)}
+
+proc visionSegmentVideo(e: VerbEnv, fps: Option[float], threshold: float,
+                        scaleWidth: Option[int]): JsonNode =
+  ## `vision-segment <video>`: the media backend's `segmentVideo`, serialized.
+  when mediaCompiledIn:
+    let details = %*{"module": "media", "backend": "ffmpeg"}
+    try: discard resolveMediaTools()
+    except MediaToolMissingError as x:
+      raise newContractError(ekBackendUnavailable, "missing-tool", x.msg,
+        remedy = "install ffmpeg (with ffprobe beside it) on PATH or set FFMPEG_BIN",
+        details = details)
+    let path = e.resolvePath(e.inv.positionals[0])
+    if not fileExists(path):
+      raise newContractError(ekNotFound, "file", "no video at " & path)
+    let token = e.ctx.token
+    var r: VideoSegmentation
+    try:
+      r = segmentVideo(path, fps.get(defaultVideoFps),
+                       scaleWidth.get(defaultVideoScaleWidth), threshold,
+                       checkpoint = proc () = token.checkpoint())
+    except MediaToolMissingError as x:
+      raise newContractError(ekBackendUnavailable, "missing-tool", x.msg, details = details)
+    except VideoDecodeError as x:
+      raise badArgs("invalid-value", x.msg)
+    %*{"source": {"path": path,
+                  "durationS": (if r.source.durationS.isSome:
+                                  finiteJson(r.source.durationS.get, "the video duration")
+                                else: newJNull()),
+                  "width": r.source.width, "height": r.source.height},
+       "params": {"fps": finiteJson(r.fps), "scaleWidth": r.scaleWidth,
+                  "threshold": finiteJson(r.threshold)},
+       "segments": segmentsJson(r.segments)}
+  else:
+    raise newContractError(ekBackendUnavailable, "not-compiled-in",
+      "video input needs the media backend, which is not compiled into this binary",
+      remedy = "decode the video to PNG frames and pass --frames <dir>",
+      details = %*{"module": "media", "backend": "ffmpeg"})
+
 proc verbVisionSegment(e: VerbEnv): JsonNode =
   let hasVideo = e.inv.positionals.len > 0
   if hasVideo == e.inv.has("frames"):
     raise (if hasVideo: badArgs("conflicting-arguments", "give <video> or --frames, not both")
            else: badArgs("missing-argument", "vision-segment needs <video> or --frames <dir>"))
-  let threshold = e.inv.floatFlag("threshold", 0.0, 1.0).get(0.35)
+  let threshold = e.inv.floatFlag("threshold", 0.0, 1.0).get(defaultChangeThreshold)
   let scaleWidth = e.inv.intFlag("scale-width", 8, 16384)
   let fps = e.inv.floatFlag("fps", 0.0, 240.0, loInclusive = false)
   if hasVideo:
-    if mediaCompiledIn:
-      raise newContractError(ekBackendUnavailable, "not-implemented",
-        "video input to vision-segment is not implemented yet; use --frames",
-        details = %*{"module": "media", "backend": "ffmpeg"})
-    raise newContractError(ekBackendUnavailable, "not-compiled-in",
-      "video input needs the media backend, which is not compiled into this binary",
-      remedy = "decode the video to PNG frames and pass --frames <dir>",
-      details = %*{"module": "media", "backend": "ffmpeg"})
+    return e.visionSegmentVideo(fps, threshold, scaleWidth)
   let dir = e.resolvePath(e.inv.value("frames").get)
   if not dirExists(dir):
     raise newContractError(ekNotFound, "file", "--frames directory does not exist: " & dir)
   let files = sortedNames(dir, ".png")
   if files.len == 0:
     raise badArgs("invalid-value", "--frames " & dir & " holds no .png frames")
-  var frames: seq[GrayImage]
-  for f in files:
+  # Frames are scored one pair at a time, as video frames are, so a long
+  # sequence never has to fit in memory; `segmentsFromSeries` splits the
+  # series exactly as `core/segmentation.segmentFrames` does.
+  var series: seq[float]
+  var prev: GrayImage
+  var srcW, srcH = 0
+  for i, f in files:
+    e.ctx.token.checkpoint()
     var g = readGrayPng(f)
-    if scaleWidth.isSome and g.width > 0:
-      let h = max(1, int(round(float(g.height) * float(scaleWidth.get) / float(g.width))))
-      g = scaleNearest(g, scaleWidth.get, h)
-    if frames.len > 0 and (g.width != frames[0].width or g.height != frames[0].height):
-      raise badArgs("invalid-value", "the frames differ in size (" & f & ")")
-    frames.add g
+    if i == 0:
+      srcW = g.width
+      srcH = g.height
+    elif g.width != srcW or g.height != srcH:
+      raise badArgs("invalid-value", "the frames differ in size (" & f & " is " &
+        $g.width & "x" & $g.height & ", the first frame " & $srcW & "x" & $srcH & ")")
+    if scaleWidth.isSome:
+      g = scaleNearest(g, scaleWidth.get, scaledHeight(srcW, srcH, scaleWidth.get))
+    if i > 0: series.add frameSimilarity(prev, g)
+    prev = g
   let rate = fps.get(1.0)
-  let segs = segmentFrames(frames, rate, threshold)
-  var segments = newJArray()
-  for i, s in segs:
-    segments.add %*{"index": i, "tStart": finiteJson(s.tStart), "tEnd": finiteJson(s.tEnd),
-                    "changeScore": finiteJson(s.changeScore)}
-  %*{"source": {"path": dir, "durationS": finiteJson(float(frames.len) / rate),
-                "width": frames[0].width, "height": frames[0].height},
+  let segs = segmentsFromSeries(series, files.len, rate, threshold)
+  %*{"source": {"path": dir, "durationS": finiteJson(float(files.len) / rate),
+                "width": srcW, "height": srcH},
      "params": {"fps": finiteJson(rate), "scaleWidth": (if scaleWidth.isSome: %scaleWidth.get
                                                          else: newJNull()),
                 "threshold": finiteJson(threshold)},
-     "segments": segments}
+     "segments": segmentsJson(segs)}
 
 proc verbVisionWindows(e: VerbEnv): JsonNode =
   let path = e.resolvePath(e.inv.positionals[0])

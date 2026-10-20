@@ -33,6 +33,11 @@ proc computeSsim*(a, b: GrayImage): float =
     raise newException(ImageMathError,
       "SSIM pixel buffer size mismatch (expected " & $n & " got " &
       $a.pixels.len & "/" & $b.pixels.len & ")")
+  # Identical pixels are exactly 1.0 by definition; the arithmetic below can
+  # round that to 1.0000000000000002, which a caller testing `== 1.0` (or
+  # reading the documented range) must not see.
+  if a.pixels == b.pixels:
+    return 1.0
 
   # Compute pixel means.
   var sumA = 0.0
@@ -69,7 +74,8 @@ proc computeSsim*(a, b: GrayImage): float =
   if denominator == 0.0:
     # Both images constant and equal → perfect similarity.
     return 1.0
-  result = numerator / denominator
+  # Rounding can carry the ratio a hair past the documented range.
+  result = clamp(numerator / denominator, -1.0, 1.0)
 
 
 proc tiledSsim*(a, b: GrayImage, gridX = 4, gridY = 4):

@@ -431,7 +431,10 @@ suite "contract 1.0 decisions":
       (@["window-focus", "fixture-window-1"],
        fixtureEnv(st, {"GUIASSERT_FIXTURE_FAIL": "window-focus:6:desktop-access"}), 6,
        "desktop-access", "window-management"),
-      (@["vision-segment", work / "v.mp4"], env, 4, "", "video-decode"),
+      # Without the media backend (guiassert-fixture) or without ffmpeg
+      # (guiassert, FFMPEG_BIN naming no file): exit 4 for video-decode.
+      (@["vision-segment", work / "v.mp4"],
+       fixtureEnv(st, {"FFMPEG_BIN": work / "no-such-ffmpeg"}), 4, "", "video-decode"),
       (@["--session", "gone", "click", "--at", "1,1"], deadEnv, 4, "session-not-running",
        "null"),
       (@["windows"], fixtureEnv(st, {"GUIASSERT_FIXTURE_FAIL": "windows:4:session-not-running"}),
