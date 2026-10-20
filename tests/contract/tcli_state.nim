@@ -145,13 +145,27 @@ suite "CLI state":
     check ne["error"]["details"]["selectedBy"].getStr == "module-flag"
     check ne.errorReason in ["wrong-platform", "not-implemented", "not-compiled-in"]
     check not fileExists(st / "nofallback.png")
-    # The platform default is not silently replaced either.
-    let (px, pe, _) = cli(@["displays"], plain)
-    check px == 4
-    check pe["error"]["details"]["selectedBy"].getStr == "default"
-    # guiassert-fixture has no platform code at all; guiassert has the
-    # platform backends' names but not (in GS2) their implementations.
-    check pe.errorReason == (if isMinimalBinary(): "not-compiled-in" else: "not-implemented")
+    # The platform default is not silently replaced either: guiassert-fixture
+    # has no platform code at all, so its default is exit 4 / not-compiled-in
+    # (never the fixture); in guiassert the default answers itself, or, where
+    # it is not implemented yet, is exit 4 / not-implemented naming it.
+    let (px, pe, pl) = cli(@["displays"], plain)
+    if isMinimalBinary():
+      check px == 4
+      check pe["error"]["details"]["selectedBy"].getStr == "default"
+      check pe.errorReason == "not-compiled-in"
+    elif px == 0:
+      # An implemented default (macos-sck since GS5) reports the host's own
+      # displays, not the fixture's.
+      check "fixture" notin pl
+      check pe.data["displays"].kind == JArray
+    else:
+      check px == 4
+      check pe["error"]["details"]["selectedBy"].getStr == "default"
+      check pe["error"]["details"]["backend"].getStr == d["capture"].getStr
+      check pe.errorReason == "not-implemented"
+    when defined(macosx):
+      if not isMinimalBinary(): check px == 0
     rec["backends"] = %*{"capture": "fixture", "tree": "fixture", "input": "fixture"}
     writeFile(recPath, $rec)
     check cli(@["session-stop", "sel"], envAll).exit == 0

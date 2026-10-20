@@ -387,7 +387,8 @@ suite "contract 1.0 decisions":
     let dead = ok(@["session-start", "--kind", "headless", "--name", "gone"], deadEnv)
     killHost(dead["session"]["hostPid"].getInt)
     let cases: seq[(seq[string], StringTableRef, int, string, string)] = @[
-      (@["displays"], baseEnv(), 4, "", "window-enumeration"),
+      (@["--capture-backend", foreignCaptureBackend, "displays"], baseEnv(), 4, "",
+       "window-enumeration"),
       (@["screenshot", "--window", "fixture-window-1", "--own-pixels", "--out", work / "a.png"],
        fixtureEnv(freshDir("c7a"), {"GUIASSERT_FIXTURE_SCENARIO": crop}), 4,
        "unsupported-option", "own-pixels-capture"),

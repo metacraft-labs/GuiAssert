@@ -101,7 +101,7 @@ suite "CLI envelope":
     var cases: seq[(seq[string], StringTableRef, int)] = @[
       (@["no-such-verb"], env, 2),
       (@["session-info", "nobody"], env, 3),
-      (@["displays"], baseEnv(), 4),                      # the platform default
+      (@["--capture-backend", foreignCaptureBackend, "displays"], baseEnv(), 4),
       (@["--session", "ghost", "displays"], env, 3),
       (@["ocr", "--image", st / "missing.png"], env, 3)]
     for code in 1..8:
@@ -120,7 +120,7 @@ suite "CLI envelope":
     let (_, inj, _) = cli(@["displays"], fixtureEnv(st, {"GUIASSERT_FIXTURE_FAIL": "displays:5"}))
     check inj["error"]["details"].kind == JNull and inj["error"]["remedy"].kind == JNull
     # ... while an unavailable backend says which one, and what to do.
-    let (_, un, _) = cli(@["displays"], baseEnv())
+    let (_, un, _) = cli(@["--capture-backend", foreignCaptureBackend, "displays"], baseEnv())
     check un["error"]["details"]["module"].getStr == "capture"
     check un["error"]["remedy"].kind == JString
 

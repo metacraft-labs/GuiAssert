@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS4 implemented on macOS (vision-segment video input through the media backend, the video-decode feature, tests/contract/tvision_verbs.nim green on both binaries); independently verified (review fixed a stderr-pipe hang on damaged videos and ffmpeg input-name handling); a follow-up added the 2^28-pixel frame cap, 50 ms cancel/deadline slices while ffmpeg decodes, and file: input names in every legacy ffmpeg call. Contract guiassert-desktop/1.0 stays frozen and unchanged (spec §7.5 only writes down the vision-segment defaults). GS3 part B builds against 1.0. GS1, GS2, GS2.1 and GS4 Linux/Windows legs run on the first pull request into dev.
+  :next_steps: GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
   :last_updated: 2026-10-20
-  :current_milestone: GS4
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs.
+  :current_milestone: GS5
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends (live evidence pending an unlocked session).
   :END:
 
 * Introduction
@@ -59,7 +59,7 @@
   | GS2.1     | substrate/macos | partially_completed            | completed | planned | planned |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
   | GS4       | substrate/macos | partially_completed            | completed | planned | planned |
-  | GS5       | split           | planned                        | planned | planned | planned |
+  | GS5       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS6       | split           | planned                        | planned | planned | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
   | GS8       | split           | planned                        | planned | planned | planned |
@@ -1382,22 +1382,25 @@
 
 ** GS5: Capture backends
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=planned linux=planned windows=planned
+   :platform_status: macos=in_progress linux=planned windows=planned
    :requires: desktop.automation
    :complexity: large
    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
-      - [ ] =backends/capture/macos_sck.nim=: =screenshot= of a display, a
+      - [X] =backends/capture/macos_sck.nim=: =screenshot= of a display, a
         window (own pixels) and a region; =record=, =record-start=,
         =record-stop= through =SCStream=; output written via temp-and-rename.
-      - [ ] =backends/capture/macos_cgwindow.nim=: =displays=, =windows= with
+        (Implemented 2026-10-20; the live evidence for captures and
+        recordings is pending an unlocked GUI session, see Outstanding
+        Tasks.)
+      - [X] =backends/capture/macos_cgwindow.nim=: =displays=, =windows= with
         =titlesVisible= and =title: null= when redacted.
-      - [ ] Missing Screen Recording grant is exit 6 / =tcc-screen-recording=
+      - [X] Missing Screen Recording grant is exit 6 / =tcc-screen-recording=
         with the bundle identity and click-path in =remedy=.
     - Linux (claimable by =companion/linux=)
       - [ ] =linux_wlr.nim= (grim / wf-recorder; window capture reported as
@@ -1410,20 +1413,24 @@
     - test_name: test_macos_windows_lists_fixture_app_window
       file: tests/live/tcapture_macos.nim
       description: The AppKit fixture's window appears in windows with its pid and bounds; the unprivileged positive control runs first.
-      status: pending
+      status: passed
+      as_built: passed 2026-10-20 (macOS 26.5, aarch64) on a locked session with the grant held: the cgwindow positive control lists the fixture window (id, pid, bounds within 8 points of its AppKit frame, document null), macos-sck lists the same window with its title, --title / --title-contains match case-sensitively; negative control: no window after the fixture exits. A bounds mutation turned it red.
     - test_name: test_macos_screenshot_window_own_pixels_matches_fixture_color
       file: tests/live/tcapture_macos.nim
       description: A window capture of the fixture (solid known colour) matches that colour even when another window overlaps it.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: implemented; fails with "BLOCKED: the GUI session is locked" on 2026-10-20 (ScreenCaptureKit lists no display while the screen is locked).
       negative_control: A display capture of the same area shows the overlapping window's colour.
     - test_name: test_macos_record_start_stop_produces_decodable_mp4
       file: tests/live/tcapture_macos.nim
       description: record-start/record-stop produce an MP4 that decodes to the reported frame count and size.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: implemented; fails with "BLOCKED: the GUI session is locked" on 2026-10-20 (ScreenCaptureKit lists no display while the screen is locked).
     - test_name: test_macos_capture_without_grant_is_exit_6
       file: tests/live/tcapture_macos.nim
       description: The same capture from an identity without the grant exits 6 / tcc-screen-recording, never an empty success.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: the ungranted-identity part passes (exit 6 / tcc-screen-recording with details.feature, the bundle id, path and click-path in remedy, no output file, record-start exit 6, capabilities --probe unavailable/denied); its vacuity guard (the granted identity succeeds) is BLOCKED on the locked session. Mapping the denial to capture-failed turned it red.
     - test_name: test_linux_wlr_screenshot_matches_wm_probe_window
       file: tests/live/tcapture_linux.nim
       description: In a private sway, a screenshot shows wm_probe's grey window at the compositor-reported rect; window capture reports window-crop.
@@ -1455,19 +1462,92 @@
       status: pending
     - test_name: just test-live-macos
       description: The macOS live capture suite on a host holding the Screen Recording grant.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: recipe added; 1 of 7 tests green, 6 BLOCKED on the locked GUI session (2026-10-20).
     - test_name: test_live_recording_metadata_measured_and_killed_recorder_is_exit_5
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C12, per platform recorder (SCStream; wf-recorder, portal/PipeWire, ffmpeg x11grab; the Windows recorder): record and record-stop report frames, duration and size equal to ffprobe's count of the file; a recorder killed before finalizing yields exit 5 / capture-failed with details.recording state failed, never stopped.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: macOS (SCStream) implemented in tests/live/tcapture_macos.nim; BLOCKED on the locked session. The finalization logic itself is green in tests/tmacos_capture.nim on ffmpeg-encoded files (measured and renamed; moov removed => failed and removed). Linux and Windows recorders: pending (companion / later).
     - test_name: test_capture_backends_report_their_features_and_name_them_on_exit_4_6
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C7: capabilities with each capture backend selected lists the capture features of spec §7.5 with probed states (window-crop and titles-redacted degradations where they apply); an unsupported capture (--own-pixels on linux-wlr) and a missing grant name their feature in details.feature.
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: macOS: the unprobed (available), macos-cgwindow (not-implemented, exit 4 with details.feature display-capture / recording / own-pixels-capture) and exit-6 parts pass; the probed all-supported part is BLOCKED on the locked session. Linux/Windows: pending.
     - test_name: test_capture_backends_keep_captured_content_off_stderr
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C15: a recorder's or helper's own stderr is not passed through when it could carry window titles or captured text; GuiAssert's stderr during a capture holds no captured content. C4: windows reports document null on the backends that have no equivalent (macOS document comes from AX, GS7).
-      status: pending
+      status: failing (BLOCKED: locked GUI session)
+      as_built: macOS implemented (planted window title absent from stderr, error messages and state files; document null on every window, C4); BLOCKED on the locked session. Linux/Windows: pending.
+
+*** Deviations
+    - =capabilities.permissions.screenRecording= on macOS comes from the
+      capture backend: =core/interfaces.CaptureBackend= gained an optional
+      =screenRecording= proc (Nim API only; the contract is unchanged), which
+      =capabilities= consults when the session backend cannot answer
+      (=macos-host= is not implemented yet). Without =--probe= it is
+      =unknown=; with it the helper bundle's =granted= / =denied=, and
+      =identity= names the bundle id and path. The =permissions= verb itself
+      still needs the =macos-host= session backend (=session-management=),
+      which no milestone has implemented yet; it stays exit 4 /
+      =not-implemented=.
+    - =macos-cgwindow= is enumeration only (spec §4.1): its capture and
+      recording verbs are exit 4 / =not-implemented= with =details.feature=
+      and the remedy "select the macos-sck capture backend".
+    - What CoreGraphics cannot tell is reported as documented in
+      =macos_cgwindow.nim=: =minimized= is always false (a minimized window
+      is only off screen), =focused= is the frontmost layer-0 window of the
+      frontmost application, =Display.name= is null and =virtual= false,
+      =document= null (C4; AX in GS7).
+    - Measured on macOS 26.5 (build 25F84): =kCGWindowBounds= is the
+      =NSWindow.frame= inset by 3 points left/right and 2 top/bottom, for
+      borderless and titled windows alike, so the live test compares the
+      window server's bounds with the fixture's own frame within 8 points
+      and uses the window server's bounds (what GuiAssert reports) for every
+      geometric expectation.
+    - =CGGetActiveDisplayList= fails with no displays in a process of the
+      Background launchd session (a terminal multiplexer started outside the
+      GUI login) while the online display list answers; =displays= uses the
+      online list without mirrors.
+    - The capture helper (=helpers/screen_capture.swift=) refuses with
+      =denied= when =CGPreflightScreenCaptureAccess= is false, before
+      touching ScreenCaptureKit, so an ungranted identity never sees a
+      prompt; this also applies to the legacy =screen_capture.nim= callers
+      (same outcome, no prompt). It gained =--display-id=, =--region=,
+      =--no-cursor=, =--srgb= and a =record= mode (SCStream into an
+      AVAssetWriter MP4 at a constant rate, finalized on SIGTERM, reporting
+      through a status file).
+    - A capture that fails while the screen is locked is exit 5 /
+      =capture-failed= naming the lock (ScreenCaptureKit then lists no
+      display, which would otherwise read as exit 3 / not-found for a
+      display that exists).
+    - Contract tests that used =displays= with the platform default to reach
+      exit 4 now select a capture backend of another platform
+      (=harness.foreignCaptureBackend=), because the macOS default is
+      implemented; =test_backend_selection_precedence= accepts an
+      implemented default answering itself (and requires it on macOS).
+    - Contract =guiassert-desktop/1.0= is unchanged: no verb, key, reason or
+      feature was added.
+
+*** Outstanding Tasks
+    - [ ] GS5 BLOCKED: the macOS GUI session was locked for the whole run
+      (2026-10-20, =CGSSessionScreenIsLocked= true; ScreenCaptureKit lists no
+      display and window captures fail with SCStreamErrorDomain -3811), so
+      the six capture/recording live tests could not run. Re-run
+      =just test-live-macos= on an unlocked session. TCC is not the blocker:
+      Screen Recording is granted to =com.metacraft-labs.guiassert.capture=
+      (=~/Library/Application Support/GuiAssert/GuiAssertCapture.app=,
+      certificate-signed, designated requirement keyed on the bundle id and
+      the signing certificate, so rebuilds keep it); the bundle's preflight
+      answered granted.
+    - [ ] Independent verification of the live evidence once the session is
+      unlocked. The code, the default suites, both contract runs and the
+      unprivileged/exit-4/exit-6 live parts were reviewed and re-run
+      2026-10-20; the review hardened the recorder against finalizing a
+      writer that is not writing and required a real window id in the
+      exit-6 window-capture check.
+    - [ ] Linux (=companion/linux=) and Windows (=later/windows=) capture
+      backends and their live tests.
 
 ** GS6: OCR backends
    :PROPERTIES:

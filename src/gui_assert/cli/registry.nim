@@ -11,7 +11,8 @@
 ## `guiassertNoFixture`) omits one backend.
 ##
 ## **Implemented.** The platform backends of spec §4 are filled in by later
-## milestones (GS5–GS11). Until a backend is implemented, selecting it is
+## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`.
+## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
 ## so a consumer can already tell the three apart.
@@ -71,8 +72,10 @@ const
     ## The CPU architecture this binary was built for (Nim's spelling).
 
   knownBackends*: seq[KnownBackend] = @[
-    KnownBackend(module: modCapture, name: "macos-sck", platforms: {hpMacos}),
-    KnownBackend(module: modCapture, name: "macos-cgwindow", platforms: {hpMacos}),
+    KnownBackend(module: modCapture, name: "macos-sck", platforms: {hpMacos},
+                 implemented: true),
+    KnownBackend(module: modCapture, name: "macos-cgwindow", platforms: {hpMacos},
+                 implemented: true),
     KnownBackend(module: modCapture, name: "linux-wlr", platforms: {hpLinux}),
     KnownBackend(module: modCapture, name: "linux-gnome", platforms: {hpLinux}),
     KnownBackend(module: modCapture, name: "linux-portal-pipewire", platforms: {hpLinux}),
@@ -139,6 +142,14 @@ const
   mediaCompiledIn* = not minimalBuild and not defined(guiassertNoMedia) and
                      not defined(guiassertNoFfmpeg)
     ## Whether the ffmpeg media backend (video decode/encode) is compiled in.
+
+const
+  macosCaptureCompiledIn* = not minimalBuild and defined(macosx) and
+    not defined(guiassertNoCapture) and
+    not (defined(guiassertNoMacosSck) and defined(guiassertNoMacosCgwindow))
+    ## Whether the macOS capture backends' code is linked into this binary
+    ## (either of them needs the module; `compiledIn` decides which one is
+    ## selectable).
 
 proc knownIndex(module: Module, name: string): int =
   for i, b in knownBackends:

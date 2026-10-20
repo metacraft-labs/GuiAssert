@@ -11,6 +11,7 @@
 # `just build-cli` - build/bin/guiassert (every backend for this OS) and
 #                    build/bin/guiassert-fixture (-d:guiassertMinimal: the core
 #                    and the fixture backends only).
+# `just test-live-macos` - the TCC-gated macOS live capture suite (GS5).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
 #                    the REAL built binaries, run once per binary.
 # `just lint`      - placeholder; required by the workspace pre-commit
@@ -21,7 +22,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -60,6 +61,15 @@ test-contract: build-cli
 test-desktop-env:
     nim c -r --hints:off tests/tdesktop_env_targets.nim
     nim c -r --hints:off tests/tdesktop_env_attach.nim
+
+# The macOS live capture suite (GS5): the real `guiassert` with the
+# macos-sck / macos-cgwindow backends against the real window server, the
+# signed helper bundle and an AppKit fixture app built at test time. Needs
+# an unlocked GUI session and the one-time Screen Recording grant for
+# ~/Library/Application Support/GuiAssert/GuiAssertCapture.app; without
+# them the gated tests FAIL with a BLOCKED line (spec §9.4), never skip.
+test-live-macos: build-cli
+    nim c -d:tccLive -r --hints:off tests/live/tcapture_macos.nim
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:

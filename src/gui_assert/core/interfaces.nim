@@ -94,6 +94,14 @@ type
     stopRecording*: proc (id: string): Recording {.closure.}
     recordings*: proc (): seq[Recording] {.closure.}
     features*: proc (probe: bool): seq[Feature] {.closure.}
+    screenRecording*: proc (probe: bool):
+        tuple[state: PermissionState, identity: Option[string]] {.closure.}
+      ## The Screen Recording permission as this backend's capture code holds
+      ## it, and the code identity the operating system evaluates (added with
+      ## the macOS capture backends, GS5). Nil for a backend that captures
+      ## through no permission of its own; `capabilities` then reports what
+      ## the session backend says. Without `probe` a backend may answer
+      ## `unknown` rather than run an active check.
 
   OcrRequest* = object
     imagePath*: string

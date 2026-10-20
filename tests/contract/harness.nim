@@ -25,6 +25,14 @@ const
   specPath* = repoRootDir / "Planned-Work" / "Desktop-Substrate.md"
   cliTimeoutMs* = 60_000
 
+const foreignCaptureBackend* =
+  when defined(macosx): "windows-gdi" else: "macos-cgwindow"
+  ## A capture backend of another platform: selecting it is exit 4 in every
+  ## build (`wrong-platform`, or `not-compiled-in` in guiassert-fixture),
+  ## whatever this platform's own backends implement. Tests that need an
+  ## unavailable backend without failure injection select it, now that the
+  ## platform defaults are implemented (GS5 onwards).
+
 proc contractBin*(): string =
   ## The binary under test. Fails loudly when it has not been built.
   result = getEnv("GUIASSERT_CONTRACT_BIN")

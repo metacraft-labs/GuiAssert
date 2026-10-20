@@ -28,6 +28,30 @@
 //                          (--window-id N | [--owner NAME] [--title TEXT]
 //                                           [--title-contains TEXT])
 //                          [--include-offscreen] [--any-layer]
+//   screen_capture record  --out PATH.mp4 --status PATH [--fps F]
+//                          [--display-id N | --window-id N | --region X,Y,W,H]
+//                          [--timeout SECONDS]
+//
+// Options added for the `macos-sck` capture backend (all optional, so the
+// older callers in `screen_capture.nim` are unaffected):
+//
+//   --display-id N    select the display by CGDirectDisplayID instead of
+//                     by index (`display` and `record`)
+//   --region X,Y,W,H  capture this rectangle of the desktop, in global
+//                     points (`display` and `record`); it must lie within
+//                     one display
+//   --no-cursor       leave the pointer out of a display or region capture
+//   --srgb            deliver pixels in sRGB rather than the display's own
+//                     colour space, so a known colour reads back as itself
+//
+// `record` runs until it receives SIGTERM or SIGINT, then finalizes the MP4
+// (its `moov` index) and exits. Its `--status` file is rewritten atomically
+// as the recording progresses (`state=starting|recording|stopped|failed|
+// denied`, `pid`, `width`, `height`, `scale`, `frames`, `message`); it is
+// the channel the Nim side reads, because a detached `open` returns before
+// the recording has even started. Frames are written at a constant rate:
+// every 1/fps the newest complete ScreenCaptureKit frame is appended, so a
+// still screen still yields fps frames per second.
 //
 // `enumerate` prints one TSV row per window on stdout:
 //
@@ -66,6 +90,9 @@ import Foundation
 import CoreGraphics
 import ImageIO
 import ScreenCaptureKit
+import AVFoundation
+import CoreMedia
+import CoreVideo
 
 // ---------------------------------------------------------------------------
 // Status / reporting
@@ -106,7 +133,16 @@ func put(_ key: String, _ value: String) {
 func put(_ key: String, _ value: Int) { put(key, String(value)) }
 func put(_ key: String, _ value: Bool) { put(key, value ? "1" : "0") }
 
+/// Set by `record` mode: a failure exit also rewrites the `--status` file,
+/// the only channel a detached recorder has.
+var recordStatusOnExit = false
+
 func flushAndExit(_ status: Status, _ message: String? = nil) -> Never {
+    if recordStatusOnExit && status != .ok {
+        writeStatus([("state", status == .denied ? "denied" : "failed"),
+                     ("code", String(status.rawValue)), ("pid", String(getpid())),
+                     ("message", message ?? status.label)])
+    }
     var out = "status=\(status.label)\ncode=\(status.rawValue)\n"
     for (k, v) in report { out += "\(k)=\(v)\n" }
     if let m = message { out += "message=\(m.replacingOccurrences(of: "\n", with: " "))\n" }
@@ -130,7 +166,7 @@ func flushAndExit(_ status: Status, _ message: String? = nil) -> Never {
 
 let argv = CommandLine.arguments
 guard argv.count >= 2 else {
-    flushAndExit(.usage, "usage: screen_capture <enumerate|preflight|request|display|window> [options]")
+    flushAndExit(.usage, "usage: screen_capture <enumerate|preflight|request|display|window|record> [options]")
 }
 
 let mode = argv[1]
@@ -143,6 +179,20 @@ var wantTitleContains: String? = nil
 var timeoutSeconds: Double = 20.0
 var includeOffscreen = false
 var anyLayer = false
+var displayId: UInt32? = nil
+var region: CGRect? = nil
+var showCursor = true
+var useSrgb = false
+var statusPath: String? = nil
+var fps: Double = 10.0
+
+/// "x,y,w,h" in points; nil unless four numbers with a positive size.
+func parseRegion(_ s: String) -> CGRect? {
+    let parts = s.split(separator: ",").map { Double($0.trimmingCharacters(in: .whitespaces)) }
+    guard parts.count == 4, let x = parts[0], let y = parts[1], let w = parts[2],
+          let h = parts[3], w > 0, h > 0 else { return nil }
+    return CGRect(x: x, y: y, width: w, height: h)
+}
 
 var i = 2
 while i < argv.count {
@@ -163,6 +213,21 @@ while i < argv.count {
     case "--timeout":              timeoutSeconds = Double(next(a)) ?? 20.0
     case "--include-offscreen":    includeOffscreen = true
     case "--any-layer":            anyLayer = true
+    case "--display-id":
+        let v = next(a)
+        guard let n = UInt32(v) else { flushAndExit(.usage, "--display-id needs a number, not \(v)") }
+        displayId = n
+    case "--region":
+        let v = next(a)
+        guard let r = parseRegion(v) else { flushAndExit(.usage, "--region needs x,y,w,h, not \(v)") }
+        region = r
+    case "--no-cursor":            showCursor = false
+    case "--srgb":                 useSrgb = true
+    case "--status":               statusPath = next(a)
+    case "--fps":
+        let v = next(a)
+        guard let f = Double(v), f > 0, f <= 240 else { flushAndExit(.usage, "--fps needs a rate in (0, 240], not \(v)") }
+        fps = f
     default:
         flushAndExit(.usage, "unknown option: \(a)")
     }
@@ -319,6 +384,298 @@ func captureStill(filter: SCContentFilter, config: SCStreamConfiguration,
 }
 
 // ---------------------------------------------------------------------------
+// Target selection and the grant gate
+// ---------------------------------------------------------------------------
+
+/// Refuse up front, without touching ScreenCaptureKit, when this code holds
+/// no Screen Recording grant. CGPreflightScreenCaptureAccess never prompts,
+/// so a denied identity gets a denial report instead of a system dialog; and
+/// a fresh process (every invocation of this helper is one) reads the
+/// current grant, not a cached answer.
+func requireGrant() {
+    if !CGPreflightScreenCaptureAccess() {
+        flushAndExit(.denied,
+            "CGPreflightScreenCaptureAccess() is false for this code: it holds " +
+            "no Screen Recording grant")
+    }
+}
+
+/// The display to capture and, for `--region`, the rectangle within it in
+/// display-local points. Exits `target-not-found` for an unknown display id
+/// and `usage` for a region that does not lie within one display.
+func selectDisplay(_ content: SCShareableContent) -> (SCDisplay, CGRect?) {
+    let displays = content.displays
+    if let r = region {
+        // SCDisplay.frame is in global desktop points, the space --region
+        // is given in.
+        guard let d = displays.first(where: { $0.frame.contains(r) }) else {
+            flushAndExit(.usage, "the region \(r) does not lie within one display")
+        }
+        let local = CGRect(x: r.origin.x - d.frame.origin.x,
+                           y: r.origin.y - d.frame.origin.y,
+                           width: r.width, height: r.height)
+        return (d, local)
+    }
+    if let id = displayId {
+        guard let d = displays.first(where: { $0.displayID == id }) else {
+            flushAndExit(.targetNotFound,
+                "no display \(id) among the \(displays.count) ScreenCaptureKit reports")
+        }
+        return (d, nil)
+    }
+    guard displayIndex >= 0 && displayIndex < displays.count else {
+        flushAndExit(.targetNotFound,
+            "display index \(displayIndex) out of range; ScreenCaptureKit reports " +
+            "\(displays.count) display(s)")
+    }
+    return (displays[displayIndex], nil)
+}
+
+// ---------------------------------------------------------------------------
+// Recording (SCStream -> AVAssetWriter)
+// ---------------------------------------------------------------------------
+
+/// Rewrite the `--status` file atomically (temp sibling + rename), so the
+/// Nim side never reads a half-written status.
+func writeStatus(_ pairs: [(String, String)]) {
+    guard let p = statusPath else { return }
+    var text = ""
+    for (k, v) in pairs {
+        text += "\(k)=\(v.replacingOccurrences(of: "\n", with: " "))\n"
+    }
+    let tmp = p + ".partial"
+    guard let data = text.data(using: .utf8) else { return }
+    do {
+        try data.write(to: URL(fileURLWithPath: tmp))
+        _ = rename(tmp, p)
+    } catch {
+        // Nothing to report through: the status file IS the channel. The
+        // Nim side treats a missing status as a recorder that did not start.
+    }
+}
+
+/// Exit with a terminal recording status (`flushAndExit` writes it to the
+/// status file in record mode). The MP4 left behind, if any, is not
+/// finalized; the Nim side measures it and reports the recording as failed.
+func recordExit(_ status: Status, _ message: String) -> Never {
+    flushAndExit(status == .ok ? .captureFailed : status, message)
+}
+
+final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
+    let queue = DispatchQueue(label: "guiassert.capture.record")
+    let writer: AVAssetWriter
+    let input: AVAssetWriterInput
+    let adaptor: AVAssetWriterInputPixelBufferAdaptor
+    let rate: Double
+    let width: Int, height: Int
+    let scale: Double
+    var stream: SCStream? = nil
+    var timer: DispatchSourceTimer? = nil
+    var latest: CVPixelBuffer? = nil   // newest complete frame (on `queue`)
+    var frames = 0                     // frames appended to the writer
+    var stopping = false
+
+    init(writer: AVAssetWriter, input: AVAssetWriterInput,
+         adaptor: AVAssetWriterInputPixelBufferAdaptor, rate: Double,
+         width: Int, height: Int, scale: Double) {
+        self.writer = writer
+        self.input = input
+        self.adaptor = adaptor
+        self.rate = rate
+        self.width = width
+        self.height = height
+        self.scale = scale
+    }
+
+    func status(_ state: String, _ extra: [(String, String)] = []) {
+        writeStatus([("state", state), ("pid", String(getpid())),
+                     ("width", String(width)), ("height", String(height)),
+                     ("scale", String(format: "%.3f", scale)),
+                     ("fps", String(rate)), ("frames", String(frames))] + extra)
+    }
+
+    // SCStreamOutput: keep only the newest COMPLETE frame. Idle and blank
+    // frames carry no new pixels; the constant-rate timer repeats the last
+    // complete one instead.
+    func stream(_ stream: SCStream, didOutputSampleBuffer sb: CMSampleBuffer,
+                of type: SCStreamOutputType) {
+        guard type == .screen, sb.isValid, let pb = sb.imageBuffer else { return }
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(
+                sb, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
+              let info = attachments.first,
+              let raw = info[.status] as? Int,
+              let frameStatus = SCFrameStatus(rawValue: raw),
+              frameStatus == .complete else { return }
+        latest = pb
+    }
+
+    // SCStreamDelegate: the stream died under us (display unplugged, window
+    // closed, grant revoked). Finalize what was written.
+    func stream(_ stream: SCStream, didStopWithError error: Error) {
+        queue.async { self.finish(reason: "the stream stopped: \(error)") }
+    }
+
+    func tick() {
+        guard !stopping else { return }
+        // A writer that failed (disk full, encoder error) takes no more
+        // frames and cannot be finalized: end the recording as failed now
+        // rather than keep ticking until a stop request.
+        if writer.status == .failed {
+            finish(reason: "AVAssetWriter failed: \(String(describing: writer.error))")
+            return
+        }
+        guard let pb = latest, input.isReadyForMoreMediaData else { return }
+        let pts = CMTime(seconds: Double(frames) / rate, preferredTimescale: 600_000)
+        if adaptor.append(pb, withPresentationTime: pts) {
+            frames += 1
+            if frames % max(1, Int(rate.rounded())) == 0 { status("recording") }
+        }
+    }
+
+    func start(filter: SCContentFilter, config: SCStreamConfiguration) {
+        let s = SCStream(filter: filter, configuration: config, delegate: self)
+        do {
+            try s.addStreamOutput(self, type: .screen, sampleHandlerQueue: queue)
+        } catch {
+            recordExit(classify(error), "addStreamOutput: \(error)")
+        }
+        stream = s
+        s.startCapture { err in
+            if let err = err {
+                recordExit(classify(err), "startCapture: \(err)")
+            }
+            self.queue.async {
+                guard self.writer.startWriting() else {
+                    recordExit(.captureFailed,
+                        "AVAssetWriter.startWriting: \(String(describing: self.writer.error))")
+                }
+                self.writer.startSession(atSourceTime: .zero)
+                let t = DispatchSource.makeTimerSource(queue: self.queue)
+                t.schedule(deadline: .now(), repeating: 1.0 / self.rate, leeway: .milliseconds(1))
+                t.setEventHandler { self.tick() }
+                t.resume()
+                self.timer = t
+                self.status("recording")
+            }
+        }
+    }
+
+    /// Stop the stream and finalize the MP4: on `queue`. `reason` is set
+    /// when the recording ended by itself rather than by a stop request.
+    func finish(reason: String? = nil) {
+        if stopping { return }
+        stopping = true
+        timer?.cancel()
+        let done = {
+            self.queue.async {
+                // markAsFinished / finishWriting / cancelWriting raise an
+                // Objective-C exception unless the writer is writing, so a
+                // writer that never started or already failed is only
+                // reported, never finalized.
+                if self.writer.status != .writing {
+                    recordExit(.captureFailed, reason ??
+                        "the writer is not writing (status \(self.writer.status.rawValue)): " +
+                        "\(String(describing: self.writer.error))")
+                }
+                if self.frames == 0 {
+                    self.writer.cancelWriting()
+                    recordExit(.captureFailed, reason ??
+                        "the recording stopped before ScreenCaptureKit delivered a frame")
+                }
+                self.input.markAsFinished()
+                self.writer.endSession(atSourceTime: CMTime(
+                    seconds: Double(self.frames) / self.rate, preferredTimescale: 600_000))
+                self.writer.finishWriting {
+                    if self.writer.status == .completed && reason == nil {
+                        self.status("stopped")
+                        flushAndExit(.ok)
+                    }
+                    recordExit(.captureFailed, reason ??
+                        "AVAssetWriter could not finalize: \(String(describing: self.writer.error))")
+                }
+            }
+        }
+        if let s = stream { s.stopCapture { _ in done() } } else { done() }
+    }
+}
+
+var activeRecorder: Recorder? = nil
+var signalSources: [DispatchSourceSignal] = []
+
+func runRecorder(out: String) -> Never {
+    recordStatusOnExit = true
+    writeStatus([("state", "starting"), ("pid", String(getpid()))])
+    requireGrant()
+    let (content, st, msg) = shareableContent(timeout: timeoutSeconds)
+    guard let content = content else { recordExit(st, msg) }
+    var filter: SCContentFilter
+    var sourceRect: CGRect? = nil
+    var showsCursor = showCursor
+    if let wid = windowId {
+        guard let w = content.windows.first(where: { $0.windowID == wid }) else {
+            recordExit(.targetNotFound, "window \(wid) is not among the " +
+                "\(content.windows.count) shareable windows")
+        }
+        filter = SCContentFilter(desktopIndependentWindow: w)
+        showsCursor = false
+    } else {
+        let (d, r) = selectDisplay(content)
+        filter = SCContentFilter(display: d, excludingWindows: [])
+        sourceRect = r
+    }
+    let scale = Double(filter.pointPixelScale)
+    let pointSize = sourceRect?.size ?? filter.contentRect.size
+    // H.264 and HEVC encode even dimensions only.
+    let width = max(2, Int((Double(pointSize.width) * scale).rounded()) / 2 * 2)
+    let height = max(2, Int((Double(pointSize.height) * scale).rounded()) / 2 * 2)
+    let config = SCStreamConfiguration()
+    if let r = sourceRect { config.sourceRect = r }
+    config.width = width
+    config.height = height
+    config.captureResolution = .best
+    config.showsCursor = showsCursor
+    config.pixelFormat = kCVPixelFormatType_32BGRA
+    config.minimumFrameInterval = CMTime(seconds: 1.0 / fps, preferredTimescale: 600_000)
+    config.queueDepth = 6
+    if useSrgb { config.colorSpaceName = CGColorSpace.sRGB }
+    if windowId != nil { config.ignoreShadowsSingleWindow = true }
+
+    try? FileManager.default.removeItem(atPath: out)
+    let writer: AVAssetWriter
+    do {
+        writer = try AVAssetWriter(outputURL: URL(fileURLWithPath: out), fileType: .mp4)
+    } catch {
+        recordExit(.writeFailed, "AVAssetWriter(\(out)): \(error)")
+    }
+    // H.264 tops out at 4096 pixels a side; larger captures use HEVC.
+    let codec: AVVideoCodecType = (width > 4096 || height > 4096) ? .hevc : .h264
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+        AVVideoCodecKey: codec, AVVideoWidthKey: width, AVVideoHeightKey: height])
+    input.expectsMediaDataInRealTime = true
+    guard writer.canAdd(input) else {
+        recordExit(.captureFailed, "AVAssetWriter cannot take a \(width)x\(height) video input")
+    }
+    writer.add(input)
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input,
+        sourcePixelBufferAttributes: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: width,
+            kCVPixelBufferHeightKey as String: height])
+    let rec = Recorder(writer: writer, input: input, adaptor: adaptor, rate: fps,
+                       width: width, height: height, scale: scale)
+    activeRecorder = rec
+    for sig in [SIGTERM, SIGINT] {
+        signal(sig, SIG_IGN)
+        let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+        src.setEventHandler { rec.queue.async { rec.finish() } }
+        src.resume()
+        signalSources.append(src)
+    }
+    rec.start(filter: filter, config: config)
+    dispatchMain()
+}
+
+// ---------------------------------------------------------------------------
 // Modes
 // ---------------------------------------------------------------------------
 
@@ -368,30 +725,33 @@ case "request":
 
 case "display":
     guard let out = outPath else { flushAndExit(.usage, "display mode needs --out PATH") }
+    requireGrant()
     let (content, st, msg) = shareableContent(timeout: timeoutSeconds)
     guard let content = content else { flushAndExit(st, msg) }
-    let displays = content.displays
-    put("displays_seen", displays.count)
-    guard displayIndex >= 0 && displayIndex < displays.count else {
-        flushAndExit(.targetNotFound,
-            "display index \(displayIndex) out of range; ScreenCaptureKit reports " +
-            "\(displays.count) display(s)")
-    }
-    let display = displays[displayIndex]
+    put("displays_seen", content.displays.count)
+    let (display, sourceRect) = selectDisplay(content)
     put("display_id", Int(display.displayID))
     put("display_points", "\(display.width)x\(display.height)")
     let filter = SCContentFilter(display: display, excludingWindows: [])
+    let scale = Double(filter.pointPixelScale)
     let config = SCStreamConfiguration()
-    config.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
-    config.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
+    if let r = sourceRect {
+        config.sourceRect = r
+        config.width = Int((Double(r.width) * scale).rounded())
+        config.height = Int((Double(r.height) * scale).rounded())
+    } else {
+        config.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
+        config.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
+    }
     config.captureResolution = .best
-    config.showsCursor = true
+    config.showsCursor = showCursor
+    if useSrgb { config.colorSpaceName = CGColorSpace.sRGB }
     let (image, cst, cmsg) = captureStill(filter: filter, config: config,
                                           timeout: timeoutSeconds)
     guard let image = image else { flushAndExit(cst, cmsg) }
     put("width", image.width)
     put("height", image.height)
-    put("scale", String(format: "%.3f", Double(filter.pointPixelScale)))
+    put("scale", String(format: "%.3f", scale))
     put("out", out)
     if !writePng(image, to: out) {
         flushAndExit(.writeFailed, "could not write PNG to \(out)")
@@ -442,6 +802,7 @@ case "window":
     put("window_bounds", "\(target.x),\(target.y),\(target.w),\(target.h)")
     put("window_onscreen", target.onScreen)
 
+    requireGrant()
     let (content, st, msg) = shareableContent(timeout: timeoutSeconds)
     guard let content = content else { flushAndExit(st, msg) }
     guard let scWindow = content.windows.first(where: { $0.windowID == target.windowId }) else {
@@ -459,6 +820,7 @@ case "window":
     config.captureResolution = .best
     config.showsCursor = false
     config.ignoreShadowsSingleWindow = true
+    if useSrgb { config.colorSpaceName = CGColorSpace.sRGB }
     let (image, cst, cmsg) = captureStill(filter: filter, config: config,
                                           timeout: timeoutSeconds)
     guard let image = image else { flushAndExit(cst, cmsg) }
@@ -470,6 +832,11 @@ case "window":
         flushAndExit(.writeFailed, "could not write PNG to \(out)")
     }
     flushAndExit(.ok)
+
+case "record":
+    guard let out = outPath else { flushAndExit(.usage, "record mode needs --out PATH") }
+    guard statusPath != nil else { flushAndExit(.usage, "record mode needs --status PATH") }
+    runRecorder(out: out)
 
 default:
     flushAndExit(.usage, "unknown mode '\(mode)'")

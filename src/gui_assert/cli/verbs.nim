@@ -34,6 +34,10 @@ when mediaCompiledIn:
   import ../media
   import ../backends/media/ffmpeg as media_ffmpeg
 
+when macosCaptureCompiledIn:
+  import ../backends/capture/macos_sck
+  import ../backends/capture/macos_cgwindow
+
 proc fromBackendError*(e: ref BackendError): ref ContractError =
   ## The contract error for a backend error: not found (3), unavailable (4),
   ## permission denied (6) or failed (5), carrying the backend's reason and
@@ -285,9 +289,16 @@ proc noConstructor(m: Module, name: string): ref ContractError =
 proc captureBackend*(e: VerbEnv): CaptureBackend =
   ## The selected capture backend.
   e.ensureAvailable(modCapture)
-  case e.selection[modCapture].name
-  of fixtureBackendName: newFixtureCapture(e.fixtureCfg)
-  else: raise noConstructor(modCapture, e.selection[modCapture].name)
+  let name = e.selection[modCapture].name
+  if name == fixtureBackendName: return newFixtureCapture(e.fixtureCfg)
+  when macosCaptureCompiledIn:
+    if name == macosSckName:
+      let ctxEmit = e.ctx.emit
+      return newMacosSckCapture(MacosSckConfig(stateDir: e.stateDir, token: e.ctx.token,
+        emit: proc (event: string, data: JsonNode) =
+          if ctxEmit != nil: ctxEmit(event, data)))
+    if name == macosCgwindowName: return newMacosCgwindowCapture()
+  raise noConstructor(modCapture, name)
 
 proc ocrBackend*(e: VerbEnv): OcrEngine =
   ## The selected OCR engine.
@@ -496,6 +507,17 @@ proc verbCapabilities(e: VerbEnv): JsonNode =
   var perms = unknownPermissions()
   try: perms = e.sessionBackend().permissions(none(string))
   except ContractError, BackendUnavailableError: discard
+  # A capture backend that captures through a permission of its own (the
+  # macOS helper bundle's Screen Recording grant) answers for it when the
+  # session backend could not.
+  if perms.screenRecording == psUnknown:
+    try:
+      let cap = e.captureBackend()
+      if cap.screenRecording != nil:
+        let (state, identity) = cap.screenRecording(probe)
+        perms.screenRecording = state
+        if perms.identity.isNone: perms.identity = identity
+    except ContractError, BackendError: discard
   %*{"platform": $currentPlatform, "selected": selected, "features": features,
      "permissions": perms.toJson}
 

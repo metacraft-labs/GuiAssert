@@ -730,8 +730,8 @@ proc runHelperDirect(args: seq[string], timeoutMs: int):
   let helper = resolveCaptureHelper()
   result = runCmd(helper, args, timeoutMs)
 
-proc runHelperViaApp(args: seq[string], timeoutMs: int,
-                     reportPath: string): StillCaptureReport =
+proc runHelperViaApp*(args: seq[string], timeoutMs: int,
+                      reportPath: string): StillCaptureReport =
   ## Run the helper **inside the signed bundle**, launched by launchd through
   ## `open`, so the bundle is its own TCC-responsible process rather than
   ## inheriting the terminal's (denied) identity.
@@ -754,6 +754,18 @@ proc runHelperViaApp(args: seq[string], timeoutMs: int,
       ". The bundle is " & app
     return rep
   result = readReportFile(reportPath)
+
+proc launchHelperDetached*(args: seq[string], timeoutMs = 30_000):
+    tuple[code: int, output: string] =
+  ## Start the helper **inside the signed bundle** without waiting for it to
+  ## exit (`open -n -g` without `-W`), for the long-running `record` mode.
+  ## `open` returns once LaunchServices has launched the app; the helper's
+  ## own progress is reported through the files its arguments name. Returns
+  ## `open`'s exit code and output.
+  let app = ensureCaptureApp()
+  var openArgs = @["-n", "-g", "-a", app, "--args"]
+  for a in args: openArgs.add a
+  result = runCmd("/usr/bin/open", openArgs, timeoutMs)
 
 var reportDirCache: string = ""
 var reportSeq = 0
