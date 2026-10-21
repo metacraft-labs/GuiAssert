@@ -2,8 +2,8 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
-  :last_updated: 2026-10-20
+  :next_steps: Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
+  :last_updated: 2026-10-21
   :current_milestone: GS6
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
   :END:
@@ -54,11 +54,11 @@
   | Milestone | Owner           | Status                         | macOS   | Linux   | Windows |
   |-----------+-----------------+--------------------------------+---------+---------+---------|
   | GS0       | substrate/macos | completed                      | —       | —       | —       |
-  | GS1       | substrate/macos | partially_completed            | completed | planned | planned |
-  | GS2       | substrate/macos | partially_completed            | completed | planned | planned |
-  | GS2.1     | substrate/macos | partially_completed            | completed | planned | planned |
+  | GS1       | substrate/macos | partially_completed            | completed | completed | planned |
+  | GS2       | substrate/macos | partially_completed            | completed | completed | planned |
+  | GS2.1     | substrate/macos | partially_completed            | completed | completed | planned |
   | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
-  | GS4       | substrate/macos | partially_completed            | completed | planned | planned |
+  | GS4       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS6       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
@@ -374,7 +374,8 @@
    :status_note: Implemented 2026-10-20 from origin/agents at 8e8df7ea; every GS1 test green on macOS (aarch64-darwin, nix develop). Linux and Windows have not been run on this host: the CI workflow that runs them triggers only on pull requests into dev/stable. Independently reviewed and re-run on macOS 2026-10-20 (review strengthened the global-state check and the PNG filter coverage).
    :depends_on: GS0
    :owner: substrate/macos
-   :platform_status: macos=completed linux=planned windows=planned
+   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+   :platform_status: macos=completed linux=completed windows=planned
    :complexity: large
    :END:
 
@@ -428,66 +429,72 @@
 
 *** Verification
     All results below: macOS 26 (aarch64-darwin), inside =nix develop=, on
-    the working tree based on origin/agents at 8e8df7ea, 2026-10-20. Linux and
-    Windows have not run yet.
+    the working tree based on origin/agents at 8e8df7ea, 2026-10-20. Linux:
+    x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below; every entry
+    marked "Linux x86_64" ran there. Windows has not run yet.
     - test_name: test_core_imports_only_stdlib_allowlist
       file: tests/tcore_purity.nim
       description: The import graph of every core/ module (nim genDepend) contains only core/ modules and the stdlib allowlist of spec §3.2.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       falsifying_mutation: Adding `import std/osproc` to core/ssim.nim turns the test red. Tried 2026-10-20: red ("ssim.nim -> std/osproc"). A built-in control runs the same analysis on gui_assert/image_math and must report its std/osproc edge and media.nim, so an analysis that sees no edges cannot pass.
     - test_name: test_core_binary_links_no_platform_libraries
       file: tests/tcore_purity.nim
       description: A program importing all of core/ links nothing beyond the C runtime (otool -L on macOS, ldd on Linux).
-      status: passing (macOS: otool -L reports only /usr/lib/libSystem.B.dylib)
+      status: passing (macOS: otool -L reports only /usr/lib/libSystem.B.dylib; Linux x86_64: readelf -d reports only libm.so.6, librt.so.1, libdl.so.2, libpthread.so.0, libc.so.6 and ld-linux-x86-64.so.2)
+      negative_control_linux: (falsifying_mutation_linux re-run red in the review, 2026-10-21.) The libstdc++ control (a program calling __cxa_demangle, linked --no-as-needed -lstdc++) shows libstdc++.so.6, passing 2026-10-21. It first failed to compile on Linux (the control source called paramCount without importing std/os; fixed, see Deviations).
+      falsifying_mutation_linux: Adding `{.passL: "-Wl,--no-as-needed -lstdc++".}` to core/geometry.nim turns it red (readelf shows libstdc++.so.6; tried 2026-10-21).
       negative_control: The same probe on a program importing backends/capture/macos_sck reports the frameworks it links, so the probe can see a link.
       negative_control_as_built: macos_sck lands in GS5, so the control is a program importing gui_assert/input (which links ApplicationServices and CoreFoundation for CGEvent); on Linux a program calling into libstdc++, on Windows one calling user32. GS5 should switch the macOS control to macos_sck. Linux reads NEEDED with readelf -d (then objdump -p, then ldd); Windows uses objdump -p from the pinned MinGW toolchain.
       falsifying_mutation: Adding `{.passL: "-framework CoreFoundation".}` to core/geometry.nim turns it red. Tried 2026-10-20: red (extra CoreFoundation link).
     - test_name: test_png_roundtrip_gray_rgb_rgba
       file: tests/tcore_png.nim
       description: Encode then decode reproduces gray, RGB and RGBA buffers bit-exactly.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       falsifying_mutation: Corrupting the deflate match-distance bits turns it red (tried 2026-10-20).
     - test_name: test_png_decode_matches_ffmpeg_decode
       file: tests/tcore_png.nim
       description: For PNGs written by ffmpeg, the pure decoder's gray buffer equals ffmpeg's gray decode; a PNG with a corrupted CRC is rejected, not half-decoded.
-      status: passing (macOS, pinned ffmpeg 8.0 arm64; also passing against the x86_64 ffmpeg 8.0 of the same nixpkgs under Rosetta, which exercises the x86 SIMD paths)
+      status: passing (macOS, pinned ffmpeg 8.0 arm64; also passing against the x86_64 ffmpeg 8.0 of the same nixpkgs under Rosetta, which exercises the x86 SIMD paths; Linux x86_64, natively against the pinned x86_64-linux ffmpeg 8.0, the exhaustive 2^24-colour gray check included)
       as_built: ffmpeg writes the pattern as gray, rgb24, rgba, pal8, ya8 and monob; every format's pixels equal ffmpeg's own rgba decode (gray, rgb24 and rgba also once per row filter ffmpeg can force with -pred: none, sub, up, avg, paeth, mixed), and the gray buffer equals ffmpeg's gray decode (backends/media/ffmpeg.decodeGray) for all but pal8. A PNG holding all 2^24 colours checks the colour-to-gray conversion exhaustively (core/image.rgbToGray follows libswscale's fixed-point steps). pal8 is excluded from the gray equality only: ffmpeg rounds each palette entry to an 8-bit studio-range luma before expanding it, which can differ by one level; its pixels are still compared exactly. Also rejected: a damaged IHDR CRC, a truncated file, a non-PNG, and 16-bit samples.
       falsifying_mutation: Replacing rgbToGray with plain full-range BT.601 rounding, or ignoring a chunk CRC mismatch, turns it red (both tried 2026-10-20). So do a wrong Paeth tie-break (`pb < pc`) and a rounding Average unfilter in the decoder (both tried in review, 2026-10-20).
     - test_name: test_legacy_import_paths_still_compile
       file: tests/tcore_shims.nim
       description: Every pre-split public module still compiles and its public procs keep their signatures.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       as_built: compares each split module's public API against a frozen nim jsondoc record of the pre-split sources (tests/fixtures/legacy_api/, recorded at 8e8df7ea): same heads and type definitions, and on macOS no raises/tags beyond the old ones. Every old name must be declared through the old import path, a probe importing every module of src/gui_assert/ (and desktop_env/) must build, and gui_assert_vision must build. A control test requires a changed signature to be reported.
       falsifying_mutation: Adding a defaulted parameter to computeSsim, dropping the decodeGray re-export from image_math, or hiding OcrWord from ocr's re-export each turns it red (tried 2026-10-20).
     - test_name: nix develop --command just test
       description: The existing default suite stays green after the split.
-      status: passing (macOS; 189 OK, 0 FAILED; baseline before the split was 174 OK)
+      status: passing (macOS; 189 OK, 0 FAILED; baseline before the split was 174 OK; Linux x86_64, 2026-10-21 at 4e2c9757: 348 OK, 0 FAILED, 0 SKIPPED, contract suite included, after the Linux fixes below)
     - test_name: nix develop --command just test-core
       description: The new core suite runs green on Linux and macOS.
-      status: passing on macOS (17 OK); Linux pending its first CI run
+      status: passing on macOS (17 OK); Linux x86_64 passing 2026-10-21 (38 OK, 0 FAILED at 4e2c9757); Linux arm64 pending its first CI run
     - test_name: test_core_sources_use_no_ffi_or_global_state
       file: tests/tcore_purity.nim
       description: (Added in GS1.) The core sources contain no FFI or linking pragma and no environment access (control: a scan of gui_assert/input), and the syntax tree of every core module, as the compiler's parser builds it, holds no module-level var (also inside a top-level when or block) and no {.global.} variable (control: a fixture holding one of each) (spec §3.2).
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       falsifying_mutation: A top-level `var` in core/hashing.nim turns it red (tried 2026-10-20). So does a `var` nested in a top-level `when true:` block, which the first, line-based version of the check missed (found and fixed in review, tried 2026-10-20).
     - test_name: test_core_builds_for_js_backend
       file: tests/tcore_purity.nim
       description: (Added in GS1.) All of core/ compiles for the JS target (spec §3.2).
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
     - test_name: nix develop --command nim c -r --hints:off tests/tcore_types.nim
       description: (Added in GS1.) Unit tests for geometry and the desktop/image mapping, image conversions, segmentation, OCR reading order, the tree path grammar and element filter, and the desktop type helpers.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
     - test_name: test_zlib_roundtrip_edge_cases
       file: tests/tcore_png.nim
       description: (Added in GS1.) zlib edge cases (empty, long runs, 32 KiB distances, bound and Adler-32 checks, CRC-32/Adler-32 check values).
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
     - test_name: test_png_encode_is_read_by_ffmpeg
       file: tests/tcore_png.nim
       description: (Added in GS1.) ffmpeg reads the encoder's output back to the exact bytes.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
     - test_name: nix shell nixpkgs#actionlint nixpkgs#shellcheck -c actionlint .github/workflows/ci.yml
       description: The workflow is valid (actionlint 1.7.12 with shellcheck 0.11.0).
-      status: passing 2026-10-20
+      status: passing 2026-10-20; also 2026-10-21 on x86_64-linux (same actionlint 1.7.12, shellcheck 0.11.0)
+    - test_name: nix develop --command just lint
+      description: (Linux, 2026-10-21.) The first step of the CI Linux leg.
+      status: passing (Linux x86_64; no linters configured)
 
 *** Deviations
     - The macOS link-probe negative control uses gui_assert/input rather than
@@ -509,6 +516,40 @@
     - `just test` now stops at the first failing test file. Before, its loop
       exited with the status of the last file only, so an earlier failure
       could leave the recipe green.
+    - Linux fixes (companion/linux, 2026-10-21; the first Linux run of the CI
+      leg's steps, each failure fixed at its cause, no test weakened):
+      - =tests/tcore_purity.nim=: the Linux (and Windows) link-probe control
+        program called =paramCount= without importing =std/os=, so it did
+        not compile and =test_core_binary_links_no_platform_libraries= failed
+        on Linux before the probe ran. The control sources now import it.
+      - =flake.nix=: the dev shell had no Linux TTS engine. =speech_synth= runs
+        =espeak-ng= on Linux (=say= on macOS ships with the OS), so tmedia's
+        =verify_tts_audio_generation= failed with the provider's
+        missing-dependency error. =espeak-ng= is now in the Linux dev shell.
+      - =tests/tcapture.nim=: the Linux branch of =resolveBackend(cbAuto)= read
+        the host's =WAYLAND_DISPLAY= / =DISPLAY=, so it raised on a headless
+        host (every CI runner). It now sets each combination itself and checks
+        all three outcomes (Wayland wins, X11, neither refused), restoring the
+        caller's environment. Review: swapping the two variables' precedence
+        in =detectLinuxDisplayServer= turns it red (2026-10-21).
+      - =tests/tappium.nim=: the mock server's stop closed the listening socket
+        and joined the worker blocked in accept(2). On Linux close(2) does not
+        wake that accept (macOS does), so the suite hung forever. The stop now
+        wakes the accept with one connection of its own, joins, then closes.
+        Review: the suite without the change still times out on Linux
+        (2026-10-21).
+      - =tests/contract/tvision_verbs.nim=: the low-fps test's control
+        ("ffmpeg alone takes at least 2.5 s") measured 2.4 s on the x86_64
+        host with the 200 000-frame fixture (~3.2 s on macOS), so the
+        control, not the code, was red; and at =--fps 0.01= this host's
+        ffmpeg reached its next output frame in about 1 s, so the named
+        mutation left the cancel check green (943 ms, bound 1000). The
+        review made the fixture 1 000 000 frames read at =--fps 0.0005=:
+        one sample per 2000 s, longer than the video, so ffmpeg writes
+        nothing until the end of the decode. The control now checks what the
+        test depends on: ffmpeg over that input is still running and has
+        written no byte after 4 s, about three times the largest bound. The
+        bounds (1400 ms, 1000 ms, 1300 ms) are unchanged.
 
 *** Outstanding Tasks
     - [X] Independent verification of this implementation (commits on green).
@@ -516,7 +557,10 @@
       (on the first pull request into dev); record the results above. The
       exhaustive gray check of test_png_decode_matches_ffmpeg_decode is the
       one most likely to differ per architecture; it passed against the x86_64
-      ffmpeg under Rosetta, not yet on a native x86_64 Linux host.
+      ffmpeg under Rosetta and, 2026-10-21, natively on x86_64 Linux. No CI
+      run exists yet (=gh run list= is empty on 2026-10-21; nothing has been
+      pushed to or proposed into dev since ci.yml landed on agents). The arm64
+      Linux leg cannot be run on the companion's x86_64 host: CI only.
     - [ ] GS5: switch the macOS link-probe control to backends/capture/macos_sck.
 
 *** Modules to Study & Entry Points
@@ -533,7 +577,8 @@
    :status_note: Implemented 2026-10-20 from origin/agents at 221249df (merged forward to 3748eb24, which changed only this file) and independently verified the same day on that base: every GS2 test green on macOS (aarch64-darwin, inside nix develop), against both build/bin/guiassert and build/bin/guiassert-fixture, the contract suite three times in a row. The review decided the session-state event in spec §8.4 and implemented it, bounded every file read, made scenario strictness and the tcore_purity exemption tested (see Deviations). Linux and Windows have not run (CI runs on the pull request into dev). Contract 1.0 is NOT frozen yet: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) arrived while GS2 was being built and are not in the spec; GS2 implements the spec as written, and a dedicated follow-up milestone takes the requests (see Outstanding Tasks for which ones the build already satisfies).
    :depends_on: GS1
    :owner: substrate/macos
-   :platform_status: macos=completed linux=planned windows=planned
+   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+   :platform_status: macos=completed linux=completed windows=planned
    :complexity: large
    :END:
 
@@ -573,7 +618,8 @@
       =ci/windows/run-contract-suite.ps1=, the same list,
       =tests/contract_suite.txt=. =nix build path:.#guiassert-fixture= and
       =.#guiassert= built 2026-10-20 on aarch64-darwin; the fixture binary
-      links only libSystem. =nix build .#…= from git needs the new files
+      links only libSystem. =nix build .#guiassert .#guiassert-fixture=
+      built on x86_64-linux 2026-10-21. =nix build .#…= from git needs the new files
       tracked, i.e. after the commit.)
 
 *** Verification
@@ -582,166 +628,170 @@
     3748eb24, a milestone-file-only change), 2026-10-20. Every contract test
     runs the REAL built binary as a subprocess (=tests/contract/harness.nim=)
     and ran twice: against =build/bin/guiassert= and against
-    =build/bin/guiassert-fixture=. Linux and Windows have not run yet.
+    =build/bin/guiassert-fixture=. Linux: x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below; every
+    entry marked "Linux x86_64, both binaries" ran against both builds
+    there. Windows has not run yet.
     Every =falsifying_mutation= below was applied to the source, the binary
     rebuilt, the named test seen red, and the mutation reverted.
     - test_name: test_envelope_success_is_one_line_with_ok_verb_data
       file: tests/contract/tcli_envelope.nim
       description: Every successful verb prints exactly one compact JSON line with ok/verb/data and exits 0; stderr is ignored.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: runs one successful invocation of every verb (=everyVerbScenario=, which tcontract_schema checks covers the spec's verb list) and requires the line to re-render byte-for-byte from its own parse.
       falsifying_mutation: Rendering the envelope with ", " separators turns it red (tried 2026-10-20).
     - test_name: test_envelope_failure_carries_code_kind_message_and_matching_exit
       file: tests/contract/tcli_envelope.nim
       description: For each injected failure the envelope's code equals the exit code and the kind matches the frozen table.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also natural failures (unknown verb, missing session, missing file, the unimplemented platform default); the error object's keys are exactly code/kind/message/reason/remedy/details, reasons are checked against a hand copy of the §7.3 table, and keys that do not apply are null.
       falsifying_mutation: Writing an empty object instead of null for absent details turns it red (tried 2026-10-20).
     - test_name: test_fixture_failure_injection_maps_every_exit_code
       file: tests/contract/tcli_envelope.nim
       description: GUIASSERT_FIXTURE_FAIL drives exits 1 through 8, each with its kind and reason.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: every code with its default reason and with every one of its kind's reasons; a reason of another kind is refused (exit 2); GUIASSERT_FIXTURE_DENY gives exit 6 with a remedy (and =windows= reports titlesVisible false instead of dropping titles); GUIASSERT_FIXTURE_UNAVAILABLE gives exit 4.
       falsifying_mutation: Mapping injected code 6 to backend-error turns it red (tried 2026-10-20).
     - test_name: test_unknown_verb_and_unknown_flag_are_bad_args
       file: tests/contract/tcli_envelope.nim
       description: An unknown verb, an unknown flag and an unknown backend name all exit 2 with the documented reason.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Accepting an unknown verb flag turns it red (tried 2026-10-20).
     - test_name: test_reject_dont_drop_unsupported_option_is_exit_4
       file: tests/contract/tcli_envelope.nim
       description: A known option the selected backend cannot honour (e.g. --own-pixels on a crop-only fixture configuration, --lifetime owner from the CLI) exits 4 / unsupported-option instead of being ignored.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also --vnc, and the Tesseract-only OCR knobs (--psm, --invert, --upscale) and an unlisted --lang on the fixture OCR; controls: the crop scenario without --own-pixels answers source.kind "window-crop", the default scenario answers "window".
       falsifying_mutation: Letting the crop configuration ignore --own-pixels turns it red (tried 2026-10-20).
     - test_name: test_every_documented_verb_is_implemented
       file: tests/contract/tcontract_schema.nim
       description: The verb table parsed from Planned-Work/Desktop-Substrate.md equals the CLI registry.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also every documented verb resolves in the built binary (no unknown-verb), an undocumented one is refused, the binary's contract name/major is the one the spec's §7 heading names, and the every-verb scenario covers exactly the spec's verbs.
       falsifying_mutation: Dropping =recordings= from the registry turns it red (tried 2026-10-20).
     - test_name: test_fixture_emits_every_documented_data_key
       file: tests/contract/tcontract_schema.nim
       description: For every verb, the fixture's data object contains every key the spec documents, with the documented JSON type.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: parses each verb's data schema and the common-objects block from the spec text (unions, literals, maps, tuples, ImageRef.source; Permissions from its prose in the permissions row) and also refuses undocumented keys (lossy excepted). A control test checks the checker reports a missing, a mistyped and an extra key.
       falsifying_mutation: Dropping =minimized= from Window's serializer turns it red (tried 2026-10-20).
     - test_name: test_state_dir_precedence_flag_env_default
       file: tests/contract/tcli_state.nim
       description: --state-dir beats GUIASSERT_STATE_DIR beats the platform default; records are mode 0600.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also directories 0700 (state root, sessions/, fixture/); on Linux XDG_STATE_HOME is checked too.
       falsifying_mutation: Letting GUIASSERT_STATE_DIR beat --state-dir turns it red (tried 2026-10-20).
     - test_name: test_backend_selection_precedence
       file: tests/contract/tcli_state.nim
       description: Module flag beats --backend beats module env beats GUIASSERT_BACKEND beats session and platform default; no fallback from an explicit selection.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: observed through =capabilities.selected=; the session rule uses a real session whose record names non-fixture backends; no fallback: an explicit backend that cannot run is exit 4 with details.backend / selectedBy, and the platform default is reported not-implemented (guiassert) or not-compiled-in (guiassert-fixture), never replaced.
       falsifying_mutation: Swapping the module-env and GUIASSERT_BACKEND rules turns it red (tried 2026-10-20).
     - test_name: test_fixture_state_persists_across_invocations
       file: tests/contract/tcli_state.nim
       description: Separate processes: type into the fixture text field, click Submit, then tree and ocr both show the status label.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: Without the click, neither tree nor ocr contains the status label (and both show the typed text, so the control is not vacuous). Passing.
       falsifying_mutation: Disabling the Submit button's press effect turns it red (tried 2026-10-20).
     - test_name: test_session_lifecycle_start_list_info_stop_via_fixture
       file: tests/contract/tcli_state.nim
       description: session-start/list/info/stop round-trip through the state directory; stopping host is bad-args; a session whose host pid died reports state error.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: the host process is real (SIGKILLed by the test); a verb in the dead session is exit 4 / session-not-running; a session's desktop is its own (typing in it leaves host's untouched).
       falsifying_mutation: Reporting a dead host's session as running turns it red (tried 2026-10-20).
     - test_name: test_wait_condition_not_met_exits_7_with_attempts
       file: tests/contract/tcli_envelope.nim
       description: wait --wait-ms on a fixture condition that never holds exits 7 / condition-not-met with details.attempts > 0; --timeout-ms not larger than --wait-ms is bad-args / conflicting-arguments.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: The same wait on a condition the fixture satisfies exits 0 with matched true (attempts 1, the matched element returned). Passing.
       falsifying_mutation: Stopping one attempt early (>= instead of >) turns it red (tried 2026-10-20).
     - test_name: test_invalid_name_is_bad_args_never_sanitized
       file: tests/contract/tcli_state.nim
       description: session-start --name with a slash, a leading dot or 65 characters exits 2 / invalid-name and writes no record.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also --session and record-stop ids; control: the longest valid name (64) is kept as given.
       falsifying_mutation: Checking only the length of a name turns it red (tried 2026-10-20).
     - test_name: test_contract_flag_and_hello_reject_unknown_major
       file: tests/contract/tserve_protocol.nim
       description: --contract 2 on the CLI and hello with contract [2] over serve both answer exit 2 / contract-unsupported; --contract 1 and hello [1] are accepted.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
     - test_name: test_sigterm_exits_8_with_envelope
       file: tests/contract/tcli_envelope.nim
       description: SIGTERM during a delayed fixture verb yields one envelope with code 8 / signal.
-      status: passing (macOS, both binaries); POSIX only (not compiled on Windows, which has no SIGTERM)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries); POSIX only (not compiled on Windows, which has no SIGTERM)
+      falsifying_mutation_linux: A signal handler that does not cancel turns it red on Linux too (no exit 8, no envelope within 5 s; tried 2026-10-21).
       falsifying_mutation: A signal handler that does not cancel turns it red (tried 2026-10-20).
     - test_name: test_serve_ready_line_then_results_by_id
       file: tests/contract/tserve_protocol.nim
       description: The daemon writes the ready line first, and every request gets exactly one result with its id.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
     - test_name: test_serve_cli_byte_parity_for_every_verb
       file: tests/contract/tserve_protocol.nim
       description: For every verb, the serve result envelope is byte-identical to the CLI stdout line for the same argv and state, and the exit codes match.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: the state directory is snapshotted before each CLI run and restored before the serve run, so both see the same state; four failure cases are compared too. =session-start= is compared with =hostPid= masked: it is the pid of a newly started process and cannot be equal between two starts (see Deviations); every other byte is compared.
       falsifying_mutation: Re-rendering the envelope inside the serve result turns it red (tried 2026-10-20).
     - test_name: test_serve_cancel_running_request_exits_8
       file: tests/contract/tserve_protocol.nim
       description: Cancelling a delayed request yields exit 8 / request; cancelling an unknown id is exit 3.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also already-finished, and a queued request cancelled before it starts.
       falsifying_mutation: Ignoring cancel for a running request turns it red (tried 2026-10-20).
     - test_name: test_serve_timeout_exits_7
       file: tests/contract/tserve_protocol.nim
       description: timeoutMs shorter than the injected delay yields exit 7 / deadline.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Not applying the deadline turns it red (tried 2026-10-20).
     - test_name: test_serve_duplicate_inflight_id_is_protocol_error
       file: tests/contract/tserve_protocol.nim
       description: A second request with an in-flight id is a protocol-error and does not run; malformed lines and unknown keys keep the connection open.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: the duplicate is a =type= whose effect is checked absent afterwards; nine malformed lines (incl. a >1 MiB line) each answer protocol-error and a later hello still answers.
       falsifying_mutation: Removing the in-flight id check turns it red (tried 2026-10-20).
     - test_name: test_serve_same_session_requests_run_in_order
       file: tests/contract/tserve_protocol.nim
       description: Input requests for one session execute in arrival order even when a later one is faster; requests for different sessions overlap.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: Two delayed requests for one session take at least the sum of their delays (measured against the overlap of two sessions). Passing.
       falsifying_mutation: Scheduling without the per-session key turns it red (tried 2026-10-20).
     - test_name: test_serve_events_seq_has_no_gaps
       file: tests/contract/tserve_protocol.nim
       description: record and wait stream progress/poll events numbered from 0 without gaps, followed by one result.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       as_built: also watch --windows; the record checks its format (png-sequence in guiassert-fixture, mp4 otherwise).
       falsifying_mutation: Advancing seq by 2 turns it red (tried 2026-10-20).
     - test_name: test_serve_shutdown_on_stdin_eof_stops_owner_sessions
       file: tests/contract/tserve_protocol.nim
       description: EOF on stdin cancels in-flight requests, stops owner-lifetime sessions, leaves detached ones, writes the shutdown line and exits 0.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Skipping the owner-session stop turns it red (tried 2026-10-20).
     - test_name: test_serve_socket_is_owner_only
       file: tests/contract/tserve_protocol.nim
       description: The unix socket is created 0600 in a 0700 directory and serves the same protocol as stdio.
-      status: passing (macOS, both binaries); POSIX only
+      status: passing (macOS, both binaries; Linux x86_64, both binaries); POSIX only
+      falsifying_mutation_linux: Creating the socket 0666 (umask 0o111, chmod 0o666) turns it red on Linux (mode check at tserve_protocol.nim:451; tried 2026-10-21, and again in the review the same day).
       as_built: two independent connections; the CLI's bytes over the socket; closing a connection stops its owner sessions only; a socket directory open to others is refused (exit 2). The peer-uid check (getpeereid / SO_PEERCRED) cannot be exercised without a second user and is not tested.
       falsifying_mutation: Creating the socket 0666 turns it red (tried 2026-10-20).
     - test_name: test_serve_session_state_events_for_owner_sessions
       file: tests/contract/tserve_protocol.nim
       description: (Added in the GS2 review.) The connection event session-state (spec §8.4): id null, its own seq from 0, data.session as session-info reports it; sent when an owner session's host dies (state error) and for each owner session stopped at shutdown, before the shutdown line.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: Nothing is sent while nothing changes; a detached session of the same connection whose host dies produces no event, and the dead owner session is reported once. Passing.
       falsifying_mutation: Not advancing the connection seq turns it red (tried 2026-10-20).
     - test_name: nix develop --command just test-contract
       description: The whole contract suite on Linux and macOS.
-      status: passing on macOS (52 OK: 26 tests x 2 binaries, 0 FAILED; run three times in a row in the review); Linux pending its first CI run
+      status: passing on macOS (52 OK: 26 tests x 2 binaries, 0 FAILED; run three times in a row in the review); Linux x86_64 passing 2026-10-21 at 4e2c9757 (114 OK: 57 tests x 2 binaries, the suite as it now stands, 0 FAILED; run three times in a row); Linux arm64 pending its first CI run
     - test_name: nix develop --command just test
       description: (Added in GS2.) The default suite still green, now followed by the contract suite.
-      status: passing (macOS; 253 OK, 0 FAILED, contract suite included)
+      status: passing (macOS; 253 OK, 0 FAILED, contract suite included; Linux x86_64 2026-10-21: 348 OK, 0 FAILED)
     - test_name: nix develop --command just test-core
       description: (Added in GS2.) The core suite with the new core modules.
-      status: passing (macOS; 29 OK, 0 FAILED)
+      status: passing (macOS; 29 OK, 0 FAILED; Linux x86_64 2026-10-21: 38 OK)
     - test_name: nix develop --command nim c -r --hints:off tests/tcore_contract.nim
       description: (Added in GS2.) Unit tests of core/contract (round-trips of every object, strict parsing, UTF-8 repair, timestamps, non-finite floats, 53-bit integers, reason validation), core/sha256 (FIPS 180-4 vectors and block boundaries), core/keys and core/raster.
-      status: passing (macOS; 12 OK)
+      status: passing (macOS; 12 OK; Linux x86_64 2026-10-21: 17 OK, the file as it now stands)
     - test_name: nix shell nixpkgs#actionlint nixpkgs#shellcheck -c actionlint .github/workflows/ci.yml
       description: The workflow stays valid with the Windows contract step.
-      status: passing 2026-10-20
+      status: passing 2026-10-20; also 2026-10-21 on x86_64-linux
 
 *** Deviations
     - =session-state= (spec §8.4) was not emitted as implemented: the spec
@@ -822,7 +872,9 @@
     - [X] Spec: say which id and =seq= a =session-state= event carries, then
       emit it (decided in §8.4 and implemented in the review; Deviations).
     - [ ] First CI run of the contract suite on Linux x64/arm64 and on the
-      Windows job; record the results above.
+      Windows job; record the results above. (Linux x86_64 ran locally and
+      passes, 2026-10-21; =nix build .#guiassert .#guiassert-fixture= builds
+      on x86_64-linux. No CI run exists yet; arm64 Linux is CI only.)
 
 *** Modules to Study & Entry Points
     - =src/gui_assert_vision.nim= (=parseVisionArgs=, =main=) — existing pure argv parser style.
@@ -835,7 +887,8 @@
    :status_note: Implemented 2026-10-20 from origin/agents at ffc66dfb (GS2; no newer commit on origin/agents) on macOS (aarch64-darwin, inside nix develop): every request C1–C17 decided (the decision is recorded under its request in GS0's Outstanding Tasks), implemented in the spec, core/contract, the CLI, serve and the fixture backend, and covered by a contract test run against both build/bin/guiassert and build/bin/guiassert-fixture. Contract guiassert-desktop/1.0 is FROZEN (spec §7.7). Independently verified on macOS the same day on the same base (see Deviations, "Review"), which hardened core/mp4 against malformed files, bounded the --stdin read by --timeout-ms and fixed one pre-existing test helper; Linux and Windows have not run (CI runs on the pull request into dev). The per-backend halves of the decisions are test obligations of GS5–GS11.
    :depends_on: GS2
    :owner: substrate/macos
-   :platform_status: macos=completed linux=planned windows=planned
+   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+   :platform_status: macos=completed linux=completed windows=planned
    :complexity: medium
    :END:
 
@@ -897,135 +950,137 @@
     All results below: macOS 26 (aarch64-darwin), inside =nix develop=, on
     the working tree based on origin/agents at ffc66dfb, 2026-10-20. Every
     contract test ran against both =build/bin/guiassert= and
-    =build/bin/guiassert-fixture=. Every =falsifying_mutation= was applied to
+    =build/bin/guiassert-fixture=. Linux: x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below; every
+    entry marked "Linux x86_64" ran there, contract tests against both
+    builds. Every =falsifying_mutation= was applied to
     the source, =guiassert-fixture= rebuilt, the named test run red, and the
     mutation reverted.
     - test_name: test_node_bounds_are_desktop_coordinates
       file: tests/contract/tcontract_decisions.nim
       description: (C1) Node bounds lie inside the window's window-server bounds, contain the OCR word of the same label mapped through origin/scale, follow the window when it moves, and their centre is where a click presses the button.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: After the window moves, a click at the old centre presses nothing (no status label). Passing.
       falsifying_mutation: Not shifting the window's nodes in window-set-bounds turns it red (tried 2026-10-20).
     - test_name: test_node_text_is_distinct_from_name_and_value
       file: tests/contract/tcontract_decisions.nim
       description: (C2) A label's text is its string, a field's text its content, a button's text null, and a scenario node's text differs from both its name and value.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Reporting no text for labels turns it red (tried 2026-10-20).
     - test_name: test_protected_field_never_reports_value_or_text
       file: tests/contract/tcontract_decisions.nim
       description: (C3) After typing (via --stdin) and set-value into the protected Password field, element, tree, find, wait --element and element-action report value and text null with state protected, no envelope holds the characters, and the frame shows only mask characters.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: The unprotected Name field reports what was typed. Passing.
       falsifying_mutation: Removing both the serializer's and the fixture's blanking turns it red (tried 2026-10-20). Removing only the fixture's leaves it green by design (the serializer still blanks); removing only the serializer's turns =a protected node never carries its value or text= in tests/tcore_contract.nim red (tried 2026-10-20).
     - test_name: test_window_document_is_reported_or_null
       file: tests/contract/tcontract_decisions.nim
       description: (C4) windows and window-focus report the fixture-form window's document; a launched application's window reports null.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Serializing document as null turns it red (tried 2026-10-20).
     - test_name: test_app_accessible_is_true_false_or_unknown
       file: tests/contract/tcontract_decisions.nim
       description: (C5) accessible is true for an application with a tree, false for one without, null when the Accessibility permission is denied; a scenario claiming a tree it lacks is refused.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Reporting accessible under GUIASSERT_FIXTURE_DENY=accessibility turns it red (tried 2026-10-20).
     - test_name: test_session_env_and_env_unset
       file: tests/contract/tcontract_decisions.nim
       description: (C6, C11 --env) A session reports env and envUnset (host: empty), app-launch --env is merged over Session.env and an explicitly set variable leaves envUnset, malformed or repeated --env is bad-args.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: A launch without --env gets exactly the session's env and envUnset. Passing.
       falsifying_mutation: Ignoring --env in the fixture launch turns it red (tried 2026-10-20).
     - test_name: test_capabilities_vocabulary_and_details_feature
       file: tests/contract/tcontract_decisions.nim
       description: (C7) capabilities lists every feature of the spec's vocabulary exactly once from its module's selected backend, with reasons by the spec's rules, also for --session (a session record naming other backends); 22 exit 4 / 6 cases name the expected feature, null exactly for session-not-running and --lifetime owner on the CLI; exit 5 carries none.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Featuring wait --text's region capture as display-capture turns it red, and so does a withFeature that never attaches (both tried 2026-10-20).
     - test_name: test_key_table_is_case_insensitive_with_aliases
       file: tests/contract/tcontract_decisions.nim
       description: (C8) Every spelling of the spec's key table, in its own, lower and upper case, is accepted and normalized; F1–F24, single characters; unknown names and doubled modifiers refused; click --modifiers aliases; the backspace alias deletes a character.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Matching named keys case-sensitively turns it red (tried 2026-10-20).
     - test_name: test_dead_session_verbs_answer_exit_4_session_not_running
       file: tests/contract/tcontract_decisions.nim
       description: (C9) After its host is killed, 16 verbs in the session answer exit 4 / session-not-running with details.feature null; session-info reports error; session-stop works.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: The same session answers windows while its host runs. Passing.
       falsifying_mutation: Letting verbs run in a non-running session turns it red (tried 2026-10-20).
     - test_name: test_session_start_readiness_and_name_in_use
       file: tests/contract/tcontract_decisions.nim
       description: (C10) session-start returns a running, usable session; a name in use (running, or in error) is exit 2 / name-in-use and leaves the record untouched; a stopped name is reusable; generated ids avoid taken names; a host that exits early or never gets ready is exit 5 / session-failed within --timeout-ms (not exit 7), leaving no record and no host process.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Not waiting for the host's readiness turns it red; so does answering conflicting-arguments for a name in use (both tried 2026-10-20).
     - test_name: test_app_launch_wait_expiry_reports_the_app
       file: tests/contract/tcontract_decisions.nim
       description: (C11) With a scenario whose launched applications open no window, --wait-window-ms expiry is exit 7 / condition-not-met with details.app, the application still running and quittable; without --wait-window-ms the launch returns window null.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: An application that opens a window satisfies the same wait. Passing.
       falsifying_mutation: Not raising on expiry turns it red (tried 2026-10-20).
     - test_name: test_recording_metadata_is_measured_and_unfinalized_is_exit_5
       file: tests/contract/tcontract_decisions.nim
       description: (C12) record and record-stop report frames, size and duration equal to what ffprobe (MP4, guiassert) or the PNG frames (guiassert-fixture) measure; an unfinalized file is exit 5 / capture-failed with details.recording state failed, and recordings lists it failed.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Accepting the measurement whatever it says turns it red (tried 2026-10-20).
     - test_name: test_matching_is_case_sensitive_with_ignore_case_and_unambiguous_app
       file: tests/contract/tcontract_decisions.nim
       description: (C13) find and wait --element match names case-sensitively, --ignore-case folds case (and is refused alone); --app is exact, and two applications of one name are exit 2 / conflicting-arguments with details.pids for tree, find and wait; windows --app filters both.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Case-folding --name-contains unconditionally turns it red, and so does resolving an ambiguous --app to the first application (both tried 2026-10-20).
     - test_name: test_secret_input_from_stdin_never_on_argv
       file: tests/contract/tcontract_decisions.nim
       description: (C14) type --stdin and set-value --value-stdin take stdin exactly (nothing stripped); conflicts, invalid UTF-8 and more than 1 MiB are bad-args with no effect; over serve the request's stdin gives a byte-identical envelope, an unused stdin is conflicting-arguments, a missing one missing-argument, a non-string one a protocol-error.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Ignoring the serve request's stdin turns it red (tried 2026-10-20).
     - test_name: test_no_captured_content_outside_data
       file: tests/contract/tcontract_decisions.nim
       description: (C15) Planted typed, set, protected and OCR strings never appear on the CLI's or the daemon's stderr, in any serve event or events-file line, or in an error message; wait --text leaves exactly its reported frame (and nothing on expiry or cancellation); the frames watch --frames writes are exactly the ones its events name (CLI and serve).
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: The OCR data of the same frame does hold the typed text, and tree data holds the set value. Passing.
       falsifying_mutation: Keeping wait --text's frame after a miss turns it red; so does echoing an extra positional in the error message (both tried 2026-10-20).
     - test_name: test_set_value_empty_clears_the_field
       file: tests/contract/tcontract_decisions.nim
       description: (C16) set-value --value "" (and --value-stdin with empty input) clears the field: value and text empty, the value gone from the frame's OCR.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: Before clearing, the frame's OCR holds the value. Passing.
       falsifying_mutation: Refusing an empty value turns it red (tried 2026-10-20).
     - test_name: test_drag_path_delivers_waypoints_in_order
       file: tests/contract/tcontract_decisions.nim
       description: (C17) drag --path reports the delivered vertices in order, takes its --duration-ms, accepts 1000 waypoints, and refuses malformed paths and 1001 waypoints; other verbs report path null.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Reporting only the end points turns it red (tried 2026-10-20).
     - test_name: test_spec_closed_lists_match_the_code
       file: tests/contract/tcontract_schema.nim
       description: The reasons of spec §7.3, the feature vocabulary and degraded reasons and the key table of spec §7.5, parsed from the spec, equal core/contract's and core/keys' lists.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       negative_control: The spec-table reader refuses a table the spec does not have (=spec table reader control=). Passing.
       falsifying_mutation: Adding a reason, a key alias or a feature to the code only turns it red (all three tried 2026-10-20).
     - test_name: test_mp4_probe_matches_ffprobe
       file: tests/tcore_mp4.nim
       description: For ffmpeg-written MP4s of several frame counts, rates and sizes (moov last and first), the pure probe's frames, size and duration equal ffprobe's decoding count.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       falsifying_mutation: Reading tkhd's size 4 bytes early turns it red (tried 2026-10-20).
     - test_name: test_mp4_probe_refuses_an_unfinalized_file
       file: tests/tcore_mp4.nim
       description: The same file without its moov box, truncated, empty, or not an MP4 is refused (Mp4Error); a missing file is IOError.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       as_built: The explicit "no moov box" check is an equivalent mutant: without it the empty movie still fails as "no video track".
     - test_name: test_mp4_probe_refuses_malformed_boxes
       file: tests/tcore_mp4.nim
       description: Hand-built MP4s whose hdlr, tkhd or mdhd is too short for its fields, whose 64-bit box size runs past the file (2^64-1 and 2^63-ish), or whose mdhd duration is 2^64-1 ticks are each Mp4Error, never a Defect; the same movie with a well-formed mdhd measures 64x48, 5 frames, 500 ms.
-      status: passing (macOS; added in the review)
+      status: passing (macOS; added in the review; Linux x86_64)
       negative_control: The well-formed movie measures exactly. Passing.
       falsifying_mutation: Dropping the bound check of the hdlr handler code turns it red with IndexDefect (tried 2026-10-20).
     - test_name: nix develop --command just test-contract
       description: The whole contract suite, against both binaries.
-      status: passing on macOS (90 OK: 45 tests x 2 binaries, 0 FAILED; run three times in a row, 2026-10-20, by the implementation and again by the review after its fixes); Linux pending its first CI run
+      status: passing on macOS (90 OK: 45 tests x 2 binaries, 0 FAILED; run three times in a row, 2026-10-20, by the implementation and again by the review after its fixes); Linux x86_64 passing 2026-10-21 at 4e2c9757 (114 OK: 57 tests x 2 binaries, the suite as it now stands, 0 FAILED; three runs in a row); Linux arm64 pending its first CI run
     - test_name: nix develop --command just test
       description: The default suite, then the contract suite.
-      status: passing (macOS; 299 OK, 0 FAILED after the review added test_mp4_probe_refuses_malformed_boxes; contract suite included)
+      status: passing (macOS; 299 OK, 0 FAILED after the review added test_mp4_probe_refuses_malformed_boxes; contract suite included; Linux x86_64 2026-10-21: 348 OK, 0 FAILED)
     - test_name: nix develop --command just test-core
       description: The core suite with core/mp4.
-      status: passing (macOS; 37 OK, 0 FAILED after the review)
+      status: passing (macOS; 37 OK, 0 FAILED after the review; Linux x86_64 2026-10-21: 38 OK)
     - test_name: nix develop --command just lint
       description: The workspace lint hook.
-      status: passing 2026-10-20 (no linters configured)
+      status: passing 2026-10-20 (no linters configured); Linux x86_64 2026-10-21
 
 *** Deviations
     - C17 was taken into 1.0 instead of a later minor (manager decision), and
@@ -1117,7 +1172,8 @@
     - [X] Independent verification of this implementation (2026-10-20, on
       origin/agents ffc66dfb; committed on green).
     - [ ] First CI run of the contract and core suites on Linux x64/arm64 and
-      the Windows job; record the results above.
+      the Windows job; record the results above. (Linux x86_64 ran locally
+      and passes, 2026-10-21; no CI run exists yet; arm64 Linux is CI only.)
     - [ ] Windows: the CLI's =--stdin= read is still a blocking read there, so
       a writer that never closes the pipe holds the verb past =--timeout-ms=
       (POSIX polls; Deviations, "Review"). Bound it when the Windows leg is built.
@@ -1175,7 +1231,8 @@
    :status_note: Implemented 2026-10-20 from origin/agents at 7608f89 (no newer commit; no new request aimed at GS4 in this file) on macOS (aarch64-darwin, inside nix develop): vision-segment video input through the media backend (the library form is backends/media/ffmpeg.segmentVideo), the video-decode feature probed, and tests/contract/tvision_verbs.nim green against both build/bin/guiassert and build/bin/guiassert-fixture. No contract change: spec §7.5 gained a paragraph writing down the vision-segment defaults (see Deviations). Independently verified on macOS the same day (review fixes under Deviations); Linux and Windows run on the pull request into dev.
    :depends_on: GS2 GS2.1
    :owner: substrate/macos
-   :platform_status: macos=completed linux=planned windows=planned
+   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+   :platform_status: macos=completed linux=completed windows=planned
    :complexity: small
    :END:
 
@@ -1194,75 +1251,76 @@
       cancellable (ffmpeg is stopped with the request).
 
 *** Verification
+    Linux: x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below; every entry marked "Linux x86_64" ran there.
     - test_name: test_vision_compare_identical_is_one_and_changed_is_lower
       file: tests/contract/tvision_verbs.nim
       description: Identical PNGs give ssim 1.0 and phashDistance 0; a frame with a drawn box gives a lower ssim and a lower minimum tile.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: computeSsim without the identical-pixel shortcut and the clamp (the code as GS4 found it) turns it red (tried 2026-10-20).
     - test_name: test_vision_compare_size_mismatch_is_bad_args
       file: tests/contract/tvision_verbs.nim
       description: Images of different sizes exit 2 rather than being resized silently.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Removing the size check in vision-compare turns it red (tried 2026-10-20).
     - test_name: test_vision_segment_two_state_frames_finds_one_boundary
       file: tests/contract/tvision_verbs.nim
       description: A PNG frame sequence with two states yields exactly two segments with the boundary at the switch.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: segmentBoundaries placing the boundary one frame late turns it red, as it does the video test (tried 2026-10-20).
     - test_name: test_vision_segment_video_without_media_backend_is_exit_4
       file: tests/contract/tvision_verbs.nim
       description: guiassert-fixture (no media backend) refuses video input with exit 4 / not-compiled-in, and accepts --frames.
-      status: passing (macOS; run against guiassert-fixture whichever binary the suite runs against)
+      status: passing (macOS; run against guiassert-fixture whichever binary the suite runs against; Linux x86_64, both suite runs)
       falsifying_mutation: Giving the fixture build's video refusal reason not-implemented turns it red (tried 2026-10-20).
     - test_name: test_vision_windows_two_window_frame
       file: tests/contract/tvision_verbs.nim
       description: A synthetic two-window frame yields exactly two windows at the expected rects; with --ocr each carries its own label.
-      status: passing (macOS, both binaries)
+      status: passing (macOS, both binaries; Linux x86_64, both binaries)
       falsifying_mutation: Taking titleText from every word of the frame turns it red (tried 2026-10-20).
     - test_name: test_vision_segment_video_damaged_or_oddly_named_input
       file: tests/contract/tvision_verbs.nim
       description: (Added in GS4 review.) A video with an intact header and damaged frames (ffmpeg's diagnostics exceed 64 KiB, checked as a control) finishes with exit 0 rather than hanging, and a file named =-two-state.mp4= or =pipe:0= is read as that file, through segmentVideo and the CLI.
-      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      status: passing (macOS; run against guiassert whichever binary the suite runs against; Linux x86_64, both suite runs)
       falsifying_mutation: Not draining stderr while frames are read turns it red (the verb hangs to the 60 s limit); passing the input without file: turns it red (ffprobe reads -two-state.mp4 as an option). Both tried in review, 2026-10-20.
     - test_name: test_vision_segment_video_two_states_matches_library
       file: tests/contract/tvision_verbs.nim
       description: (Added in GS4.) Video input on guiassert: a two-state H.264 video gives exactly two segments split at the switch, equal to segmentVideo on the same file, with default and explicit --fps / --scale-width / --threshold; a missing file is exit 3, a non-video exit 2, no ffmpeg exit 4 / missing-tool; capabilities reports video-decode available, supported with --probe, missing-tool without ffmpeg.
-      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      status: passing (macOS; run against guiassert whichever binary the suite runs against; Linux x86_64, both suite runs)
       falsifying_mutation: Ignoring the video --fps turns it red (tried 2026-10-20); so does mapping a decode error to exit 3 not-found (tried in review, 2026-10-20).
     - test_name: test_vision_verbs_over_serve_equal_the_cli
       file: tests/contract/tvision_verbs.nim
       description: (Added in GS4.) Every vision verb's envelope over guiassert serve equals the one-shot CLI's byte for byte, on both builds.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64, both binaries)
     - test_name: test_serve_cancels_a_running_video_segmentation
       file: tests/contract/tvision_verbs.nim
       description: (Added in GS4.) A running vision-segment of a long video is cancelled over serve with exit 8 within 5 s, and its ffmpeg child is gone afterwards (checked with pgrep on POSIX; the control checks it was running before the cancel).
-      status: passing (macOS)
-      falsifying_mutation: Removing the per-frame checkpoint in segmentVideo turns it red (tried 2026-10-20); so does not killing an abandoned ffmpeg (the cancel never answers; tried in review, 2026-10-20).
+      status: passing (macOS; Linux x86_64, both binaries)
+      falsifying_mutation: Removing the per-frame checkpoint in segmentVideo turns it red (tried 2026-10-20); so does not killing an abandoned ffmpeg (the cancel never answers; tried in review, 2026-10-20). On Linux, 2026-10-21: not killing an abandoned ffmpeg (stopChild without kill) turns this test and the low-fps test red (no answer within 10 s).
     - test_name: just lint && just test-core && just test
       description: The default, core and contract suites (the contract suite now includes tvision_verbs) on both binaries.
-      status: passing 2026-10-20 (macOS, at 7608f89 plus this change, after the review fixes; test-contract also run three more times, plus the GS1 out-of-suite tests and nix build of guiassert and guiassert-fixture)
+      status: passing 2026-10-20 (macOS, at 7608f89 plus this change, after the review fixes; test-contract also run three more times, plus the GS1 out-of-suite tests and nix build of guiassert and guiassert-fixture); Linux x86_64 2026-10-21: see the follow-up entry below
     - test_name: test_vision_segment_frame_size_cap_is_refused_before_decoding
       file: tests/contract/tvision_verbs.nim
       description: (Added in the GS4 follow-up.) A 16x2048 video at --scale-width 1449 (just over 2^28 pixels) or 16384 is exit 2 / invalid-value naming the limit, and segmentVideo raises FrameTooLargeError; on POSIX recording ffmpeg/ffprobe wrappers show ffprobe ran and ffmpeg did not (control: --scale-width 64 succeeds and runs both). --frames with a tall PNG at --scale-width 16384 is exit 2 too (control: 64 succeeds). The legacy decodeGray refuses a 20000x20000 PNG header before ffmpeg starts, as decodePngGray does with the same constant.
-      status: passing (macOS; run against guiassert whichever binary the suite runs against)
+      status: passing (macOS; run against guiassert whichever binary the suite runs against; Linux x86_64, both suite runs)
       falsifying_mutation: Disabling the cap in segmentVideo turns it red (the verb dies with exit 1 / internal on the 34 GB read, and ffmpeg is started); disabling the --frames cap turns it red (the binary dies allocating the scaled frame, no envelope); disabling the decodeGray cap turns it red (ffmpeg is started and fails instead). All three tried 2026-10-20.
     - test_name: test_vision_segment_low_fps_deadline_and_cancel_are_prompt
       file: tests/contract/tvision_verbs.nim
-      description: (Added in the GS4 follow-up.) A 200 000-frame video (32x32, 1000 fps, deterministic testsrc) at --fps 0.01 keeps ffmpeg busy for seconds between frames (control: ffmpeg alone takes at least 2.5 s, measured ~3.2 s). --timeout-ms 400 answers exit 7 / deadline within 1.4 s; a serve cancel sent after 600 ms (control: ffmpeg is still running) answers exit 8 within 1 s and ffmpeg is gone; segmentVideo with a checkpoint that raises after 300 ms stops within 1.3 s.
-      status: passing (macOS; run against guiassert whichever binary the suite runs against)
-      falsifying_mutation: Waiting for ffmpeg's output without the per-slice checkpoint (readOutput given nil) turns it red: the deadline run takes ~3 s and ends exit 2, the cancel takes ~2.5 s, the library ~2.8 s (tried 2026-10-20).
+      description: (Added in the GS4 follow-up.) A long video (32x32, 1000 fps, deterministic testsrc) at a low --fps keeps ffmpeg busy for seconds before its next output frame. As built on macOS 2026-10-20: 200 000 frames at --fps 0.01 (control: ffmpeg alone takes at least 2.5 s, measured ~3.2 s). Since the Linux review 2026-10-21: 1 000 000 frames at --fps 0.0005, so ffmpeg writes its only frame at the end (control: ffmpeg over the input is still running and has written nothing after 4000 ms, about three times the largest bound; see GS1 Deviations). --timeout-ms 400 answers exit 7 / deadline within 1.4 s; a serve cancel sent after 600 ms (control: ffmpeg is still running) answers exit 8 within 1 s and ffmpeg is gone; segmentVideo with a checkpoint that raises after 300 ms stops within 1.3 s.
+      status: passing (macOS; run against guiassert whichever binary the suite runs against; Linux x86_64, both suite runs)
+      falsifying_mutation: Waiting for ffmpeg's output without the per-slice checkpoint (readOutput given nil) turns it red: the deadline run takes ~3 s and ends exit 2, the cancel takes ~2.5 s, the library ~2.8 s (tried 2026-10-20). On Linux x86_64 the 400 000-frame fixture at --fps 0.01 was not enough: the cancel stayed inside its bound (943 ms, bound 1000), because ffmpeg there reached the next output frame in about 1 s. With the current fixture (review, 2026-10-21) the same mutation is red on Linux x86_64 with a wide margin: the deadline run took 13 271 ms (bound 1400), the cancel got no answer within 10 s (bound 1000), and segmentVideo alone ran 57 s before stopping (bound 1300; the unmutated library stops in ~350 ms); the host was heavily loaded, and the control guarantees at least 4 s on any host.
     - test_name: test_legacy_inputs_named_like_options_or_protocols
       file: tests/tvideo_analysis.nim
       description: (Added in the GS4 follow-up; out of the default suite, like the rest of tvideo_analysis.) Relative names -two-state.mp4 and concat:absent.mp4 give segmentByChange the result of the original file and probeVideo its size; -still.png and concat:absent.png give probeImageSize and decodeGray the original image. test_build_argv_shapes now checks the builders put the input behind file:.
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
       falsifying_mutation: ffmpegInputUrl returning the raw path turns it red (segmentByChange opens concat:absent.mp4 as the concatenation of a missing file; ffprobe reads -two-state.mp4 and -still.png as options). Tried 2026-10-20.
     - test_name: the pixel cap of a decoded image
       file: tests/tcore_types.nim
       description: (Added in the GS4 follow-up.) maxImagePixels is 2^28; fitsPixelCap is exact at the bound (16384x16384, 1448x185344 fit; one more row or column does not), rejects non-positive sizes, and does not overflow for high(int).
-      status: passing (macOS)
+      status: passing (macOS; Linux x86_64)
     - test_name: just lint && just test-core && just test (GS4 follow-up)
       description: The default, core and contract suites on both binaries after the follow-up, plus the out-of-suite legacy tests it touches (tvideo_analysis, tvision_windows, tvision_cli, tscreen_capture, tchange_detect).
-      status: passing 2026-10-20 (macOS aarch64-darwin inside nix develop, at 96710e5 plus this change: just lint, just test-core, just test incl. test-contract on both binaries, rc 0; tvideo_analysis, tvision_windows, tvision_cli, tscreen_capture, tchange_detect all green)
+      status: passing 2026-10-20 (macOS aarch64-darwin inside nix develop, at 96710e5 plus this change: just lint, just test-core, just test incl. test-contract on both binaries, rc 0; tvideo_analysis, tvision_windows, tvision_cli, tscreen_capture, tchange_detect all green); Linux x86_64 2026-10-21 at 4e2c9757 plus the Linux fixes: just lint, just test (348 OK), just test-core (38 OK), test-contract three times (114 OK each), tvideo_analysis (12 OK), tvision_windows (3), tvision_cli (5), tscreen_capture (20), tchange_detect (5), all rc 0, nothing skipped
 
 *** Deviations
     - =vision-segment --frames --scale-width= reported the scaled size as
@@ -1362,7 +1420,9 @@
     - [X] Independent verification of this implementation (2026-10-20; the
       review fixes are listed under Deviations).
     - [ ] First CI run of tvision_verbs on Linux x64/arm64 and on the Windows
-      job (the Windows job's provisioned ffmpeg essentials build carries
+      job (Linux x86_64 ran locally and passes, 2026-10-21, after the
+      fixture fix in GS1's Deviations; no CI run exists yet; arm64 Linux is
+      CI only) (the Windows job's provisioned ffmpeg essentials build carries
       libx264, which the test videos are encoded with). This includes the
       first run of =readOutput='s Windows branch.
     - [X] Follow-up hardening of the three items the review left open
