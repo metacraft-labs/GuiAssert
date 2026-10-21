@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
+  :next_steps: GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
   :last_updated: 2026-10-21
   :current_milestone: GS6
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
@@ -57,7 +57,7 @@
   | GS1       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS2       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS2.1     | substrate/macos | partially_completed            | completed | completed | planned |
-  | GS3       | companion/linux | in_progress (part A)           | —       | —       | —       |
+  | GS3       | companion/linux | completed                      | —       | —       | —       |
   | GS4       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS6       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
@@ -1189,8 +1189,8 @@
 
 ** GS3: Agent Harbor consumer spec and backend crate (companion)
    :PROPERTIES:
-   :status: in_progress
-   :status_note: Part A (Agent Harbor's consumer spec, and the review of spec §7–§8 against what Agent Harbor uses today) is in progress on the companion Linux host since 2026-10-20. Part B (the backend crate, its contract tests and the Nix packaging) waits for GS2 to publish the guiassert-fixture binary.
+   :status: completed
+   :status_note: Completed and independently reviewed 2026-10-21 by companion/linux on Linux x86_64. Part A, Agent Harbor's consumer spec, is reconciled with the frozen contract 1.0. Part B is in Agent Harbor: a thin Rust crate that runs guiassert per verb or forwards the same argv to guiassert serve, parsing only the contract (no capture, OCR, tree, input or session logic), selected opt-in with the native paths the default; a flake input pinning GuiAssert agents 85b2dc3 with guiassert and guiassert-fixture on the dev shell PATH. The crate covers every verb Agent Harbor uses, the session verbs included, and its three Verification tests pass twice against the pinned guiassert-fixture with a missing fixture failing them. The review hardened the CLI transport's process handling (bounded output, a client deadline that kills the child, no wedge on an inherited pipe). Routing the consumer's own session lifecycle onto session-start/session-stop is Agent Harbor work tracked there, not part of this milestone. One wrapper run of the consumer's gate recipe is pending on that host; the identical test selection is green.
    :depends_on: GS2 GS2.1
    :owner: companion/linux
    :complexity: large
@@ -1203,27 +1203,32 @@
    listed here so both campaigns see one ordering.
 
 *** Deliverables
-    - [ ] Agent Harbor's consumer specification for the GuiAssert substrate,
+    - [X] Agent Harbor's consumer specification for the GuiAssert substrate,
       in its computer-use specs: transports (CLI child process and the serve
       daemon), verb mapping, exit-code-to-error mapping, configuration
       variables, opt-in selection, and the parity gates GS12–GS14.
-    - [ ] A thin Rust backend crate that drives =guiassert= / =guiassert serve=
+      (Agent Harbor specs/Computer-Use/GuiAssert-Substrate.md; reconciled with
+      the frozen 1.0 on 2026-10-21.)
+    - [X] A thin Rust backend crate that drives =guiassert= / =guiassert serve=
       and parses the contract, carrying no capture, OCR, tree, input or
       session logic of its own; opt-in, with the native paths remaining the
-      default.
-    - [ ] The flake input pinning a GuiAssert revision, with =guiassert= and
-      =guiassert-fixture= on the dev shell's =PATH=.
+      default. (Agent Harbor crate ah-desktop-guiassert; reviewed 2026-10-21.)
+    - [X] The flake input pinning a GuiAssert revision, with =guiassert= and
+      =guiassert-fixture= on the dev shell's =PATH=. (Agent Harbor flake.nix
+      input =guiassert=, locked to 85b2dc3; =guiassert= also on the =ah=
+      runtime =PATH=; reviewed 2026-10-21.)
 
 *** Verification
+    Run in Agent Harbor on Linux x86_64, inside nix develop, 2026-10-21, with the fixture required (a missing guiassert-fixture fails), against the pinned guiassert-fixture; rerun twice in the independent review.
     - test_name: e2e_ah_drives_guiassert_fixture_over_cli
       description: Every verb Agent Harbor uses, through the backend crate, against the real pinned guiassert-fixture binary, each verb a separate process.
-      status: pending
+      status: passing (Linux x86_64, twice; type and click make the status label appear in tree and ocr, and the no-click negative control shows neither)
     - test_name: e2e_ah_drives_guiassert_fixture_over_serve
       description: The same scenario over guiassert serve, including cancellation and shutdown.
-      status: pending
+      status: passing (Linux x86_64, twice; plus hello, CLI/serve parity, pipelined per-session ordering, an owner session stopped at shutdown, and a unix: socket)
     - test_name: test_ah_maps_every_guiassert_exit_code
       description: Exit codes 1–8 injected through the fixture map to the documented Agent Harbor errors; the binding never parses message text.
-      status: pending
+      status: passing (Linux x86_64, twice, both transports; red under a mis-mapped exit 6 and under a message-reading mapping)
 
 ** GS4: Vision verbs in the CLI
    :PROPERTIES:
