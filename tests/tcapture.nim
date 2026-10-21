@@ -18,6 +18,9 @@ import std/[options, strutils, unittest]
 
 import ../src/gui_assert/capture
 
+when defined(linux):
+  import std/os
+
 when defined(macosx) and defined(captureLive):
   import std/[json, os, osproc, streams, strtabs]
   import ../src/gui_assert/media
@@ -67,16 +70,30 @@ proc valueAfter(argv: seq[string], tok: string): string =
 suite "capture: backend resolution":
 
   test "resolveBackend(cbAuto) maps to the current OS default":
-    let r = resolveBackend(cbAuto)
     when defined(macosx):
-      check r == rbAvfoundation
+      check resolveBackend(cbAuto) == rbAvfoundation
     elif defined(windows):
-      check r == rbDdagrab
+      check resolveBackend(cbAuto) == rbDdagrab
     elif defined(linux):
-      # On Linux the result depends on env. Any of the linux backends is
-      # acceptable; if neither WAYLAND_DISPLAY nor DISPLAY is set the
-      # resolver raises and we'd not reach here.
-      check (r == rbWfRecorder or r == rbX11Grab)
+      # On Linux the default follows the session's display variables, so the
+      # test sets each combination itself instead of depending on whether the
+      # host running it (a headless CI runner, a desktop) has a display:
+      # WAYLAND_DISPLAY wins over DISPLAY, and with neither the resolver
+      # refuses rather than guessing. The caller's values are restored.
+      let saved = [("WAYLAND_DISPLAY", getEnv("WAYLAND_DISPLAY"),
+                    existsEnv("WAYLAND_DISPLAY")),
+                   ("DISPLAY", getEnv("DISPLAY"), existsEnv("DISPLAY"))]
+      try:
+        putEnv("WAYLAND_DISPLAY", "wayland-test"); putEnv("DISPLAY", ":99")
+        check resolveBackend(cbAuto) == rbWfRecorder
+        delEnv("WAYLAND_DISPLAY")
+        check resolveBackend(cbAuto) == rbX11Grab
+        delEnv("DISPLAY")
+        expect CaptureError:
+          discard resolveBackend(cbAuto)
+      finally:
+        for (name, value, present) in saved:
+          if present: putEnv(name, value) else: delEnv(name)
 
   test "resolveBackend rejects an OS-incompatible explicit choice":
     when defined(linux):

@@ -190,14 +190,25 @@ proc callsOf(dir: string): seq[string] =
   else: @[]
 
 proc sparseVideo(work: string): string =
-  ## A video that keeps ffmpeg busy for seconds between two output frames at a
-  ## low `--fps`: 200 000 tiny frames (200 s at 1000 fps). Each costs ffmpeg a
-  ## demux and a decode, and at `--fps 0.01` it writes two frames for all of
-  ## them. Deterministic (`testsrc`, single-threaded x264).
+  ## A video that keeps ffmpeg busy for seconds before it writes anything at
+  ## `sparseFps`: 1 000 000 tiny frames (1000 s at 1000 fps). Each costs ffmpeg
+  ## a demux and a decode, and `sparseFps` samples one frame per 2000 s, more
+  ## than the whole video, so ffmpeg writes its only output frame at the end:
+  ## the wait for that frame is the whole decode (~10 s on an unloaded x86_64
+  ## Linux host). Deterministic (`testsrc`, single-threaded x264).
   result = work / "sparse.mp4"
-  runFfmpeg(@["-f", "lavfi", "-i", "testsrc=size=32x32:rate=1000:duration=200",
+  runFfmpeg(@["-f", "lavfi", "-i", "testsrc=size=32x32:rate=1000:duration=1000",
               "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1",
               "-pix_fmt", "yuv420p", result])
+
+const
+  sparseFps = "0.0005"
+    ## The sample rate the low-fps test reads `sparseVideo` at.
+  sparseQuietMs = 4000
+    ## How long ffmpeg must stay silent over `sparseVideo` for the low-fps
+    ## test to mean anything: about three times the largest bound it checks
+    ## (1400 ms), so a wait that is not interrupted between frames is far
+    ## beyond every bound while the correct one stays far below it.
 
 suite "vision verbs":
   test "test_vision_compare_identical_is_one_and_changed_is_lower":
@@ -532,21 +543,29 @@ suite "vision verbs":
     let work = freshDir("vslow")
     let video = sparseVideo(work)
     let bin = mediaBin()
-    # Control: ffmpeg itself takes seconds over this input at this rate, so a
-    # deadline honoured only between frames would answer seconds late.
-    let probeStart = getMonoTime()
+    # Control: ffmpeg itself writes nothing over this input at this rate for
+    # at least `sparseQuietMs` while it keeps decoding, so a deadline or a
+    # cancel honoured only when a frame arrives would answer at least that
+    # late, about three times the bounds below. The output goes to a file:
+    # one frame is 320x320 bytes, more than ffmpeg's output buffer, so a
+    # frame written is on disk, and an empty file means no frame yet.
+    let quietOut = work / "quiet.gray"
     let probe = startProcess(ffmpegTool(), args = @["-hide_banner", "-loglevel", "error",
-      "-nostdin", "-i", video, "-vf", "fps=0.01,scale=320:320", "-f", "rawvideo",
-      "-pix_fmt", "gray", "-"], options = {})
-    discard probe.outputStream.readAll()
-    check probe.waitForExit() == 0
+      "-nostdin", "-y", "-i", video, "-vf", "fps=" & sparseFps & ",scale=320:320",
+      "-f", "rawvideo", "-pix_fmt", "gray", quietOut], options = {})
+    sleep(sparseQuietMs)
+    let stillDecoding = probe.running
+    let quietBytes = (if fileExists(quietOut): getFileSize(quietOut) else: 0'i64)
+    probe.kill()
+    discard probe.waitForExit()
     probe.close()
-    let controlMs = msSince(probeStart)
-    checkpoint "ffmpeg alone took " & $controlMs & " ms"
-    check controlMs >= 2500
+    checkpoint "after " & $sparseQuietMs & " ms ffmpeg was running: " &
+      $stillDecoding & ", its output held " & $quietBytes & " bytes"
+    check stillDecoding
+    check quietBytes == 0
     # The one-shot CLI: a 400 ms deadline answers exit 7 within ~1 s.
     let start = getMonoTime()
-    let r = runCli(@["--timeout-ms", "400", "vision-segment", video, "--fps", "0.01"],
+    let r = runCli(@["--timeout-ms", "400", "vision-segment", video, "--fps", sparseFps],
                    baseEnv(), timeoutMs = 60_000, bin = bin)
     let elapsed = msSince(start)
     checkpoint "the --timeout-ms 400 run took " & $elapsed & " ms: " & r.stdout
@@ -557,7 +576,7 @@ suite "vision verbs":
     check elapsed < 1400
     # Over serve: a cancel sent while ffmpeg is busy is answered within 1 s.
     var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
-    d.send(runReq("seg", @["vision-segment", video, "--fps", "0.01"]))
+    d.send(runReq("seg", @["vision-segment", video, "--fps", sparseFps]))
     sleep(600)
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
@@ -591,7 +610,7 @@ suite "vision verbs":
     let libStart = getMonoTime()
     let libDeadline = libStart + initDuration(milliseconds = 300)
     expect ValueError:
-      discard segmentVideo(video, fps = 0.01, checkpoint = proc () =
+      discard segmentVideo(video, fps = parseFloat(sparseFps), checkpoint = proc () =
         if getMonoTime() >= libDeadline: raise newException(ValueError, "deadline"))
     let libMs = msSince(libStart)
     checkpoint "segmentVideo stopped after " & $libMs & " ms"

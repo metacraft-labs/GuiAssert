@@ -159,10 +159,21 @@ proc startMockServer(state: ptr MockState): Thread[ptr MockState] =
   createThread(result, mockServerThread, state)
 
 proc stopMockServer(state: ptr MockState, th: var Thread[ptr MockState]) =
+  ## Stops the worker and waits for it. Closing the listening socket is not
+  ## enough to stop it: on Linux, close(2) on a socket another thread is
+  ## blocked in accept(2) on does not wake that thread (macOS does wake it,
+  ## with an error), so the join would wait forever. One connection of our
+  ## own wakes the accept on every platform; the worker reads EOF, closes it
+  ## and, seeing `stopping`, leaves its loop. Only then is the socket closed.
   state[].stopping = true
-  try: state[].sock.close() except CatchableError: discard
-  # The accept call will fail with OSError and the thread exits.
+  try:
+    let waker = newSocket()
+    defer: waker.close()
+    waker.connect("127.0.0.1", Port(state[].port))
+  except CatchableError:
+    discard # the worker already left accept (e.g. it failed and exited)
   joinThread(th)
+  try: state[].sock.close() except CatchableError: discard
 
 suite "appium HTTP wire protocol against mock server":
 

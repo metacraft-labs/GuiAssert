@@ -167,7 +167,13 @@
             # compositors and session stack a target starts, pinned here so a
             # target's identity is part of this flake's lock rather than of
             # whatever the host or a consumer's shell provides.
-            ++ lib.optionals pkgs.stdenv.isLinux desktopEnvPackages;
+            ++ lib.optionals pkgs.stdenv.isLinux desktopEnvPackages
+            # The Linux host TTS engine (`speech_synth` / the `espeak`
+            # speech-synthesis provider run `espeak-ng -w <out> <text>`).
+            # macOS ships its counterpart, `say`, with the OS; on Linux it has
+            # to come from this shell, or tmedia's TTS test in `just test`
+            # fails with the provider's missing-dependency error.
+            ++ lib.optionals pkgs.stdenv.isLinux [ pkgs.espeak-ng ];
 
             shellHook = ''
               # Canonicalize TMPDIR to its physical path. On macOS /tmp is a

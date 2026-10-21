@@ -436,6 +436,7 @@ proc p(): int =
       let controlArgs: seq[string] = @[]
     elif defined(windows):
       let controlSrc = """
+import std/os
 proc MessageBeep(kind: uint32): int32 {.importc, stdcall, header: "<windows.h>".}
 if paramCount() > 1000: discard MessageBeep(0)
 """
@@ -443,6 +444,7 @@ if paramCount() > 1000: discard MessageBeep(0)
       let controlArgs = @["--passL:-luser32"]
     else:
       let controlSrc = """
+import std/os
 proc cxaDemangle(name: cstring, buf: pointer, n: pointer, status: ptr cint): cstring
   {.importc: "__cxa_demangle", cdecl.}
 if paramCount() > 1000:
