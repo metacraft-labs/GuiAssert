@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
   :last_updated: 2026-10-22
   :current_milestone: GS6
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
@@ -60,7 +60,7 @@
   | GS3       | companion/linux | completed                      | —       | —       | —       |
   | GS4       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
-  | GS6       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
+  | GS6       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
   | GS8       | split           | planned                        | planned | planned | planned |
   | GS9       | substrate/macos | planned                        | planned | —       | —       |
@@ -1533,7 +1533,7 @@
     - test_name: just test-live-linux
       description: The Linux live capture suite (tests/live/tcapture_linux.nim) inside nix develop; it starts its own Xvfb, headless sway with the portal stack, and headless GNOME Shell, never the operator's display; a server that cannot start fails its tests with GS5-LINUX BLOCKED.
       status: passed
-      as_built: recipe added; 14 of 14 tests green on Linux x86_64 (2026-10-21), on three consecutive full runs after the last change. Review re-runs (2026-10-22): 14/14 on four of five runs; one run 13/14 from an intermittent wf-recorder stall (GS5 Outstanding Tasks). After the fix (2026-10-22, companion/linux): 15 tests (test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall added), 15/15 on ten consecutive runs.
+      as_built: recipe added; 14 of 14 tests green on Linux x86_64 (2026-10-21), on three consecutive full runs after the last change. Review re-runs (2026-10-22): 14/14 on four of five runs; one run 13/14 from an intermittent wf-recorder stall (GS5 Outstanding Tasks). After the fix (2026-10-22, companion/linux): 15 tests (test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall added), 15/15 on ten consecutive runs. GS6 review (2026-10-22): 16 tests (test_live_suite_leaves_no_process_running added, see GS6 Verification), 16/16 on three consecutive runs; the recipe also runs the GS6 OCR suite (24/24 in all).
     - test_name: test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall
       file: tests/live/tcapture_linux.nim
       description: Regression test of the linux-wlr flake. A 1.5 s linux-wlr record at 10 fps with the encoder's second libx264 encode call delayed 2.5 s (tests/live/slow_x264.c, preloaded into the recorder's encoder; it writes a marker once the delay is served) must exit 0 with every frame: frames equal to ffprobe's count, >= 15, duration >= 1500 ms.
@@ -1886,7 +1886,8 @@
    :status_note: macOS parts implemented 2026-10-20 from origin/agents at ece9b24 (apple-vision and tesseract engines behind the ocr verb, over files and captures). Every GS6 test that needs no screen passes; the capture-then-read test is BLOCKED on a locked GUI session (GS5's blocker). Awaiting independent verification.
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=in_progress linux=planned windows=planned
+   :platform_status: macos=in_progress linux=completed windows=planned
+   :linux_status_note: companion/linux, 2026-10-22: the tesseract engine (the Linux default) run live and passing on Linux x86_64 (NixOS, kernel 6.18, inside nix develop, from origin/agents at fe86cfd): over files (tests/live/tocr_tesseract.nim 2/2) and over captures from every GS5 Linux backend (tests/live/tocr_linux.nim 7/7: linux-x11, linux-wlr at scale 1 and scale 2, linux-portal-pipewire through its screenshot, linux-gnome), boxes mapped to desktop coordinates; the packaged guiassert OCRs a capture (guiassert-packaged-linux-capture) and probes tesseract supported (guiassert-packaged-tesseract). just test-live-linux 22/22 on three consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 failed, 0 skipped. Independently verified 2026-10-22 (review agent, Linux x86_64): review fixes to the sway target's stop (no orphaned session bus), the box tolerance (1 px, measured exact) and the PPM helpers; tests/live/tocr_linux.nim 8/8 and tests/live/tcapture_linux.nim 16/16 (each with test_live_suite_leaves_no_process_running), just test-live-linux 24/24 on three consecutive runs; counts in GS6 Outstanding Tasks.
    :platform_prereqs: GS5=macos (capture-then-OCR on macOS only)
    :complexity: medium
    :END:
@@ -1918,17 +1919,50 @@
         =OcrEngine.validate= (core interface addition) so =ocr= refuses an
         option before it captures; a frame whose recognition fails is
         removed; the legacy =ocr.obAppleVision= path builds the same helper.
-    - Linux (claimable by =companion/linux=)
-      - [ ] Tesseract default on Linux sessions, language packs from the flake.
-        (The engine is implemented and marked implemented on every platform,
-        and =linux-*= already defaults to it; what remains is the Linux live
-        run of =tests/live/tocr_tesseract.nim=. The packaged =guiassert= now
-        pins tesseract (the review, 2026-10-20: its wrapper sets
-        =TESSERACT_BIN= by default beside =FFMPEG_BIN=, and the flake check
-        =guiassert-packaged-tesseract= runs the package from an empty
-        environment and requires its probed =tesseract= =ocr= feature to be
-        =supported=; green on aarch64-darwin, red with the wrapper line
-        removed). The check's Linux run is the companion's.)
+    - Linux (=companion/linux=)
+      - [X] Tesseract default on Linux sessions, language packs from the flake.
+        (As built, companion/linux 2026-10-22: nothing in the engine needed
+        changing for Linux but one case: a tesseract without the default
+        language's traineddata, asked for no =--lang=, is now exit 4 /
+        =missing-tool= with a remedy naming the traineddata (it was
+        =unsupported-option=, which names an option the caller did not
+        pass), matching what =capabilities --probe= already reported; an
+        uninstalled =--lang= stays =unsupported-option=. The flake's
+        tesseract carries all 129 language packs (=--lang deu --lang eng=
+        tested). =tests/live/tocr_tesseract.nim= passes on Linux unchanged
+        but for its rendering and ink-measuring helpers, moved to
+        =tests/live/ocr_live.nim= for the Linux suite to share.)
+      - [X] Capture-then-OCR through every GS5 Linux capture backend, with
+        word boxes mapped to desktop coordinates:
+        =tests/live/tocr_linux.nim=, in =just test-live-linux= after the
+        capture suite. (As built: the fixture windows show an invented
+        two-line label image pixel for pixel — =wm_probe image=<ppm>= on
+        Wayland and =x11_probe window --image <ppm>= on X11, both reading a
+        binary PPM through the new =helpers/linux/ppm_image.h= — so each
+        word's desktop rect is the server-reported window position plus the
+        ink measured from the rendered pixels. =SwayTarget= gained a =scale=
+        (the headless output's scale; default 1, pointer extents in logical
+        pixels) so linux-wlr is exercised at scale 2. linux-portal-pipewire
+        cannot be pointed at a display, window or region (GS5) and =ocr=
+        with a capture needs one (§7.5), so there the portal's screenshot is
+        read with =ocr --image= and mapped through that screenshot's origin
+        and scale, and =ocr --display= is checked to be refused before
+        capturing.)
+      - [X] The packaged =guiassert= OCRs a capture outside =nix develop=:
+        the flake check =guiassert-packaged-linux-capture= now shows an
+        ffmpeg-drawn label in an =x11_probe= window of its private Xvfb and
+        requires =ocr --window= (text, word order, confidences, origin) and
+        =ocr --region= to read it from an empty environment;
+        =guiassert-packaged-tesseract= green on x86_64-linux.
+        (Before this: the engine was implemented and marked implemented on
+        every platform, =linux-*= defaulting to it, and the packaged
+        =guiassert= pinned tesseract (the review, 2026-10-20: its wrapper
+        sets =TESSERACT_BIN= by default beside =FFMPEG_BIN=, and
+        =guiassert-packaged-tesseract= requires the probed =tesseract= =ocr=
+        feature to be =supported= from an empty environment; green on
+        aarch64-darwin, red with the wrapper line removed). With the wrapper
+        line removed the Linux capture check is red too: =ocr --window= exit
+        4 / =missing-tool=, measured 2026-10-22.)
     - Windows (=later/windows=)
       - [ ] =backends/ocr/windows_media.nim=.
 
@@ -1946,13 +1980,33 @@
     - test_name: test_tesseract_ocr_verb_reads_rendered_text
       file: tests/live/tocr_tesseract.nim
       description: The ocr verb with the pinned tesseract reads ffmpeg-rendered text, on Linux and macOS.
-      status: passing 2026-10-20 at base ece9b24 on macOS (pinned tesseract 5.5.1, ffmpeg 8.0, DejaVu Sans); Linux run pending (companion)
+      status: passing 2026-10-20 at base ece9b24 on macOS (pinned tesseract 5.5.1, ffmpeg 8.0, DejaVu Sans); passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18; the same pins; companion/linux), 2/2 in just test-live-tesseract
       as_built: word boxes match the ink rects measured from the rendered pixels within 3 px (measured: exact); controls: swapped lines, blank frame; --upscale 2 keeps original-image boxes, --psm 7, --invert always/auto on light-on-dark, --lang deu --lang eng. Mutation tried: removing the upscale box mapping turned it red.
+      falsifying_mutation_linux: removing the upscale box mapping (words.unscale), dropping the second word of every line from the TSV, and writing tesseract's diagnostics to stderr each turned it red on Linux (2026-10-22); reverted.
     - test_name: test_ocr_capture_then_read_maps_bbox_to_desktop
       file: tests/live/tocr_macos.nim
       description: ocr --window returns words whose bbox, mapped through origin and scale, lands on the fixture label's on-screen rect.
       status: failing (BLOCKED: locked GUI session)
       as_built: implemented; the AppKit fixture (solid_window.swift) gained --label / --label-at / --label-size and reports the label's desktop rect; negative control: the same window without a label reads no words. Fails with "BLOCKED: the GUI session is locked" on 2026-10-20 (ScreenCaptureKit lists no display while the screen is locked; Screen Recording is granted).
+    - test_name: test_tesseract_ocr_reads_capture_mapped_to_desktop [linux-x11, linux-wlr, linux-wlr scale 2, linux-portal-pipewire, linux-gnome]
+      file: tests/live/tocr_linux.nim
+      description: The Linux counterpart of test_ocr_capture_then_read_maps_bbox_to_desktop: the default engine (tesseract) reads an invented label shown in a real window of each GS5 Linux capture backend's private server, and every word box, mapped through the captured image's origin and scale, lands on the word's ink on the desktop.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 5/5, in just test-live-linux 22/22 on three consecutive runs
+      as_built: the label (QUARTZ 4719 / PELICAN DOCK, DejaVu Sans 40 px by the pinned ffmpeg) is shown pixel for pixel by wm_probe image= (sway, GNOME Shell) and x11_probe window --image (Xvfb); its ink measured from the rendered pixels; windows placed away from the origin (Xvfb 150,200; sway 70,90; GNOME 130,170). For each backend ocr --window (window-crop, origin = the server's window position), ocr --display and ocr --region (origin = the region's; holding the first line only, it reads only QUARTZ 4719): exactly the label's words, each box within 3 px of its ink on the desktop on every edge (measured: exact at scale 1), confidence 50..100, text in reading order, the words of one line on one line number; linux-wlr also on an output at scale 2 (1280x800 mode, 640x400 logical): image scale 2, frame twice the window's logical size, boxes mapped by /2 within the same tolerance. linux-portal-pipewire: its --no-cursor screenshot read with ocr --image and mapped through the screenshot's origin and scale; ocr --display refused exit 4 / unsupported-option, feature display-capture, no frame. GNOME's display frame also shows the top bar's clock: exactly the label's words lie on the window. Negative controls: a background region reads no words; the first-line region reads only its two. Also C7 on each server: capabilities --probe selects tesseract and probes its ocr feature supported; label words never on any run's stderr nor in a state record.
+      falsifying_mutation_linux: the capture's reported origin forced to 0,0 (linux_common.adoptPng) turned linux-x11, linux-wlr, linux-wlr scale 2 and linux-gnome red; the measured scale forced to 1 turned linux-wlr scale 2 red; dropping the second word of every line, and numbering every word line 0, turned all five red; reverted (2026-10-22).
+      review_linux: independently verified 2026-10-22 (review agent). With the tolerance set to 0 every box on all five backends matched its ink exactly, at scale 2 too, so the claimed scale-2 edge blur does not occur; the suite's tolerance is now its own boxSlack = 1 logical px (ocr_live.inkSlack, 3, stays for tocr_tesseract). Re-applied: origin forced to 0,0 => linux-x11, linux-wlr, linux-wlr scale 2 and linux-gnome red (the portal's whole-display screenshot has origin 0,0, so it stays green); scale forced to 1 => linux-wlr scale 2 red; reverted. linux-portal-pipewire: the portal backend refuses --display, --window and --region (GS5) and ocr with a capture needs one of them (spec §7.5), so a consumer reads portal pixels as screenshot then ocr --image; the test checks exactly that composition and the refusal, which is all the ledger and contract allow.
+    - test_name: test_tesseract_missing_tool_and_traineddata_are_exit_4 [linux-x11]
+      file: tests/live/tocr_linux.nim
+      description: Over a capture: an uninstalled --lang, a missing tesseract and a tesseract without its default traineddata are exit 4 with their reasons, details.feature ocr and backend tesseract, and leave no frame; capabilities reports each.
+      status: passing 2026-10-22 on Linux x86_64 (companion/linux), in just test-live-linux on three consecutive runs
+      as_built: --lang zzz exit 4 unsupported-option; TESSERACT_BIN at a missing file exit 4 missing-tool with a remedy naming tesseract, capabilities --probe unavailable missing-tool; an empty TESSDATA_PREFIX exit 4 missing-tool with a remedy naming the traineddata (and --lang deu there unsupported-option), capabilities --probe unavailable missing-tool naming the traineddata; no --out file in any case; positive control: the same window reads with the pinned data.
+      falsifying_mutation_linux: reverting the missing-default-traineddata case to unsupported-option turned it red (2026-10-22); reverted. Re-applied by the review (2026-10-22): red, only this test; reverted.
+    - test_name: test_live_suite_leaves_no_process_running
+      file: tests/live/tocr_linux.nim, tests/live/tcapture_linux.nim
+      description: The last test of each Linux live suite: once every server was stopped, no process this run started (server, helper, session bus, bus-activated service, guiassert run) is still running.
+      status: passing 2026-10-22 on Linux x86_64 (review agent), in just test-live-linux 24/24 on three consecutive runs
+      as_built: tests/live/linux_live.nim puts a per-run tag (GA_LIVE_SUITE_RUN) into the suite's environment when it loads; every environment the suites build derives from it, so a process carrying the run's value was started by the run however it was reparented (proc(5) environ). The test waits up to 10 s for such processes to exit, fails naming each one left, then SIGKILLs them so a failing run leaves nothing behind either.
+      falsifying_mutation_linux: the sway target's stop terminating the dbus-run-session wrapper without stopping the compositor first (the behaviour before 3ae97af) => red, naming per sway session a dbus-daemon, sway, swaybg and swaybar left running (2026-10-22); reverted.
     - test_name: test_windows_media_ocr_reads_rendered_label
       file: tests/live/tocr_windows.nim
       description: Windows.Media.Ocr reads the rendered label with a bbox within tolerance.
@@ -1960,8 +2014,10 @@
     - test_name: test_ocr_text_never_on_stderr_and_features_named
       file: tests/live/tocr_<engine>.nim
       description: (GS2.1 obligation) C15 and C7: OCR of a frame with a planted word leaves the word out of GuiAssert's stderr (tesseract's own diagnostics are not echoed with recognized text), and an option the engine lacks (--psm on apple-vision) names feature ocr in details.feature; capabilities reports the engine's ocr feature with a probed state.
-      status: passing 2026-10-20 at base ece9b24 on macOS, in tests/live/tocr_macos.nim (apple-vision) and tests/live/tocr_tesseract.nim (tesseract)
+      status: passing 2026-10-20 at base ece9b24 on macOS, in tests/live/tocr_macos.nim (apple-vision) and tests/live/tocr_tesseract.nim (tesseract); passing 2026-10-22 on Linux x86_64 (companion/linux) in tests/live/tocr_tesseract.nim (over a file) and tests/live/tocr_linux.nim [linux-x11, serve] (over a capture)
       as_built: planted word PLANTED+5 random digits; positive control: data holds it; stderr empty (CLI) and free of it (serve daemon, serve events); refusals (--psm/--upscale/--invert, unknown --lang, a --lang joining two) exit 4 naming feature ocr and the engine; a failing tesseract (stand-in script, justified in the header) is exit 5 ocr-failed with nothing on stderr; a missing one exit 4 missing-tool; capabilities --probe reports ocr supported from the engine, available without --probe, unavailable missing-tool without tesseract. Mutation tried: passing the engine's diagnostics to stderr turned it red.
+      as_built_linux: tests/live/tocr_tesseract.nim as above, unchanged; tests/live/tocr_linux.nim [linux-x11, serve]: a planted word shown in an x11_probe window, read by ocr --window: positive control (data holds it), CLI stderr empty, serve --stdio result holds it while no serve event and not the daemon's stderr does, nor any state record; --lang eng+deu refused before the capture (exit 4 unsupported-option, feature ocr, backend tesseract, no frame, no word in the output). C7 on every Linux server: capabilities --probe selects tesseract with its ocr feature supported (test_tesseract_ocr_reads_capture_mapped_to_desktop).
+      falsifying_mutation_linux: writing tesseract's TSV (the recognized words) to stderr turned it and every Linux OCR test red; writing tesseract's diagnostics to stderr turned the tocr_tesseract one red (2026-10-22); reverted. Re-applied by the review (2026-10-22): the TSV written to stderr => all seven OCR tests of tocr_linux red; reverted.
 
 *** Key Source Files
     - src/gui_assert/backends/ocr/apple_vision.nim - the apple-vision engine
@@ -1969,6 +2025,9 @@
     - src/gui_assert/backends/ocr/engine_process.nim - engine subprocesses
     - src/gui_assert/helpers/vision_ocr.swift - the Vision helper (--json, --languages)
     - tests/live/macos_live.nim - shared macOS live support (extracted from tcapture_macos)
+    - tests/live/tocr_linux.nim - the Linux live OCR suite (over captures from every GS5 Linux backend)
+    - tests/live/ocr_live.nim - shared ffmpeg-rendered OCR fixtures (extracted from tocr_tesseract)
+    - helpers/linux/ppm_image.h - the PPM reader behind wm_probe image= and x11_probe window --image
 
 *** Outstanding Tasks
     - [ ] GS6 BLOCKED: the macOS GUI session was locked for the whole run
@@ -1992,9 +2051,104 @@
       owner and symlink checks each mutated red), and pinned tesseract in the
       flake package (Deliverables, Linux). The capture-then-read test still
       needs its unlocked run before GS6 macOS is done.
-    - [ ] Linux (=companion/linux=): the Linux live run of
-      =tests/live/tocr_tesseract.nim= and of the flake check
-      =guiassert-packaged-tesseract= (see Deliverables). Windows (=later/windows=): =windows_media.nim=.
+    - [X] Linux (=companion/linux=, 2026-10-22, Linux x86_64, NixOS kernel
+      6.18, inside =nix develop=, from origin/agents at fe86cfd): the Linux
+      live run of =tests/live/tocr_tesseract.nim= (2/2), capture-then-OCR
+      through every GS5 Linux backend (=tests/live/tocr_linux.nim= 7/7), and
+      the flake checks =guiassert-packaged-tesseract= and
+      =guiassert-packaged-linux-capture= (now OCRing a capture) green. Re-run:
+      =just lint= green; =just test= 375 (261 unit + 114 contract);
+      =just test-core= 39; =just test-contract= 114; =just
+      test-desktop-env= 31; =just test-live-linux= 22/22 (15 capture + 7 OCR)
+      on three consecutive runs (61 s, 44 s, 42 s) and once more after the
+      last edits; =just
+      test-live-tesseract= 2/2; =nix flake check= green on x86_64-linux;
+      0 failed, 0 skipped. Falsifying mutations in Verification
+      (=falsifying_mutation_linux=), each red then reverted. No GS6-LINUX
+      BLOCKED item. Awaiting independent verification.
+      Independently verified 2026-10-22 (review agent, Linux x86_64, inside
+      =nix develop=, from origin/agents at fe86cfd). Review fixes: the
+      headless sway target's =stop= no longer orphans the bus of the sway
+      wrapper's =dbus-run-session= (cause and fix in the notes below), with
+      =test_live_suite_leaves_no_process_running= closing both Linux live
+      suites; =tests/live/tocr_linux.nim='s box tolerance 3 -> 1 logical px
+      (measured exact everywhere, scale 2 included); =ppm_image.h= caps a
+      side at 8192 px so =wm_probe='s two-buffer pool size cannot overflow
+      its =int32_t=; =wm_probe= frees the image on its error paths;
+      =x11_probe='s colour packing no longer shifts by a negative amount for
+      a channel mask wider than 8 bits. The PPM reader was run under
+      ASan/UBSan against truncated, P5, maxval 65535, oversized, negative
+      and empty headers (each refused with its reason). Re-run: =just lint=
+      (no linters configured yet); =just test= 375; =just test-core= 39;
+      =just test-contract= 114; =just test-desktop-env= 31;
+      =just test-live-linux= 24/24 (16 capture + 8 OCR) on three
+      consecutive runs (65 s, 44 s, 46 s); =just test-live-tesseract= 2/2;
+      =nix flake check= green on x86_64-linux; 0 failed, 0 skipped. Before
+      and after that whole sequence, no dbus-daemon, sway, Xvfb,
+      gnome-shell, pipewire, wireplumber or xdg-desktop-portal process had
+      its working directory in this worktree. Mutations re-applied (each
+      red, then reverted): origin forced to 0,0; the TSV written to stderr;
+      the scale forced to 1; the missing-default-traineddata reason back to
+      unsupported-option; the pre-3ae97af sway stop (leak check red).
+    - [ ] Windows (=later/windows=): =windows_media.nim=.
+    - Notes for the verifier on the Linux share (each deliberate):
+      - =backends/ocr/tesseract.nim=: with no =--lang= and no =eng=
+        traineddata installed, =ocr= is now exit 4 / =missing-tool= (remedy:
+        the traineddata or =TESSDATA_PREFIX=), not =unsupported-option=:
+        the caller passed no option, and =capabilities --probe= already
+        called the same state =missing-tool=. Exit code unchanged; contract
+        1.0 unchanged (both reasons are in §7.3's code-4 row).
+        For =substrate/macos= (the backend is shared): kept by the review
+        (2026-10-22). §7.5 reserves =unsupported-option= for an option the
+        engine has no equivalent for, and §3.4 calls a compiled-in backend
+        unusable here =missing-tool=; with no =--lang= given there is no
+        option to refuse, and the probe already said =missing-tool=. Only
+        this one case changed and only its reason (and remedy); an
+        uninstalled explicit =--lang= is still =unsupported-option=
+        (=tests/live/tocr_tesseract.nim='s =--lang zzz= case, 2/2 on Linux),
+        and the macOS paths and tests are otherwise unaffected. A macOS run
+        of =just test-live-tesseract= covers it at the next macOS session.
+      - =desktop_env/sway.nim=: =newSwayTarget= gained a trailing =scale=
+        parameter (default 1.0, so every caller is unchanged); the sway
+        config always states the output's scale, and the pointer helper's
+        extents are the logical size (mode / scale), which equals the mode
+        at scale 1.
+      - Test helpers: =tests/live/tocr_tesseract.nim='s ffmpeg rendering,
+        ink measurement and word lookup moved verbatim to
+        =tests/live/ocr_live.nim= (=renderLines= and =inkWords= take an
+        optional font size, default the previous 44); =linux_live.probeWindow=
+        and =x11Window= take an optional =image=.
+      - Helpers: =wm_probe image=PATH= (a window of the PPM's size showing
+        it) and =x11_probe window --image PATH= (the PPM as the window's
+        background pixmap; its size must equal the geometry); the colour
+        forms are unchanged (GS5's capture suite green).
+      - =just test-live-linux= now runs =tcapture_linux= then =tocr_linux=,
+        both even when the first fails, and fails when either does (as
+        =test-live-macos= does).
+      - Session buses: 78 =dbus-daemon --session= processes with
+        their working directory in this worktree, orphaned 3.7 h to 1 day
+        before this run by earlier live runs, were found on the host; none
+        was started by this run (each run's servers and helpers were checked
+        gone afterwards), so they were left alone.
+        (Review, 2026-10-22: each carried =_SWAY_WRAPPER_ALREADY_EXECUTED=1=
+        and a =/tmp/guienv-*= runtime directory, and ran as
+        =dbus-daemon --nofork --print-address N --session=: the bus
+        =dbus-run-session= starts for the packaged =sway= wrapper, which runs
+        sway under it when no bus is set. =dbus-run-session= ends that bus
+        only when its program exits; a SIGTERM to =dbus-run-session= itself
+        orphans it, which is what the sway target's =stop= did before
+        3ae97af, and could still do when the compositor's pid was unknown or
+        =dbus-run-session= had not yet reaped it. Fixed at the cause in
+        =desktop_env/sway.nim=: =stop= notes the wrapper's children, stops
+        the compositor, waits for =dbus-run-session= to end its bus and exit
+        by itself, and only then signals any noted child still under it;
+        =session_bus.startSessionBus= also stops a bus (and portals) it
+        started when it then fails, and both live suites stop their targets
+        unconditionally (a target that failed part way through =start= had
+        been left running). The 78 orphans were killed (only those: a
+        =dbus-daemon= whose cwd is this worktree, parent init, runtime
+        directory =/tmp/guienv-*=). New guard:
+        =test_live_suite_leaves_no_process_running= (Verification).)
     - Notes for the verifier (deviations, each deliberate):
       - =tests/contract/tcontract_decisions.nim= C7 case: =--ocr-backend
         tesseract= no longer fails (tesseract is implemented), so the exit-4
