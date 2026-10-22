@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :next_steps: GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
   :last_updated: 2026-10-22
-  :current_milestone: GS6
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
+  :current_milestone: GS7
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session); GS7 the Linux accessibility-tree backend (linux-atspi).
   :END:
 
 * Introduction
@@ -61,10 +61,10 @@
   | GS4       | substrate/macos | partially_completed            | completed | completed | planned |
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
   | GS6       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
-  | GS7       | split           | planned                        | planned | planned | planned |
+  | GS7       | split           | partially_completed            | planned | completed | planned |
   | GS8       | split           | planned                        | planned | planned | planned |
   | GS9       | substrate/macos | planned                        | planned | —       | —       |
-  | GS10      | companion/linux | planned                        | —       | planned | —       |
+  | GS10      | companion/linux | in_progress (linux-host part)  | —       | in_progress | —       |
   | GS11      | later/windows   | planned                        | —       | —       | planned |
   | GS12      | substrate/macos | planned                        | planned | —       | —       |
   | GS13      | companion/linux | planned                        | —       | planned | —       |
@@ -2168,10 +2168,11 @@
 
 ** GS7: Accessibility tree backends
    :PROPERTIES:
-   :status: planned
+   :status: partially_completed
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=planned linux=planned windows=planned
+   :platform_status: macos=planned linux=completed windows=planned
+   :linux_status_note: companion/linux, 2026-10-22, from origin/agents at fba2515: linux-atspi implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): tree, find, element, element-action, wait --element over the session's own AT-SPI bus, read straight in the D-Bus wire protocol (no libatspi, nothing on the package's wrapper), against invented forms in GTK 3, GTK 4 and Qt 6 Widgets on a private headless sway (scale 1 and 2) and a private Xvfb; bounds in desktop coordinates (window extents placed through the session's window list; a real click at the centre of Submit presses it), protected password fields, text, C5 accessible through the linux-host session backend (apps, app-launch, app-quit, session-list/info, permissions), C7 features and exit 6 atspi-disabled. tests/live/ttree_linux.nim 33/33 in just test-live-linux 57/57 on three consecutive runs; tests/tlinux_tree.nim 12/12; the packaged guiassert reads, drives and probes a GTK 3 form outside nix develop (guiassert-packaged-linux-tree). Contract 1.0 unchanged. Independently verified 2026-10-22 by review (see GS7 Outstanding Tasks).
    :requires: desktop.automation
    :complexity: large
    :END:
@@ -2182,7 +2183,54 @@
         =element-action=, =wait --element=, =apps=, =window-focus=,
         =window-set-bounds=; normalized roles and states; stale paths detected.
     - Linux (claimable by =companion/linux=)
-      - [ ] =backends/tree/linux_atspi.nim= on the session's own AT-SPI bus.
+      - [X] =backends/tree/linux_atspi.nim= on the session's own AT-SPI bus.
+        (As built, companion/linux 2026-10-22: =tree= (=--pid=, =--app=
+        exact and refused when ambiguous with =details.pids=, =--window=
+        through the session's window list, =--focused=), =find=, =element=,
+        =element-action= (press, focus, set-value incl. =""= and
+        =--value-stdin=, increment, decrement, expand, collapse, select,
+        show-menu) and =wait --element=. The bus is the invocation's own:
+        =AT_SPI_BUS_ADDRESS=, else the session bus's =org.a11y.Bus=, asked
+        with no-auto-start, so a read never starts an AT-SPI bus; none (or no
+        session bus) is exit 6 / =atspi-disabled= naming =tree-read= /
+        =element-actions=. AT-SPI is spoken directly in the D-Bus wire
+        protocol (=backends/tree/dbus_wire.nim=: EXTERNAL auth, pipelined
+        calls, both byte orders, deadlines and cancellation checked every
+        50 ms), not through libatspi (whose caches go stale without a GLib
+        main loop) or libdbus: the binary loads no library for the tree
+        verbs. Roles map the numeric AT-SPI role (the role-name strings are
+        toolkit-specific) onto the contract vocabulary, =nativeRole= the
+        AT-SPI name; the role and state tables are checked against
+        at-spi2-core's =atspi-constants.h=. =ROLE_PASSWORD_TEXT= (GTK 3, GTK
+        4, Qt 6) is =protected= and its text is never read. Bounds: GTK 4,
+        and GTK 3 on Wayland, report no screen coordinates (measured), so
+        WINDOW extents are placed through the window the session's capture
+        backend reports (sway IPC, the X server), the frame's origin found
+        from the window's content size (the frame itself, or for GTK 3's
+        client-side shadow the union of its children); unplaceable or
+        not-showing nodes are =bounds: null=. Every property is read with
+        =Properties.Get= (Qt implements no =GetAll=).)
+      - [X] The =linux-host= session backend, for C5 and the fixtures'
+        lifecycle (GS7's share of GS10's =linux-host= attach):
+        =backends/session/linux_host.nim=: =apps= (window owners and AT-SPI
+        registrants; =accessible= true / false / null without a reachable
+        AT-SPI bus), =app-launch= (argv or path, =--env=, =--wait-window-ms=
+        with exit 7 and =details.app=; =--bundle-id= exit 4
+        =unsupported-option=), =app-quit= (an application of the session,
+        or a process whose environment names its display, runtime directory
+        and bus), =session-list= / =session-info host=, =permissions=
+        (=accessibility= granted / denied / unknown from the AT-SPI bus).
+        =session-start= is exit 4 / =not-implemented= until GS10.
+      - [X] Packaged: the tree verbs need nothing on the wrapper; the flake
+        check =guiassert-packaged-linux-tree= reads a GTK 3 form's tree on a
+        private Xvfb + session bus + AT-SPI bus from an empty environment
+        (golden names, window at its requested position, protected field),
+        presses Submit, waits for the status label, probes =tree-read=
+        supported and lists the form =accessible=. The dev shell's AT-SPI
+        bus launcher is at-spi2-core rebuilt to run the pinned dbus-daemon
+        (=atspiLauncherFor=): nixpkgs' launcher spawns
+        =/run/current-system/sw/bin/dbus-daemon= (or a dbus-broker there),
+        i.e. the host's, and fails in the build sandbox.
     - Windows (=later/windows=)
       - [ ] =backends/tree/windows_uia.nim=.
     - Optional, any platform: =backends/tree/appium.nim= over the existing
@@ -2206,14 +2254,18 @@
       file: tests/live/ttree_macos.nim
       description: Without the Accessibility grant tree exits 6 / tcc-accessibility rather than returning an empty tree.
       status: pending
-    - test_name: test_atspi_tree_of_gtk_fixture_in_private_sway
+    - test_name: test_atspi_tree_of_gtk_fixture_in_private_sway [gtk3, gtk4, qt6]
       file: tests/live/ttree_linux.nim
       description: The GTK fixture's tree in a private sway session contains its golden names.
-      status: pending
-    - test_name: test_atspi_find_filters_role_name_state
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 3/3 (and test_atspi_tree_of_gtk_fixture_in_private_xvfb [gtk3, gtk4, qt6] 3/3), in just test-live-linux 57/57 on three consecutive runs
+      vacuity_guard: The tree is non-empty and has the fixture's window as a child of its app node.
+      as_built_linux: the invented form (tests/live/fixtures/atspi_form.c for GTK 3 and GTK 4, atspi_form_qt.cpp for Qt 6 Widgets), started through guiassert app-launch on the session's own AT-SPI bus; root /app[<pid>] role application named as the application, exactly one window child named with the test's title at /app[<pid>]/window[0]; the golden names Display name, Passphrase, Remember this device, Delivery notes, Submit; one button Submit, one checkbox, a text-field and a text-area of their names; nodeCount = the nodes returned, truncated false; --depth 1 and --max-nodes 3 (truncated, 3 nodes) bound the read; tree --window <the compositor's window id> is the same window node.
+    - test_name: test_atspi_find_filters_role_name_state [gtk3, gtk4, qt6]
       file: tests/live/ttree_linux.nim
       description: find filters by role, name and state; an unknown filter key is bad-args.
-      status: pending
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 3/3, in just test-live-linux on three consecutive runs
+      as_built_linux: --role button --name Submit is exactly one element (press among its actions, no children); --role text-field two; --state protected exactly the passphrase (role text-field); --state editable --state protected one; button + protected none; --name-contains; --limit 1 truncated; --colour is exit 2 unknown-flag, an unknown role or state exit 2 invalid-value.
+      falsifying_mutation_linux: dropping the protected state of ROLE_PASSWORD_TEXT (with its text read) turned all three red (2026-10-22); reverted.
     - test_name: test_uia_tree_of_win32_fixture
       file: tests/live/ttree_windows.nim
       description: The Win32 fixture's UIA tree contains its golden names.
@@ -2221,19 +2273,138 @@
     - test_name: test_tree_bounds_are_desktop_coordinates
       file: tests/live/ttree_<os>.nim
       description: (GS2.1 obligation) C1: every node's bounds are desktop coordinates (AT-SPI on Wayland converted through the compositor's window placement; AX and UIA as reported), checked by clicking the centre of the fixture's button and seeing its effect; a node that cannot be mapped reports bounds null.
-      status: pending
+      status: pending (macOS, Windows); Linux: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) in tests/live/ttree_linux.nim: [sway, gtk3], [sway, gtk4], [sway, qt6], [sway, gtk3 drawing its own frame], [sway scale 2, gtk3], [x11, gtk3], [x11, gtk4], [x11, qt6] 8/8, in just test-live-linux on three consecutive runs
+      as_built_linux: each form placed away from the desktop origin (sway: floating, moved through its IPC; Xvfb: XMoveWindow with no window manager); the window node's bounds are exactly the window the compositor / X server reports (for GTK 3 drawing its own frame, the surface around it: the shadow), Submit lies inside it, every visible element has bounds; negative controls: no status label before the click, and a click in the window below the form presses nothing; then a REAL pointer click (sway's virtual pointer; XTest on Xvfb) at the centre of Submit's reported bounds makes the status label appear (wait --element). With no way to place the frame (--capture-backend linux-x11 in a sway session: no X display) every node's bounds is null and the read succeeds. Scale 2: logical coordinates, the same click.
+      falsifying_mutation_linux: placing extents window-relative (the window origin dropped in placeExtents) turned all eight red, and the protected tests that focus the password field by clicking it (2026-10-22); reverted.
     - test_name: test_tree_text_protected_document_accessible
       file: tests/live/ttree_<os>.nim
       description: (GS2.1 obligation) C2, C3, C4, C5: a label's and a text area's text come from AT-SPI Text / the AX static-text value / UIA TextPattern, distinct from name and value; the fixture's password field (AXSecureTextField, ROLE_PASSWORD_TEXT, UIA IsPassword) carries protected with value and text null after typing into it; macOS windows report the fixture's open document (AXDocument), null elsewhere; apps reports accessible true for the fixture, false for an application without an accessibility tree, null without the permission.
-      status: pending
+      status: pending (macOS, Windows); Linux: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) in tests/live/ttree_linux.nim: [sway, gtk3], [sway, gtk4], [sway, qt6], [x11, gtk3], [x11, gtk4], [x11, qt6] 6/6, in just test-live-linux on three consecutive runs
+      as_built_linux: C2: a GTK label's text is its Text interface's ("Display name"); Qt's labels implement no Text interface, so theirs is null (not the name); the text view's text and value are its content, distinct from its name. C3: the password field is focused by a real click at the centre of its bounds and an invented passphrase typed with real key events (wtype on sway, XTest on Xvfb); then tree, find --state protected, element, wait --element --state protected and the re-read of element-action set-value --value-stdin (a second invented passphrase) all report role text-field, nativeRole password text, state protected, value and text null; the keys did reach the field: the fixture's status label counts 17 and then 14 characters; neither passphrase appears in any stdout or stderr of the run. C4: windows reports document null. C5: apps lists the form accessible true with its AT-SPI name, a client without an accessibility bridge (wm_probe / x11_probe window) false, and every application null with the session bus unset.
+      falsifying_mutation_linux: dropping the protected state (and reading the password's text) turned all six red; window-relative extents turned the five that click the field red (2026-10-22); reverted.
     - test_name: test_tree_matching_rules_and_set_value_empty
       file: tests/live/ttree_<os>.nim
       description: (GS2.1 obligation) C13 and C16: find --name is case-sensitive, --ignore-case folds case, two fixture instances make --app ambiguous (exit 2 with details.pids); element-action set-value --value "" clears the fixture's field (read back through the tree).
-      status: pending
+      status: pending (macOS, Windows); Linux: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) in tests/live/ttree_linux.nim: [sway, gtk3 and gtk4], [sway, qt6] 2/2, in just test-live-linux on three consecutive runs
+      as_built_linux: two instances of one application name (a GTK 3 and a GTK 4 form; two Qt forms): tree, find and wait --element --app are exit 2 conflicting-arguments with details.pids the sorted pids (three with a third instance), a name of its own is not ambiguous, an absent name exit 3 app; --name submit finds nothing, --name Submit and --ignore-case SUBMIT find both instances' buttons, --name-contains DELIVERY only with --ignore-case; --ignore-case without a name exit 2; set-value Robin Vale and --value-stdin Ash Corlett read back through element, set-value --value "" reads back value and text "" through tree, the other instance untouched; a path that does not resolve exit 3 element, an action the element lacks exit 5 tree-failed.
+      falsifying_mutation_linux: names compared case-folded by default (core/tree_types.matches), and set-value of "" skipped in the backend, each turned both red (2026-10-22); reverted.
     - test_name: test_tree_backends_name_features_on_exit_4_6
       file: tests/live/ttree_<os>.nim
       description: (GS2.1 obligation) C7: tree-read and element-actions are reported with probed states, and a missing Accessibility grant / disabled AT-SPI names its feature in details.feature.
-      status: pending
+      status: pending (macOS, Windows); Linux: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) in tests/live/ttree_linux.nim: [sway], [x11] 2/2, in just test-live-linux on three consecutive runs
+      as_built_linux: capabilities selects linux-atspi and linux-host; tree-read and element-actions are reported by linux-atspi, available without --probe and supported with it, permissions.accessibility granted. On a bare private session bus (no AT-SPI bus): tree, find, element, wait --element are exit 6 permission-denied atspi-disabled with details.feature tree-read, element-action with element-actions, backend linux-atspi, a remedy naming at-spi-bus-launcher; capabilities --probe reports both unavailable atspi-disabled, accessibility denied; and the reads started no AT-SPI bus there. With no session bus at all: exit 6 likewise, tree-read unavailable, accessibility unknown.
+      falsifying_mutation_linux: asking org.a11y.Bus without the no-auto-start flag (so a read activates an AT-SPI bus) turned both red (2026-10-22); reverted.
+    - test_name: test_atspi_role_and_state_tables_match_at_spi2_core
+      file: tests/live/ttree_linux.nim
+      description: linux-atspi's numeric role and state tables are the AtspiRole and AtspiStateType enumerations of the pinned at-spi2-core's atspi-constants.h, in order.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux)
+    - test_name: test_element_action_press_changes_status [sway, gtk3, gtk4 and qt6]
+      file: tests/live/ttree_linux.nim
+      description: The Linux counterpart of test_macos_element_action_press_changes_status: element-action press on Submit makes the status label appear in a re-read tree, in each toolkit.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux on three consecutive runs
+      as_built_linux: no status label before; press answers action press and the element at its path; wait --element finds the status label; the re-read tree holds it.
+    - test_name: test_tree_content_never_on_stderr_or_serve_events [sway]
+      file: tests/live/ttree_linux.nim
+      description: C15 for the tree verbs: names, text and typed passphrases appear only in data: never on a CLI's or the serve daemon's stderr, in a serve event or in a state record.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux on three consecutive runs
+      as_built_linux: every run of the suite has an empty stderr; over serve --stdio a wait --element and a tree of the form: the results hold the text view's content (positive control), the wait's poll events hold none of it nor any name or passphrase, the daemon's stderr is empty; no state file holds a name, text or passphrase.
+      falsifying_mutation_linux: writing each node's text to stderr in the backend turned 27 of the suite's 33 tests red (2026-10-22); reverted.
+    - test_name: test_linux_host_launches_lists_and_quits_apps [sway, x11]
+      file: tests/live/ttree_linux.nim
+      description: linux-host: app-launch starts the form and returns its pid and on-screen window, apps lists it, app-quit ends it; --bundle-id is exit 4 unsupported-option (feature app-management), an unknown program exit 3 file, a windowless program with --wait-window-ms exit 7 condition-not-met with details.app and still quittable; session-list is the host session of linux-host with the selected backends.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 2/2, in just test-live-linux on three consecutive runs
+    - test_name: test_live_suite_leaves_no_process_running
+      file: tests/live/ttree_linux.nim
+      description: The tree suite's last test: once every server, AT-SPI bus and fixture was stopped, nothing the run started is still running (linux_live.ownProcesses), so no AT-SPI bus, registry, fixture or bus-activated portal leaks.
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux on three consecutive runs
+    - test_name: tests/tlinux_tree.nim (18 tests)
+      file: tests/tlinux_tree.nim
+      description: In the default suite (just test): the D-Bus wire format (every type round-tripped, a big-endian reply, a table of 34 malformed messages each refused with DbusError (invalid UTF-8, NULs, bad object paths and signatures, nesting, array and string lengths, padding, header field types, fd passing, serial 0), the per-message value budget, every truncation and 20000 seeded random mutations of a message decoding or raising DbusError only, invalid strings never sent, addresses with escapes), a flood from another client of the bus dropped undecoded, the client against a real dbus-daemon on a private path and abstract socket (auth, Hello, 50 pipelined calls, error replies, no-auto-start, a call nobody answers timing out and a checkpoint aborting it), the role / state mapping and frame placement in the measured GTK 3 / GTK 4 shapes, and linux-atspi / linux-host without an AT-SPI bus (exit 6 atspi-disabled, never an empty tree).
+      status: passing 2026-10-22 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 12/12; 18/18 after review (2026-10-22)
+    - test_name: guiassert-packaged-linux-tree
+      file: flake.nix (checks)
+      description: The packaged guiassert, from an empty environment, reads a GTK 3 form's tree on a private Xvfb with its own session and AT-SPI buses, drives and probes it (see Deliverables).
+      status: passing 2026-10-22 in nix flake check on Linux x86_64
+
+*** Deviations
+    - Linux (companion/linux, 2026-10-22). =focus= is not offered on GTK 4
+      elements: GTK 4.20 answers Component.GrabFocus with NotSupported
+      (measured), and the backend tells GTK 4 by its Application
+      ToolkitName / Version. =scroll-to-visible= is offered by no Linux
+      element: GTK 3 and GTK 4 refuse Component.ScrollTo (measured), and
+      offering it would promise an action no measured toolkit performs.
+    - Linux: =wait --element --pid N= (and =--app=) for an application not
+      yet on the AT-SPI bus is exit 3 / =app= at once, as with the fixture
+      backend, not a wait for it to register; a caller that waits for a
+      starting application waits without a target, or polls =find --pid=.
+    - Linux: Qt 6 Widgets labels implement no AT-SPI Text interface, so a
+      Qt label's =text= is null (its words are its =name=); GTK labels have
+      both. Qt registers on the AT-SPI bus only while
+      =org.a11y.Status.IsEnabled= is true (the test session sets it, as an
+      assistive technology does); a GuiAssert session backend that starts
+      an AT-SPI bus for Qt clients sets it too (GS10).
+    - Linux: =linux-host= is implemented ahead of GS10 for what GS7 needs of
+      the caller's own session (see Deliverables); GS10 keeps its attach
+      checks (=test_linux_host_attach_reports_existing_session=) and the
+      private session backends.
+    - Linux, request to the spec owner (=substrate/macos=), 2026-10-22: the
+      §4.2 =tree= row of the Linux backend table could state how
+      =linux-atspi= finds its bus and its geometry, which this share settled
+      by measurement and which the contract leaves implicit: the bus is the
+      one the invocation's environment names (=AT_SPI_BUS_ADDRESS=, else the
+      session bus's =org.a11y.Bus=, asked without starting it), none being
+      exit 6 / =atspi-disabled=; extents are read in window coordinates and
+      placed through the window the session's capture backend reports (GTK 4,
+      and GTK 3 on Wayland, give no screen coordinates), else =bounds: null=.
+      Both follow from §5 and §7.3 as written, so no contract change is
+      needed. (The implementing agent first wrote this into the spec; review
+      reverted it, since the spec belongs to =substrate/macos=.)
+    - Linux, review 2026-10-22: =dbus_wire= treats every message as hostile
+      (any application on the bus can address this client): strings are
+      checked for UTF-8 and NUL, object paths and signatures validated,
+      header fields type-checked, fd passing refused, one message bounded to
+      2^20 decoded values, and a message that is not the answer to a call in
+      flight dropped from its header undecoded; a malformed one closes the
+      connection. Pipelined reads are sent 64 objects at a time. An answer of
+      an unexpected type is =tree-failed=, never an internal error.
+
+*** Key Source Files
+    - src/gui_assert/backends/tree/linux_atspi.nim - the linux-atspi tree backend
+    - src/gui_assert/backends/tree/dbus_wire.nim - the D-Bus wire-protocol client it speaks AT-SPI with
+    - src/gui_assert/backends/session/linux_host.nim - the linux-host session backend (apps, launch, quit)
+    - tests/live/ttree_linux.nim - the Linux live tree suite
+    - tests/live/fixtures/atspi_form.c, tests/live/fixtures/atspi_form_qt.cpp - the invented GTK 3 / GTK 4 and Qt 6 forms
+    - tests/live/x11_input.c - the suite's XTest hands on Xvfb (place, click, type)
+    - tests/tlinux_tree.nim - the backend's and the D-Bus client's unit tests
+
+*** Outstanding Tasks
+    - [ ] GS7 macOS (=macos_ax.nim=) and Windows (=windows_uia.nim=) shares.
+    - [X] Independent verification of the Linux share (review agent,
+      2026-10-22, Linux x86_64, inside =nix develop=): =just lint= clean;
+      =just test= 393 ok (387 plus six new D-Bus tests), =just test-core=
+      39, =just test-contract= 114, =just test-desktop-env= 31,
+      =just test-live-tesseract= 2, =just test-live-linux= 57/57 on three
+      consecutive runs (=ttree_linux= 33/33), all 0 failed and 0 skipped;
+      =nix flake check= (x86_64-linux) passes, =guiassert-packaged-linux-tree=
+      included; =nim check --os:macosx= of tlinux_tree and the tree / session
+      modules clean (tlinux_tree's wire-format suite runs on every OS, the
+      rest is Linux-gated). Mutations re-applied and red: extents placed
+      window-relative (14 live tests), the protected state dropped and the
+      password's text read (9), each node's text written to stderr (27);
+      in dbus_wire, the array length check dropped, UTF-8 validation
+      dropped, the nesting bound dropped, the value budget dropped, and
+      unsolicited messages decoded (each turned a tlinux_tree test red); all
+      reverted. Review fixes: dbus_wire's untrusted-input hardening
+      (Deviations); answers of an unexpected type are =tree-failed= rather
+      than an internal defect; =ChildCount= and numeric values range-checked
+      before conversion; =focus= performs GrabFocus only where it was
+      offered; reads pipelined 64 objects at a time; =app-quit= identifies
+      the process by pid and start time; the abstract-socket daemon test
+      stops its daemon when it fails. The §4.2 note the implementer wrote
+      into the spec was reverted and recorded as a request (Deviations).
+      51 sway / dbus-daemon processes left by the implementation's ad-hoc
+      experiments (=/tmp/gaexp-*=, not the suites) were stopped; after the
+      runs nothing with its working directory in the worktree remained.
 
 ** GS8: Input backends
    :PROPERTIES:
@@ -2377,7 +2548,8 @@
 
 ** GS10: Linux off-screen sessions (companion)
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
+   :progress_note: linux-host partly delivered with GS7 (companion/linux, 2026-10-22; reviewed the same day): apps, app-launch, app-quit, session-list / session-info of host and permissions, in backends/session/linux_host.nim, exercised by tests/live/ttree_linux.nim (test_linux_host_launches_lists_and_quits_apps). No GS10 deliverable is complete: the attach checks, session-start (exit 4 / not-implemented until then), linux-sway, linux-gnome, linux-xvfb and VNC remain.
    :depends_on: GS2
    :owner: companion/linux
    :platform_prereqs: GS5=linux GS7=linux GS8=linux
@@ -2388,6 +2560,12 @@
 *** Deliverables
     - [ ] =backends/session/linux_sway.nim= and =linux_gnome.nim= wrapping the
       existing =desktop_env= targets; =linux_xvfb.nim=; =linux-host= attach.
+      (GS7, 2026-10-22: =backends/session/linux_host.nim= exists with apps,
+      app-launch, app-quit, session-list / session-info of =host= and
+      permissions; its attach checks and =session-start= remain here. A
+      session that starts an AT-SPI bus for its clients should also set
+      =org.a11y.Status.IsEnabled=, which Qt waits for; tests/live/linux_live
+      =startAtspiBus= shows the sequence.)
     - [ ] Optional loopback VNC endpoint (=wayvnc= / =x11vnc=) reported in
       =Session.vnc=.
 
