@@ -2,10 +2,10 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged. GS5 Linux is claimable by the companion campaign.
-  :last_updated: 2026-10-21
+  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; an intermittent wf-recorder stall on headless sway, about one recording in forty, is an Outstanding Task for companion/linux); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :last_updated: 2026-10-22
   :current_milestone: GS6
-  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
+  :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
   :END:
 
 * Introduction
@@ -59,7 +59,7 @@
   | GS2.1     | substrate/macos | partially_completed            | completed | completed | planned |
   | GS3       | companion/linux | completed                      | —       | —       | —       |
   | GS4       | substrate/macos | partially_completed            | completed | completed | planned |
-  | GS5       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
+  | GS5       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
   | GS6       | split           | in_progress (macOS blocked)    | in_progress | planned | planned |
   | GS7       | split           | planned                        | planned | planned | planned |
   | GS8       | split           | planned                        | planned | planned | planned |
@@ -1450,7 +1450,8 @@
    :status: in_progress
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=in_progress linux=planned windows=planned
+   :platform_status: macos=in_progress linux=completed windows=planned
+   :linux_status_note: companion/linux, 2026-10-21: linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire implemented; every Linux verification entry passed on Linux x86_64 (just test-live-linux 14/14). Independently verified 2026-10-22 (review agent, Linux x86_64): just test 374, test-core 39, test-contract 114, test-desktop-env 31, test-live-linux 14/14 on four of five runs (the fourth: one linux-wlr recording that wf-recorder delivered as two frames, an intermittent recorder stall, see Outstanding Tasks), 0 skipped; review fixes and the flake package now carries the Linux helpers and tools (see Deviations)
    :requires: desktop.automation
    :complexity: large
    :END:
@@ -1468,9 +1469,15 @@
       - [X] Missing Screen Recording grant is exit 6 / =tcc-screen-recording=
         with the bundle identity and click-path in =remedy=.
     - Linux (claimable by =companion/linux=)
-      - [ ] =linux_wlr.nim= (grim / wf-recorder; window capture reported as
+      - [X] =linux_wlr.nim= (grim / wf-recorder; window capture reported as
         =window-crop=; =--own-pixels= refused), =linux_gnome.nim=,
-        =linux_x11.nim=, =linux_portal_pipewire.nim=.
+        =linux_x11.nim=, =linux_portal_pipewire.nim=. (Implemented
+        2026-10-21 by =companion/linux=, with the shared
+        =backends/capture/linux_common.nim=, the helpers
+        =helpers/linux/x11_probe.c= and =helpers/linux/portal_screencast.c=,
+        =wm_probe= options =rgb= / =title= / =pulse=, the session-following
+        capture default in =cli/registry.defaultFor=, and
+        =just test-live-linux=.)
     - Windows (=later/windows=)
       - [ ] =windows_dxgi.nim=, =windows_wgc.nim=, =windows_gdi.nim=.
 
@@ -1499,19 +1506,41 @@
     - test_name: test_linux_wlr_screenshot_matches_wm_probe_window
       file: tests/live/tcapture_linux.nim
       description: In a private sway, a screenshot shows wm_probe's grey window at the compositor-reported rect; window capture reports window-crop.
-      status: pending
+      status: passed
+      as_built: passed 2026-10-21 (Linux x86_64, sway 1.11 headless, pixman) via just test-live-linux: the capture default is linux-wlr from the session's variables; displays lists HEADLESS-1 (virtual, [0,0,800,600]); windows reports wm_probe's window (pid, app id, planted title, document null) with bounds equal to sway's own get_tree rect; the display PNG has the window's colour inside that rect and none outside; --window gives source.kind window-crop at the rect's origin and size; negative control: after sway moves the window the crop follows the new rect and the old place shows the background.
+      falsifying_mutation_linux: window-crop origin reported as the display origin (0,0) => red (crop origin, and the moved-window control).
+      negative_control: the moved window: the old place shows the background, the crop follows the compositor.
     - test_name: test_linux_gnome_screenshot_in_private_gnome_shell
       file: tests/live/tcapture_linux.nim
       description: In a private headless GNOME Shell, a display screenshot shows wm_probe's window at the Shell-reported rect.
-      status: pending
+      status: passed
+      as_built: passed 2026-10-21 (Linux x86_64, GNOME Shell 49.4 --headless --unsafe-mode, private bus): the capture default is linux-gnome (XDG_CURRENT_DESKTOP GNOME with WAYLAND_DISPLAY); displays [0,0,1024,768] primary; windows reports the window with bounds equal to the Shell's MetaWindow frame rect (desktop_env/gnome readback); the display PNG shows the colour exactly there; --window is a window-crop at the rect; negative control: moved by the Shell, the crop follows.
+      falsifying_mutation_linux: window-crop origin reported as the display origin (0,0) => red (crop origin checks).
     - test_name: test_linux_x11_screenshot_in_xvfb
       file: tests/live/tcapture_linux.nim
       description: Xvfb display capture returns the expected size and the fixture window's pixels.
-      status: pending
+      status: passed
+      as_built: passed 2026-10-21 (Linux x86_64, Xvfb from xorg-server 21.1.21, no window manager): default linux-x11 (DISPLAY without WAYLAND_DISPLAY); one display [0,0,640,480]; x11_probe's 200x120+100+80 window listed with its X id, pid, class and planted title; the 640x480 display PNG has the colour in the window's rect and black elsewhere; window-crop and a region straddling the window's edge measure right; an off-screen region is exit 2 with no file; negative control: once the window is gone it is neither listed nor drawn.
+      falsifying_mutation_linux: image origin off by one pixel => red (display, window-crop and region origin checks).
     - test_name: test_linux_portal_pipewire_record_decodes
       file: tests/live/tcapture_linux.nim
       description: A portal ScreenCast recording decodes to the reported frame count.
-      status: pending
+      status: passed
+      as_built: passed 2026-10-21 (Linux x86_64, xdg-desktop-portal 1.20.4 + xdg-desktop-portal-wlr 0.8.0, PipeWire 1.4.9 + WirePlumber 0.5.12, all private, on a private headless sway; chooser_type=none): record --duration-ms 2000 reports frames, width, height and durationMs equal to ffprobe's decoded count of the file (800x600, >=10 frames); a still through the same portal has origin [0,0], scale 1 and the window's colour at the compositor rect. 40/40 back-to-back sessions of the helper succeeded on a stress run.
+      falsifying_mutation_linux: the helper SIGKILLs the encoder instead of closing its input at stop (file never finalized) => red (exit 5 instead of 0).
+    - test_name: just test-live-linux
+      description: The Linux live capture suite (tests/live/tcapture_linux.nim) inside nix develop; it starts its own Xvfb, headless sway with the portal stack, and headless GNOME Shell, never the operator's display; a server that cannot start fails its tests with GS5-LINUX BLOCKED.
+      status: passed
+      as_built: recipe added; 14 of 14 tests green on Linux x86_64 (2026-10-21), on three consecutive full runs after the last change. Review re-runs (2026-10-22): 14/14 on four of five runs; one run 13/14 from an intermittent wf-recorder stall (GS5 Outstanding Tasks).
+    - test_name: tests/tlinux_capture.nim
+      description: Default-suite unit tests of the Linux backends' pure parts (sway, x11_probe and GNOME Shell answers; filters; regions; PPM; status files; the session-following default; finalizing ffmpeg-encoded MP4s) and, on Linux, the process machinery (tools run with the invocation's environment only, deadlines, detached recorders named by pid and start time); off Linux every backend is wrong-platform.
+      status: passed
+      as_built: added to just test (26 tests green, Linux x86_64, 2026-10-21; 27 with the review's feature-reason test, 2026-10-22).
+    - test_name: test_mp4_probe_counts_only_frames_within_the_track_duration
+      file: tests/tcore_mp4.nim
+      description: core/mp4 counts the samples that start within the track duration (stts), so a trailing zero-duration sample is not a frame; a track without stts counts every stsz sample.
+      status: passed
+      as_built: added 2026-10-21 (Linux x86_64); the existing ffprobe-agreement tests are unchanged and green.
     - test_name: test_windows_dxgi_screenshot_shows_win32_fixture
       file: tests/live/tcapture_windows.nim
       description: Desktop Duplication captures the Win32 fixture's known colour at its reported bounds.
@@ -1533,17 +1562,22 @@
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C12, per platform recorder (SCStream; wf-recorder, portal/PipeWire, ffmpeg x11grab; the Windows recorder): record and record-stop report frames, duration and size equal to ffprobe's count of the file; a recorder killed before finalizing yields exit 5 / capture-failed with details.recording state failed, never stopped.
       status: failing (BLOCKED: locked GUI session)
-      as_built: macOS (SCStream) implemented in tests/live/tcapture_macos.nim; BLOCKED on the locked session. The finalization logic itself is green in tests/tmacos_capture.nim on ffmpeg-encoded files (measured and renamed; moov removed => failed and removed). Linux and Windows recorders: pending (companion / later).
+      as_built: macOS (SCStream) implemented in tests/live/tcapture_macos.nim; BLOCKED on the locked session. The finalization logic itself is green in tests/tmacos_capture.nim on ffmpeg-encoded files (measured and renamed; moov removed => failed and removed). Linux (2026-10-21, x86_64, just test-live-linux): passed for all three Linux recorders (wf-recorder on a private sway, the x11_probe XGetImage grabber into ffmpeg on a private Xvfb, the portal/PipeWire helper into ffmpeg): record-stop and the blocking record report frames, width, height and durationMs equal to ffprobe's decoded count (duration within 1 ms); nothing at --out until finalized, no .partial sibling left; a recorder SIGKILLed before finalizing gives exit 5 / capture-failed with details.recording state failed and frames null, no file, and recordings lists it failed. The finalization logic is also unit-tested in tests/tlinux_capture.nim. Windows recorder: pending (later).
+      linux_status: passed (2026-10-21, Linux x86_64)
+      falsifying_mutation_linux: wf-recorder writing straight to --out (no temp-and-rename) => red; core/mp4 counting every stsz sample instead of those within the track duration (wf-recorder ends a -r track with a zero-duration sample) => red; a file without moov finalized as stopped => red (exit 0 instead of 5, wlr); the portal helper killing its encoder at stop => red.
     - test_name: test_capture_backends_report_their_features_and_name_them_on_exit_4_6
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C7: capabilities with each capture backend selected lists the capture features of spec §7.5 with probed states (window-crop and titles-redacted degradations where they apply); an unsupported capture (--own-pixels on linux-wlr) and a missing grant name their feature in details.feature.
       status: failing (BLOCKED: locked GUI session)
-      as_built: macOS: the unprobed (available), macos-cgwindow (not-implemented, exit 4 with details.feature display-capture / recording / own-pixels-capture) and exit-6 parts pass; the probed all-supported part is BLOCKED on the locked session. Linux/Windows: pending.
+      as_built: macOS: the unprobed (available), macos-cgwindow (not-implemented, exit 4 with details.feature display-capture / recording / own-pixels-capture) and exit-6 parts pass; the probed all-supported part is BLOCKED on the locked session. Linux (2026-10-21): passed: capabilities --probe with each Linux backend in its own session lists the six capture features exactly once with probed states: linux-wlr, linux-x11, linux-gnome window-enumeration/display-capture/region-capture supported, window-capture degraded / window-crop, own-pixels-capture unavailable / unsupported-option; recording available (wlr, x11), unavailable / not-implemented (gnome); linux-portal-pipewire display-capture supported, recording available, window-enumeration / window-capture / own-pixels-capture unavailable / display-server-unsupported, region-capture not-implemented. --own-pixels on linux-wlr, linux-x11 and linux-gnome, record-start on linux-gnome, windows, --region and --display on the portal, and windows without an X display are exit 4 naming details.feature (and the backend). Linux has no capture permission: permissions.screenRecording is not-applicable and no Linux capture path is exit 6. Windows: pending.
+      linux_status: passed (2026-10-21, Linux x86_64)
     - test_name: test_capture_backends_keep_captured_content_off_stderr
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C15: a recorder's or helper's own stderr is not passed through when it could carry window titles or captured text; GuiAssert's stderr during a capture holds no captured content. C4: windows reports document null on the backends that have no equivalent (macOS document comes from AX, GS7).
       status: failing (BLOCKED: locked GUI session)
-      as_built: macOS implemented (planted window title absent from stderr, error messages and state files; document null on every window, C4); BLOCKED on the locked session. Linux/Windows: pending.
+      as_built: macOS implemented (planted window title absent from stderr, error messages and state files; document null on every window, C4); BLOCKED on the locked session. Linux (2026-10-21): passed for all four backends: a planted window title (wm_probe title=, x11_probe --title) appears in windows data and in no stderr of any invocation (screenshots, recordings, record-stop of a killed recorder, a missing-window error), in no error message and in no file under the state directory; recorder and tool output stays in private files that are removed; document is null on every window (C4). Windows: pending.
+      linux_status: passed (2026-10-21, Linux x86_64)
+      falsifying_mutation_linux: linux-x11 printing window titles to stderr while listing => red.
 
 *** Deviations
     - =capabilities.permissions.screenRecording= on macOS comes from the
@@ -1593,6 +1627,82 @@
       implemented default answering itself (and requires it on macOS).
     - Contract =guiassert-desktop/1.0= is unchanged: no verb, key, reason or
       feature was added.
+    - Linux (=companion/linux=, 2026-10-21). Contract 1.0 unchanged here too.
+      - *Default follows the session* for the host session (spec §4.2):
+        =cli/registry.defaultFor= picks =linux-wlr= with =SWAYSOCK=,
+        =linux-gnome= with =WAYLAND_DISPLAY= and an =XDG_CURRENT_DESKTOP=
+        naming GNOME, =linux-x11= with =DISPLAY= and no =WAYLAND_DISPLAY=,
+        else =linux-wlr=, from the invocation's environment. Sessions of
+        the GS10 session backends will record their own backends (rule 5).
+        =tests/contract/tcli_state.nim= now clears those variables for its
+        platform-default check, checks the four cases, and uses
+        =harness.foreignCaptureBackend= for its no-fallback check (every
+        Linux capture backend is implemented, so =linux-x11= no longer
+        answers =not-implemented=).
+      - Every Linux backend runs its tools with the invocation's environment
+        (=RunContext.env=) and finds them on its =PATH=; nothing reads the
+        process environment.
+      - =linux-wlr= reads displays and windows through sway's IPC, so it needs
+        =SWAYSOCK=; another wlroots compositor is exit 4 /
+        =display-server-unsupported= naming that. Window order is: focused,
+        then floating (top-most first), then tiled (sway states no z-order).
+        Its wf-recorder runs =-r <fps> -D -p bf=0=.
+      - =linux-gnome= needs a shell that answers =Eval= and the screenshot API
+        (unsafe mode: GuiAssert's private headless shell); a normal session's
+        shell is exit 4 / =display-server-unsupported= with that remedy. Its
+        window capture is a crop (=window-crop=, =--own-pixels= refused):
+        =ScreenshotWindow= captures only the focused window. It does not
+        record (exit 4 / =not-implemented=, remedy linux-portal-pipewire).
+      - =linux-x11= stills are XGetImage (spec), through the =x11_probe=
+        helper; its recordings are that helper's XGetImage frames piped into
+        ffmpeg, not ffmpeg's =x11grab= (the pinned ffmpeg is built without
+        it). Window capture is a crop (no compositing manager keeps covered
+        pixels), =--own-pixels= refused. A window whose owner neither sets
+        =_NET_WM_PID= nor is attributable through X-Resource reports pid 0;
+        =appId= is null (=app= is the WM_CLASS class).
+      - =linux-portal-pipewire= streams one monitor the portal chooses (an
+        explicit =--display= is exit 4 / =unsupported-option=), enumerates
+        nothing (=window-enumeration=, =window-capture=,
+        =own-pixels-capture= exit 4 / =display-server-unsupported=) and has
+        no region capture (=not-implemented=). Stills are one frame of the
+        ScreenCast stream, not the Screenshot portal, so the origin comes
+        from the stream's =position=. A refusal through the portal is exit 5
+        / =capture-failed= (no closed exit-6 reason fits a per-session
+        consent). The helper consumes the stream with libpipewire itself: a
+        GStreamer =pipewiresrc= consumer left xdg-desktop-portal-wlr 0.8
+        believing every buffer was in flight after its start-up pause, and
+        the stream stalled in about a third of sessions (measured; 0 of 40
+        with the helper's own consumer).
+      - No capture permission exists on Linux: =permissions.screenRecording=
+        is =not-applicable= with =linux-wlr=, =linux-x11= and =linux-gnome=;
+        no Linux capture path is exit 6.
+      - Area screenshots (GNOME) and XGetImage never include the cursor;
+        =grim -c= does when =--no-cursor= is absent.
+      - All Linux H.264 encodes use no B-frames, so a track's duration and
+        its edit list agree. =core/mp4= now counts the samples that start
+        within the track duration (=stts=): wf-recorder ends a constant-rate
+        track with a zero-duration sample that no player presents and
+        ffprobe does not count. Unchanged for files without such a sample
+        (the macOS recordings and every earlier test file).
+      - Recorders are started detached (double fork, own session, every
+        inherited descriptor closed) and named by pid plus kernel start time,
+        so record-stop never signals a recycled pid.
+      - In a checkout the Linux helpers are built from =helpers/linux= on
+        first use (as the desktop_env targets' are). The flake's packaged
+        =guiassert= (the one Agent Harbor consumes) builds them in its
+        derivation into =libexec/guiassert= and its wrapper sets
+        =GUI_ASSERT_HELPER_DIR= there (=--set-default=) and puts the pinned
+        grim, wf-recorder, swaymsg, gdbus and ffmpeg first on its =PATH=, so
+        it captures with no dev shell. The flake check
+        =guiassert-packaged-linux-capture= runs the package from an empty
+        environment against a private Xvfb (linux-x11 probed supported, a
+        screenshot, a finalized recording).
+      - A probe that fails with exit 5 (a portal refusal, an unreadable
+        answer) reports its feature =unavailable= with reason
+        =display-server-unsupported= (=linux_common.unavailableReason=):
+        a feature's reason must be a backend-unavailable or
+        permission-denied reason (§7.5), and =capture-failed= would make
+        =capabilities --probe= exit 8 (review fix, 2026-10-22).
 
 *** Outstanding Tasks
     - [ ] GS5 BLOCKED: the macOS GUI session was locked for the whole run
@@ -1611,8 +1721,63 @@
       2026-10-20; the review hardened the recorder against finalizing a
       writer that is not writing and required a real window id in the
       exit-6 window-capture check.
-    - [ ] Linux (=companion/linux=) and Windows (=later/windows=) capture
-      backends and their live tests.
+    - [X] Linux (=companion/linux=) capture backends and their live tests
+      (2026-10-21; see Verification).
+    - [ ] Windows (=later/windows=) capture backends and their live tests.
+    - [X] Independent verification of the Linux share (review agent): re-run
+      =just test-live-linux=, =just test=, =just test-core=,
+      =just test-contract= on the Linux host. (2026-10-22, Linux x86_64,
+      inside =nix develop=: =just test= 374 ok (the default suites and both
+      contract runs), =just test-core= 39, =just test-contract= 114,
+      =just test-desktop-env= 31, all 0 failed and 0 skipped;
+      =just test-live-linux= 14/14 on four of five runs, 0 skipped; the
+      other run was 13/14: one blocking linux-wlr =record= got a file
+      whose track has zero duration from wf-recorder and answered exit 5 /
+      =capture-failed= (truthfully; see the wf-recorder task below).
+      Mutations re-applied and red:
+      core/mp4 counting every =stsz= sample (tcore_mp4's new test and the
+      linux-wlr recorder test), the portal helper SIGKILLing its encoder at
+      stop (both portal recording tests, exit 5), linux-wlr window-crop
+      origin at (0,0) (the wlr screenshot test); the linux-x11 and GNOME
+      tests stayed green as controls. Review fixes: the feature-reason rule
+      (Deviations), a bounds check of the PipeWire buffer's offset and
+      stride in =portal_screencast=, a zero-width colour mask in
+      =x11_probe=, descriptor and mapping error paths in =runTool=,
+      =portal_screencast= and =wm_probe=, a linux-x11 no-fallback check in
+      =tcli_state= with the display variables cleared, and the headless
+      sway target's =stop= now ends the compositor itself, which the sway
+      wrapper runs under =dbus-run-session= when no bus is set: before, every
+      sway target of =just test=, =just test-desktop-env= and
+      =just test-live-linux= stayed running after its test.)
+    - [X] Package the Linux helpers (=x11_probe=, =portal_screencast=) and
+      the tools the Linux capture backends run (grim, wf-recorder, swaymsg,
+      gdbus, ffmpeg) with the flake's =guiassert= (wrapper =PATH= and
+      =GUI_ASSERT_HELPER_DIR=), so the packaged binary captures outside
+      =nix develop=. (Review, 2026-10-22: =nix build .#guiassert=; the new
+      flake check =guiassert-packaged-linux-capture= passes; by hand,
+      =result/bin/guiassert= from =env -i= with only a private headless
+      sway's variables (no =PATH=) probed every linux-wlr feature, listed
+      HEADLESS-1 and a wm_probe window, took display and window-crop
+      screenshots with the window's colour, and recorded a 14-frame MP4.)
+    - [ ] =companion/linux=: wf-recorder (0.6.0, =-r <fps> -D=) on a headless
+      sway 1.11 output intermittently stalls: the file holds the first frame
+      and the one flushed at SIGINT, nothing between. Measured by the review
+      (2026-10-22) with a pulsing wm_probe window: 1 of 40, 0 of 40 and 1 of
+      20 recordings of 1.5 s (wf-recorder alone, and through =guiassert=);
+      it failed one full =just test-live-linux= run of five. GuiAssert
+      reports such a recording truthfully (=frames= 1, or exit 5 when the
+      track has zero duration), so C12 holds, but the live suite's
+      =frames >= 5= check and the blocking-record check go red when it
+      happens. Plan: capture wf-recorder's timestamps on a stalled run
+      (the fps filter received no frame with a later pts), decide between
+      a wf-recorder/wlroots fix upstream and recording the screencopy
+      frames with a GuiAssert helper as linux-x11 and the portal already do,
+      then require the live suite clean on ten consecutive runs.
+    - [ ] Proposal (not contract surface yet): a VNC framebuffer capture
+      backend (for example =linux-vnc=) that captures a session through its
+      loopback VNC endpoint (=wayvnc= / =x11vnc=, spec §6.3 =--vnc=). It
+      would be a new backend name, a 1.x minor change (§7.7); decide it with
+      GS10, which brings the VNC endpoints.
 
 ** GS6: OCR backends
    :PROPERTIES:
