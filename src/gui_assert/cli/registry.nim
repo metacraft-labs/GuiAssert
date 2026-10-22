@@ -11,8 +11,9 @@
 ## `guiassertNoFixture`) omits one backend.
 ##
 ## **Implemented.** The platform backends of spec §4 are filled in by later
-## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`,
-## GS6 the OCR engines `apple-vision` and `tesseract`.
+## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`
+## and the Linux capture backends `linux-wlr`, `linux-gnome`, `linux-x11` and
+## `linux-portal-pipewire`, GS6 the OCR engines `apple-vision` and `tesseract`.
 ## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
@@ -22,7 +23,7 @@
 ## verb tables are the other half, and `tests/contract/tcontract_schema.nim`
 ## checks that the two list the same verbs.
 
-import std/[macros, strutils]
+import std/[macros, strutils, tables]
 
 import ../core/contract
 
@@ -77,10 +78,14 @@ const
                  implemented: true),
     KnownBackend(module: modCapture, name: "macos-cgwindow", platforms: {hpMacos},
                  implemented: true),
-    KnownBackend(module: modCapture, name: "linux-wlr", platforms: {hpLinux}),
-    KnownBackend(module: modCapture, name: "linux-gnome", platforms: {hpLinux}),
-    KnownBackend(module: modCapture, name: "linux-portal-pipewire", platforms: {hpLinux}),
-    KnownBackend(module: modCapture, name: "linux-x11", platforms: {hpLinux}),
+    KnownBackend(module: modCapture, name: "linux-wlr", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modCapture, name: "linux-gnome", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modCapture, name: "linux-portal-pipewire", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modCapture, name: "linux-x11", platforms: {hpLinux},
+                 implemented: true),
     KnownBackend(module: modCapture, name: "windows-dxgi", platforms: {hpWindows}),
     KnownBackend(module: modCapture, name: "windows-wgc", platforms: {hpWindows}),
     KnownBackend(module: modCapture, name: "windows-gdi", platforms: {hpWindows}),
@@ -155,6 +160,12 @@ const
     ## selectable).
 
 const
+  linuxCaptureCompiledIn* = not minimalBuild and defined(linux) and
+    not defined(guiassertNoCapture)
+    ## Whether the Linux capture backends' code is linked into this binary
+    ## (`compiledIn` decides which of them is selectable).
+
+const
   appleVisionCompiledIn* = not minimalBuild and defined(macosx) and
     not defined(guiassertNoOcr) and not defined(guiassertNoAppleVision)
     ## Whether the `apple-vision` OCR engine's code is linked into this binary.
@@ -213,6 +224,32 @@ proc unavailability*(module: Module, name: string):
 proc platformDefault*(module: Module): string =
   ## The default backend of `module` on this platform.
   platformDefaults[currentPlatform][module]
+
+proc linuxHostCaptureDefault*(env: Table[string, string]): string =
+  ## The capture backend of the caller's own Linux session (spec §4.2,
+  ## "Default follows the session"), read from the invocation's
+  ## environment: `linux-wlr` in a sway session (`SWAYSOCK`), `linux-gnome`
+  ## in a GNOME Wayland session (`XDG_CURRENT_DESKTOP` naming GNOME, with
+  ## `WAYLAND_DISPLAY`), `linux-x11` on an X display without Wayland
+  ## (`DISPLAY` without `WAYLAND_DISPLAY`, an Xvfb for example), and the
+  ## platform default `linux-wlr` otherwise (any other wlroots compositor,
+  ## or no display at all, where it answers exit 4 naming what is missing).
+  let get = proc (k: string): string = env.getOrDefault(k, "")
+  if get("SWAYSOCK").len > 0: return "linux-wlr"
+  if get("WAYLAND_DISPLAY").len > 0:
+    for part in get("XDG_CURRENT_DESKTOP").split(':'):
+      if part.toLowerAscii == "gnome": return "linux-gnome"
+    return "linux-wlr"
+  if get("DISPLAY").len > 0: return "linux-x11"
+  "linux-wlr"
+
+proc defaultFor*(module: Module, env: Table[string, string]): string =
+  ## The default backend of `module` for an invocation with environment
+  ## `env` (rule 6 of spec §3.4): the platform default, except that on Linux
+  ## the capture default follows the caller's session
+  ## (`linuxHostCaptureDefault`).
+  if currentPlatform == hpLinux and module == modCapture: linuxHostCaptureDefault(env)
+  else: platformDefault(module)
 
 # ---------------------------------------------------------------------------
 # Verbs and flags

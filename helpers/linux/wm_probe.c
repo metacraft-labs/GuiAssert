@@ -39,7 +39,18 @@
  *
  *   hold=MS        with `map`: keep the window mapped for MS milliseconds
  *                  instead of asking to maximize — a real window for a
- *                  test to find, click and capture. Its buffer is 0x80 grey.
+ *                  test to find, click and capture. Its buffer is 0x80 grey
+ *                  unless `rgb=` says otherwise.
+ *
+ *   rgb=RRGGBB     with `map`: the window's colour (hex), instead of grey.
+ *
+ *   title=TEXT     the toplevel's title (`xdg_toplevel.set_title`).
+ *
+ *   pulse          with `hold`: repaint every 100 ms, alternating between
+ *                  the colour and the colour with its blue channel XOR 1,
+ *                  so the screen keeps changing (a screen cast that sends
+ *                  frames only on damage then has frames to send) while
+ *                  every pixel stays within one step of the colour.
  *
  * The JSON also carries "fixed", and with `map` "maximize_honoured" and
  * "fullscreen_honoured".
@@ -188,8 +199,10 @@ static const struct zxdg_toplevel_decoration_v1_listener decoration_listener = {
 
 int main(int argc, char **argv) {
   const char *requested = "";
-  int fixed = 0, map = 0;
+  int fixed = 0, map = 0, pulse = 0;
   long hold_ms = 0;
+  unsigned long rgb = 0x808080;
+  const char *title = NULL;
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "client") == 0 || strcmp(argv[i], "server") == 0)
       requested = argv[i];
@@ -199,8 +212,15 @@ int main(int argc, char **argv) {
       map = 1;
     else if (strncmp(argv[i], "hold=", 5) == 0)
       hold_ms = atol(argv[i] + 5);
+    else if (strncmp(argv[i], "rgb=", 4) == 0)
+      rgb = strtoul(argv[i] + 4, NULL, 16) & 0xffffff;
+    else if (strncmp(argv[i], "title=", 6) == 0)
+      title = argv[i] + 6;
+    else if (strcmp(argv[i], "pulse") == 0)
+      pulse = 1;
     else {
-      fprintf(stderr, "usage: %s [client|server] [fixed] [map [hold=MS]]\n", argv[0]);
+      fprintf(stderr, "usage: %s [client|server] [fixed] [title=TEXT] "
+                      "[map [rgb=RRGGBB] [hold=MS [pulse]]]\n", argv[0]);
       return 2;
     }
   }
@@ -224,6 +244,8 @@ int main(int argc, char **argv) {
   struct xdg_toplevel *top = xdg_surface_get_toplevel(xs);
   xdg_toplevel_add_listener(top, &toplevel_listener, NULL);
   xdg_toplevel_set_app_id(top, "gui-assert-wm-probe");
+  if (title)
+    xdg_toplevel_set_title(top, title);
   if (fixed) {
     xdg_toplevel_set_min_size(top, 320, 200);
     xdg_toplevel_set_max_size(top, 320, 200);
@@ -257,17 +279,27 @@ int main(int argc, char **argv) {
       fprintf(stderr, "wm_probe: the compositor offers no wl_shm\n");
       return 1;
     }
-    int w = 320, h = 200, stride = w * 4, size = stride * h;
+    /* Two buffers in one pool: the colour, and the pulse colour. */
+    int w = 320, h = 200, stride = w * 4, size = stride * h * 2;
     int fd = memfd_create("wm_probe", MFD_CLOEXEC);
     if (fd < 0 || ftruncate(fd, size) < 0) {
       fprintf(stderr, "wm_probe: cannot allocate a buffer\n");
       return 1;
     }
-    void *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    memset(px, 0x80, size);
+    uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (px == MAP_FAILED) {
+      fprintf(stderr, "wm_probe: cannot map the buffer\n");
+      return 1;
+    }
+    for (int i = 0; i < w * h; i++) {
+      px[i] = 0xff000000u | (uint32_t)rgb;
+      px[w * h + i] = 0xff000000u | ((uint32_t)rgb ^ 1u);
+    }
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
     struct wl_buffer *buf =
         wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_XRGB8888);
+    struct wl_buffer *pulse_buf = wl_shm_pool_create_buffer(
+        pool, stride * h, w, h, stride, WL_SHM_FORMAT_XRGB8888);
     wl_surface_attach(surface, buf, 0, 0);
     wl_surface_commit(surface);
     for (int i = 0; i < 5; i++)
@@ -276,15 +308,27 @@ int main(int argc, char **argv) {
       /* Serve the compositor (pings, configures) until the deadline. */
       struct timespec start, now;
       clock_gettime(CLOCK_MONOTONIC, &start);
+      long next_pulse = 100;
+      int pulsed = 0;
       for (;;) {
         clock_gettime(CLOCK_MONOTONIC, &now);
         long elapsed = (now.tv_sec - start.tv_sec) * 1000 +
                        (now.tv_nsec - start.tv_nsec) / 1000000;
         if (elapsed >= hold_ms)
           break;
+        if (pulse && elapsed >= next_pulse) {
+          pulsed = !pulsed;
+          wl_surface_attach(surface, pulsed ? pulse_buf : buf, 0, 0);
+          wl_surface_damage(surface, 0, 0, w, h);
+          wl_surface_commit(surface);
+          next_pulse = elapsed + 100;
+        }
+        long wait = hold_ms - elapsed;
+        if (pulse && next_pulse - elapsed < wait)
+          wait = next_pulse - elapsed;
         wl_display_flush(display);
         struct pollfd pfd = {wl_display_get_fd(display), POLLIN, 0};
-        if (poll(&pfd, 1, (int)(hold_ms - elapsed)) > 0 &&
+        if (poll(&pfd, 1, (int)wait) > 0 &&
             wl_display_dispatch(display) < 0)
           break;
       }
@@ -302,6 +346,7 @@ int main(int argc, char **argv) {
     fullscreen_honoured = state_fullscreen;
     }
     wl_buffer_destroy(buf);
+    wl_buffer_destroy(pulse_buf);
     wl_shm_pool_destroy(pool);
     munmap(px, size);
     close(fd);

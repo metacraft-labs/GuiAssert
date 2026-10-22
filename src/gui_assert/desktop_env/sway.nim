@@ -17,6 +17,7 @@
 ## Sway IPC: https://man.archlinux.org/man/sway-ipc.7
 
 import std/[json, os, osproc, streams, strtabs, strutils, tables, tempfiles, times]
+from std/posix import nil
 import ../desktop_env, ./helpers, ./session_bus, ./wayland_probe
 
 type
@@ -176,6 +177,25 @@ method start*(t: SwayTarget) =
 
 proc restoreSettings(t: SwayTarget)
 
+proc compositorPid(t: SwayTarget): int =
+  ## The pid of this target's running sway, 0 when there is none. sway names
+  ## its IPC socket `sway-ipc.<uid>.<pid>.sock` (sway/ipc-server.c); the pid
+  ## counts only while that process runs (not a zombie) with this target's
+  ## own config on its command line, so a recycled pid is never signalled.
+  let parts = t.swaySock.extractFilename.split('.')
+  if parts.len != 4 or parts[0] != "sway-ipc" or parts[3] != "sock": return 0
+  let pid = try: parseInt(parts[2]) except ValueError: 0
+  if pid <= 0: return 0
+  try:
+    let stat = readFile("/proc/" & $pid & "/stat")
+    let close = stat.rfind(')')
+    if close < 0 or stat[close + 1 .. ^1].strip.startsWith("Z"): return 0
+    let cmdline = readFile("/proc/" & $pid & "/cmdline")
+    if (t.runtimeDir / "sway.conf") notin cmdline.split('\0'): return 0
+  except IOError, OSError:
+    return 0
+  pid
+
 method stop*(t: SwayTarget) =
   t.stopSpawned()
   t.restoreSettings()
@@ -192,6 +212,17 @@ method stop*(t: SwayTarget) =
     return
   t.bus.stop()
   if t.sway != nil:
+    # The compositor itself first. Without DBUS_SESSION_BUS_ADDRESS the
+    # packaged `sway` wrapper runs it under `dbus-run-session`, which does
+    # not pass SIGTERM on: terminating only the started process left the
+    # compositor running, reparented to init.
+    let compositor = compositorPid(t)
+    if compositor > 0:
+      discard posix.kill(posix.Pid(compositor), posix.SIGTERM)
+      let deadline = epochTime() + 3
+      while compositorPid(t) == compositor and epochTime() < deadline: sleep(20)
+      if compositorPid(t) == compositor:
+        discard posix.kill(posix.Pid(compositor), posix.SIGKILL)
     if t.sway.running:
       t.sway.terminate()
       discard t.sway.waitForExit(3000)

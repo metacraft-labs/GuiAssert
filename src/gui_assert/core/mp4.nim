@@ -11,7 +11,13 @@
 ##   died before finalizing never writes it) and an `mdat` box;
 ## * in `moov`, the first track whose `mdia/hdlr` handler is `vide`: its
 ##   `tkhd` presentation size, its `mdia/mdhd` duration and timescale, and
-##   the sample count of its `mdia/minf/stbl/stsz` (one sample per frame).
+##   its frames: the samples of its `mdia/minf/stbl/stsz` (one sample per
+##   frame) that start within the track's duration by the decoding times of
+##   its `stts`. A recorder may end a constant-rate track with a sample of
+##   zero duration placed at the track's end (wf-recorder does); no player
+##   presents it and ffprobe does not count it, so neither does this. A
+##   track without an `stts` (the box is mandatory, ISO/IEC 14496-12
+##   §8.6.1.2) counts every `stsz` sample.
 ##
 ## A file is **finalized** when all of that is present, the video track's
 ## duration is positive and it has at least one sample. Anything else raises
@@ -99,11 +105,37 @@ proc child(s: string, parent: Box, kind: string): Box =
     if b.kind == kind: return b
   raise mp4Error("box '" & parent.kind & "' has no '" & kind & "' box")
 
-proc sampleCount(s: string, mdia: Box): int =
+proc sampleCount(s: string, mdia: Box, duration: uint64): int =
+  ## The samples that start before `duration` (module doc).
   let stbl = child(s, child(s, mdia, "minf"), "stbl")
   let stsz = child(s, stbl, "stsz")
   # version/flags(4) sample_size(4) sample_count(4)
-  int(field32(s, stsz, 8))
+  let total = int(field32(s, stsz, 8))
+  var stts: Box
+  var found = false
+  for b in boxes(s, stbl.start, stbl.stop):
+    if b.kind == "stts":
+      stts = b
+      found = true
+  if not found: return total
+  # version/flags(4) entry_count(4), then (sample_count(4), sample_delta(4))
+  # per entry; a malformed count runs into the end of the box (Mp4Error).
+  let entries = uint64(field32(s, stts, 4))
+  var t = 0'u64
+  var presented = 0'u64
+  var i = 0'u64
+  while i < entries and t < duration:
+    let count = uint64(field32(s, stts, 8 + 8 * int(i)))
+    let delta = uint64(field32(s, stts, 12 + 8 * int(i)))
+    if delta == 0:
+      presented += count               # every one starts at t < duration
+    else:
+      let fit = (duration - t + delta - 1) div delta
+      presented += min(count, fit)
+      # count * delta < 2^64; stop at the duration rather than overflow t.
+      t = if count * delta >= duration - t: duration else: t + count * delta
+    inc i
+  int(min(uint64(total), presented))
 
 proc videoTrack(s: string, moov: Box): Mp4Info =
   ## The video track's measurements from a `moov` box.
@@ -142,7 +174,7 @@ proc videoTrack(s: string, moov: Box): Mp4Info =
       raise mp4Error("the video track's duration is implausibly long")
     result.durationMs = int(seconds * 1000 +
       ((duration mod timescale) * 1000 + timescale div 2) div timescale)
-    result.frames = sampleCount(s, mdia)
+    result.frames = sampleCount(s, mdia, duration)
     if result.frames < 1:
       raise mp4Error("the video track has no samples (not finalized)")
     if result.width < 1 or result.height < 1:

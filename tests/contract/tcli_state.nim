@@ -96,6 +96,9 @@ suite "CLI state":
     # Platform default (spec §4, the bold entries) when nothing is selected.
     let plain = baseEnv()
     plain["GUIASSERT_STATE_DIR"] = st
+    # On Linux the capture default follows the caller's session (spec §4.2);
+    # without one (no Wayland, X11 or sway variables) it is the bold default.
+    for k in ["WAYLAND_DISPLAY", "DISPLAY", "SWAYSOCK", "XDG_CURRENT_DESKTOP"]: plain.del(k)
     let d = selected(@[], plain)
     when defined(macosx):
       check d["capture"].getStr == "macos-sck" and d["ocr"].getStr == "apple-vision" and
@@ -106,6 +109,23 @@ suite "CLI state":
     else:
       check d["capture"].getStr == "linux-wlr" and d["ocr"].getStr == "tesseract" and
             d["tree"].getStr == "linux-atspi" and d["session"].getStr == "linux-host"
+      # The session-following capture default, from the environment alone:
+      # sway, GNOME on Wayland, X11 without Wayland, and another wlroots
+      # compositor. Each choice is the default (no rule above it applies).
+      proc withVars(vars: openArray[(string, string)]): StringTableRef =
+        result = newStringTable(modeCaseSensitive)
+        for k, v in plain: result[k] = v
+        for (k, v) in vars: result[k] = v
+      check selected(@[], withVars({"WAYLAND_DISPLAY": "wayland-9",
+        "SWAYSOCK": "/nonexistent/sway.sock"}))["capture"].getStr == "linux-wlr"
+      check selected(@[], withVars({"WAYLAND_DISPLAY": "wayland-9",
+        "XDG_CURRENT_DESKTOP": "ubuntu:GNOME"}))["capture"].getStr == "linux-gnome"
+      check selected(@[], withVars({"DISPLAY": ":99"}))["capture"].getStr == "linux-x11"
+      check selected(@[], withVars({"WAYLAND_DISPLAY": "wayland-9", "DISPLAY": ":0",
+        "XDG_CURRENT_DESKTOP": "Hyprland"}))["capture"].getStr == "linux-wlr"
+      # An explicit selection still beats the session-following default.
+      check selected(@["--capture-backend", "linux-x11"], withVars({"WAYLAND_DISPLAY":
+        "wayland-9", "XDG_CURRENT_DESKTOP": "GNOME"}))["capture"].getStr == "linux-x11"
     # GUIASSERT_BACKEND beats the default.
     let envAll = fixtureEnv(st)
     check selected(@[], envAll)["capture"].getStr == "fixture"
@@ -136,19 +156,39 @@ suite "CLI state":
     check s6["ocr"].getStr == d["ocr"].getStr        # sessions name no OCR backend
     check selected(@["--session", "sel"], envAll)["capture"].getStr == "fixture"
     # No fallback: an explicit backend that cannot run here is exit 4, even
-    # with the fixture selected for every other module.
-    let (nx, ne, _) = cli(@["--capture-backend", "linux-x11", "screenshot", "--out",
-                            st / "nofallback.png"], envAll)
+    # with the fixture selected for every other module. (A backend of another
+    # platform: every platform's own capture backends are implemented now.)
+    let (nx, ne, _) = cli(@["--capture-backend", foreignCaptureBackend, "screenshot",
+                            "--out", st / "nofallback.png"], envAll)
     check nx == 4
     check ne.errorKind == "backend-unavailable"
-    check ne["error"]["details"]["backend"].getStr == "linux-x11"
+    check ne["error"]["details"]["backend"].getStr == foreignCaptureBackend
     check ne["error"]["details"]["selectedBy"].getStr == "module-flag"
     check ne.errorReason in ["wrong-platform", "not-implemented", "not-compiled-in"]
     check not fileExists(st / "nofallback.png")
+    when defined(linux):
+      # An implemented backend of this platform that cannot run here (no X
+      # display in this environment) is exit 4 from that backend, never the
+      # fixture (and never the operator's display: the display variables are
+      # cleared).
+      let noDisplay = fixtureEnv(st)
+      for k in ["WAYLAND_DISPLAY", "DISPLAY", "SWAYSOCK", "XDG_CURRENT_DESKTOP"]:
+        noDisplay.del(k)
+      let (lx, le, _) = cli(@["--capture-backend", "linux-x11", "screenshot", "--out",
+                              st / "nofallback-x11.png"], noDisplay)
+      check lx == 4
+      check le.errorKind == "backend-unavailable"
+      check le["error"]["details"]["backend"].getStr == "linux-x11"
+      check le.errorReason == (if isMinimalBinary(): "not-compiled-in"
+                               else: "display-server-unsupported")
+      check not fileExists(st / "nofallback-x11.png")
     # The platform default is not silently replaced either: guiassert-fixture
     # has no platform code at all, so its default is exit 4 / not-compiled-in
     # (never the fixture); in guiassert the default answers itself, or, where
-    # it is not implemented yet, is exit 4 / not-implemented naming it.
+    # it is not implemented yet, is exit 4 / not-implemented naming it, or
+    # (Linux, whose default is implemented since GS5) finds no session to
+    # capture in this environment and says so: exit 4 /
+    # display-server-unsupported from the default backend itself.
     let (px, pe, pl) = cli(@["displays"], plain)
     if isMinimalBinary():
       check px == 4
@@ -159,6 +199,11 @@ suite "CLI state":
       # displays, not the fixture's.
       check "fixture" notin pl
       check pe.data["displays"].kind == JArray
+    elif pe.errorReason == "display-server-unsupported":
+      check defined(linux)
+      check px == 4
+      check pe["error"]["details"]["backend"].getStr == d["capture"].getStr
+      check pe["error"]["details"]["feature"].getStr == "window-enumeration"
     else:
       check px == 4
       check pe["error"]["details"]["selectedBy"].getStr == "default"

@@ -7,7 +7,8 @@
 ## its `data` with the serializers of `core/contract`. Backend selection
 ## follows spec §3.4: per module, the first of `--<module>-backend`,
 ## `--backend`, `GUIASSERT_<MODULE>_BACKEND`, `GUIASSERT_BACKEND`, the
-## session's own backends and the platform default; an explicit selection
+## session's own backends and the default (the platform's, which on Linux
+## follows the caller's session for capture); an explicit selection
 ## never falls back to another backend.
 ##
 ## Every exit 4 and exit 6 failure names the capability it lacked in
@@ -37,6 +38,10 @@ when mediaCompiledIn:
 when macosCaptureCompiledIn:
   import ../backends/capture/macos_sck
   import ../backends/capture/macos_cgwindow
+
+when linuxCaptureCompiledIn:
+  import ../backends/capture/[linux_common, linux_wlr, linux_gnome, linux_x11,
+                                linux_portal_pipewire]
 
 when appleVisionCompiledIn:
   import ../backends/ocr/apple_vision
@@ -156,7 +161,7 @@ proc selectBackends(e: var VerbEnv) =
       elif backendEnv.len > 0: Selected(name: backendEnv, source: "backend-env")
       elif sessionChoice.len > 0 and isKnownBackend(m, sessionChoice):
         Selected(name: sessionChoice, source: "session")
-      else: Selected(name: platformDefault(m), source: "default")
+      else: Selected(name: defaultFor(m, e.ctx.env), source: "default")
 
 proc prepare*(inv: Invocation, ctx: RunContext): VerbEnv =
   ## Resolve the global flags of an invocation (spec §7.1). Raises
@@ -304,6 +309,15 @@ proc captureBackend*(e: VerbEnv): CaptureBackend =
         emit: proc (event: string, data: JsonNode) =
           if ctxEmit != nil: ctxEmit(event, data)))
     if name == macosCgwindowName: return newMacosCgwindowCapture()
+  when linuxCaptureCompiledIn:
+    let ctxEmit = e.ctx.emit
+    let cfg = LinuxCaptureConfig(stateDir: e.stateDir, token: e.ctx.token, env: e.ctx.env,
+      emit: proc (event: string, data: JsonNode) =
+        if ctxEmit != nil: ctxEmit(event, data))
+    if name == linuxWlrName: return newLinuxWlrCapture(cfg)
+    if name == linuxGnomeName: return newLinuxGnomeCapture(cfg)
+    if name == linuxX11Name: return newLinuxX11Capture(cfg)
+    if name == linuxPortalPipewireName: return newLinuxPortalPipewireCapture(cfg)
   raise noConstructor(modCapture, name)
 
 proc ocrBackend*(e: VerbEnv): OcrEngine =

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-# build.sh <out-dir> — compile GuiAssert's Linux desktop-environment helpers
-# (`virtual_pointer`, `wm_probe`) into <out-dir>.
+# build.sh <out-dir> — compile GuiAssert's Linux helpers into <out-dir>:
+# `virtual_pointer` and `wm_probe` (the desktop-environment targets),
+# `x11_probe` (the linux-x11 capture backend's enumeration and its live
+# tests' fixture window) and `portal_screencast` (the linux-portal-pipewire
+# capture backend).
 #
 # Needs the dev shell (`nix develop`): `cc`, `pkg-config`, `wayland-scanner`,
-# libwayland-client, and the protocol XML from wayland-protocols and
-# wlr-protocols. `gui_assert/desktop_env/helpers` calls this when a helper is
-# missing or older than its source.
+# libwayland-client, the protocol XML from wayland-protocols and
+# wlr-protocols, libX11 with libXres, GIO and libpipewire. `gui_assert/desktop_env/helpers`
+# calls this when a helper is missing or older than its source.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="${1:?usage: build.sh <out-dir>}"
@@ -33,4 +36,7 @@ cc "${flags[@]}" -o "$out/virtual_pointer" "$here/virtual_pointer.c" \
 	"$gen/wlr-virtual-pointer-unstable-v1-protocol.c" "${libs[@]}"
 cc "${flags[@]}" -o "$out/wm_probe" "$here/wm_probe.c" \
 	"$gen/xdg-shell-protocol.c" "$gen/xdg-decoration-unstable-v1-protocol.c" "${libs[@]}"
-echo "built $out/virtual_pointer $out/wm_probe"
+cc "${flags[@]}" -o "$out/x11_probe" "$here/x11_probe.c" $(pkg-config --cflags --libs x11 xres)
+cc "${flags[@]}" -o "$out/portal_screencast" "$here/portal_screencast.c" \
+	$(pkg-config --cflags --libs gio-unix-2.0 libpipewire-0.3) -lpthread
+echo "built $out/virtual_pointer $out/wm_probe $out/x11_probe $out/portal_screencast"

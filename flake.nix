@@ -40,35 +40,109 @@
               ./src
               ./gui_assert.nimble
               ./config.nims
+              ./helpers
             ];
           };
+          # The Linux capture backends (spec §4.2) run GuiAssert's own C
+          # helpers (`helpers/linux`: `x11_probe` for linux-x11 and
+          # `portal_screencast` for linux-portal-pipewire, beside the
+          # desktop-environment targets' `wm_probe` and `virtual_pointer`)
+          # and these tools: grim and wf-recorder (linux-wlr), swaymsg
+          # (sway's IPC, linux-wlr), gdbus (GNOME Shell, linux-gnome) and
+          # ffmpeg (the linux-x11 and portal recorders, via FFMPEG_BIN).
+          linuxHelperInputs = with pkgs; [
+            wayland
+            wayland-protocols
+            wlr-protocols
+            xorg.libX11
+            xorg.libXres
+            glib
+            pipewire
+          ];
+          linuxCaptureTools = with pkgs; [
+            grim
+            wf-recorder
+            sway
+            glib.bin
+            ffmpeg
+          ];
+          linuxHelpers = [
+            "x11_probe"
+            "portal_screencast"
+            "wm_probe"
+            "virtual_pointer"
+          ];
           mkGuiassert =
             name: defines: wrap:
+            let
+              # Only the full program on Linux has Linux capture backends.
+              helpers = wrap && pkgs.stdenv.isLinux;
+              helperDir = "${placeholder "out"}/libexec/guiassert";
+              # The packaged program carries its external tools: ffmpeg for
+              # the media backend and tesseract (with its default English
+              # traineddata) for the `tesseract` OCR engine, the Linux default
+              # (spec §4.2, "Pinned by the flake"). On Linux it also carries
+              # the capture backends' helpers and tools: GUI_ASSERT_HELPER_DIR
+              # names the helpers built here, and the tools come first on the
+              # PATH, so a capture runs the pinned tools rather than the
+              # host's. `--set-default` keeps a caller's own FFMPEG_BIN /
+              # TESSERACT_BIN / GUI_ASSERT_HELPER_DIR.
+              wrapArgs = [
+                "--set-default"
+                "FFMPEG_BIN"
+                "${pkgs.ffmpeg}/bin/ffmpeg"
+                "--set-default"
+                "TESSERACT_BIN"
+                "${pkgs.tesseract}/bin/tesseract"
+              ]
+              ++ lib.optionals helpers [
+                "--set-default"
+                "GUI_ASSERT_HELPER_DIR"
+                helperDir
+                "--prefix"
+                "PATH"
+                ":"
+                (lib.makeBinPath linuxCaptureTools)
+              ];
+            in
             pkgs.stdenv.mkDerivation {
               pname = name;
               inherit version src;
-              nativeBuildInputs = [ pkgs.nim ] ++ lib.optional wrap pkgs.makeWrapper;
+              nativeBuildInputs = [
+                pkgs.nim
+              ]
+              ++ lib.optional wrap pkgs.makeWrapper
+              ++ lib.optionals helpers [
+                pkgs.pkg-config
+                pkgs.wayland-scanner
+              ];
+              buildInputs = lib.optionals helpers linuxHelperInputs;
               buildPhase = ''
                 runHook preBuild
                 export HOME="$TMPDIR"
                 nim c --hints:off -d:release ${defines} \
                   --nimcache:"$TMPDIR/nimcache" -o:"$TMPDIR/${name}" src/guiassert.nim
+              ''
+              + lib.optionalString helpers ''
+                bash helpers/linux/build.sh "$TMPDIR/linux-helpers"
+              ''
+              + ''
                 runHook postBuild
               '';
               installPhase = ''
                 runHook preInstall
                 install -Dm755 "$TMPDIR/${name}" "$out/bin/${name}"
+              ''
+              + lib.optionalString helpers ''
+                for h in ${lib.escapeShellArgs linuxHelpers}; do
+                  install -Dm755 "$TMPDIR/linux-helpers/$h" "${helperDir}/$h"
+                done
+              ''
+              + ''
                 runHook postInstall
               '';
-              # The packaged program carries its external tools: ffmpeg for the
-              # media backend and tesseract (with its default English
-              # traineddata) for the `tesseract` OCR engine, the Linux default
-              # (spec §4.2, "Pinned by the flake"). `--set-default` keeps a
-              # caller's own FFMPEG_BIN / TESSERACT_BIN.
               postFixup = lib.optionalString wrap ''
-                wrapProgram "$out/bin/${name}" \
-                  --set-default FFMPEG_BIN "${pkgs.ffmpeg}/bin/ffmpeg" \
-                  --set-default TESSERACT_BIN "${pkgs.tesseract}/bin/tesseract"
+                wrapProgram "$out/bin/${name}" ${lib.escapeShellArgs wrapArgs}
               '';
               meta = {
                 description = "GuiAssert desktop substrate CLI (contract guiassert-desktop/1)";
@@ -104,6 +178,49 @@
                 jq -e '.ok == true and ([.data.features[]
                          | select(.feature == "ocr" and .backend == "tesseract"
                                   and .state == "supported")] | length == 1)' caps.json
+                touch "$out"
+              '';
+        }
+        # The packaged `guiassert` captures on Linux with no dev shell and no
+        # PATH: against a private Xvfb, from an empty environment, linux-x11
+        # (the session-following default with only DISPLAY set) must probe
+        # `supported`, take a screenshot of the expected size, and record a
+        # finalized MP4 (its helper from GUI_ASSERT_HELPER_DIR, its encoder
+        # from FFMPEG_BIN), so a package that lost its helpers or tools
+        # fails here instead of answering `missing-tool` to a consumer.
+        // lib.optionalAttrs pkgs.stdenv.isLinux {
+          guiassert-packaged-linux-capture =
+            pkgs.runCommand "guiassert-packaged-linux-capture"
+              {
+                nativeBuildInputs = [
+                  pkgs.jq
+                  pkgs.xorg.xvfb
+                ];
+              }
+              ''
+                export HOME="$TMPDIR"
+                Xvfb :71 -screen 0 320x240x24 -nolisten tcp > xvfb.log 2>&1 &
+                xvfb=$!
+                trap 'kill $xvfb' EXIT
+                for _ in $(seq 100); do
+                  [ -e /tmp/.X11-unix/X71 ] && break
+                  sleep 0.1
+                done
+                ga() {
+                  env -i HOME="$HOME" DISPLAY=:71 ${guiassert}/bin/guiassert \
+                    --state-dir "$TMPDIR/state" "$@"
+                }
+                ga capabilities --probe > caps.json
+                jq -e '.ok == true and .data.selected.capture == "linux-x11" and
+                       ([.data.features[] | select(.backend == "linux-x11" and
+                         .feature == "display-capture" and .state == "supported")]
+                        | length == 1)' caps.json
+                ga screenshot --out "$TMPDIR/shot.png" > shot.json
+                jq -e '.ok == true and .data.image.width == 320 and
+                       .data.image.height == 240' shot.json
+                ga record --out "$TMPDIR/rec.mp4" --duration-ms 1000 --fps 10 > rec.json
+                jq -e '.ok == true and .data.recording.state == "stopped" and
+                       .data.recording.frames >= 5' rec.json
                 touch "$out"
               '';
         }
@@ -144,6 +261,22 @@
             # GNOME portal backend, as a real GNOME session runs them.
             gnome-shell
             xdg-desktop-portal-gnome
+            # The Linux capture backends (GS5) and their live tests:
+            # `linux-wlr` records with wf-recorder; `linux-x11` captures an
+            # Xvfb server through the `x11_probe` helper (XGetImage; this
+            # ffmpeg has no x11grab), which also lists and draws its windows,
+            # compiled against libX11 and libXres;
+            # `linux-portal-pipewire` asks xdg-desktop-portal (its wlroots
+            # backend) for a ScreenCast stream, which the `portal_screencast`
+            # helper reads with libpipewire; its live tests run a private
+            # PipeWire and WirePlumber.
+            wf-recorder
+            xorg.xvfb
+            xorg.libX11
+            xorg.libXres
+            pipewire
+            wireplumber
+            xdg-desktop-portal-wlr
           ];
         in
         {
@@ -204,6 +337,9 @@
               export GUI_ASSERT_GSETTINGS_SCHEMAS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas"
               export GUI_ASSERT_GNOME_SHELL="${pkgs.gnome-shell}/bin/gnome-shell"
               export GUI_ASSERT_XDG_DESKTOP_PORTAL_GNOME="${pkgs.xdg-desktop-portal-gnome}/libexec/xdg-desktop-portal-gnome"
+              # The wlroots portal backend (ScreenCast for the linux-portal-pipewire
+              # capture backend's live tests, GS5).
+              export GUI_ASSERT_XDG_DESKTOP_PORTAL_WLR="${pkgs.xdg-desktop-portal-wlr}/libexec/xdg-desktop-portal-wlr"
               # Where GLib finds the GNOME session's settings schemas (each
               # package's compiled schemas live under its own data dir).
               export GUI_ASSERT_GNOME_SCHEMA_DATA_DIRS="${pkgs.gnome-shell}/share/gsettings-schemas/${pkgs.gnome-shell.name}:${pkgs.mutter}/share/gsettings-schemas/${pkgs.mutter.name}:${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}"

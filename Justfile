@@ -13,6 +13,10 @@
 #                    and the fixture backends only).
 # `just test-live-macos` - the macOS live suites: capture (GS5, TCC-gated)
 #                    and OCR (GS6: Apple Vision over files, and over captures).
+# `just test-live-linux` - the Linux live capture suite (GS5): linux-x11 in a
+#                    private Xvfb, linux-wlr and linux-portal-pipewire in a
+#                    private headless sway, linux-gnome in a private headless
+#                    GNOME Shell (inside `nix develop`).
 # `just test-live-tesseract` - the tesseract OCR engine against the pinned
 #                    tesseract (GS6; Linux and macOS, inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
@@ -25,7 +29,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tswift_helper_cache; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tswift_helper_cache; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -80,6 +84,15 @@ test-live-macos: build-cli
       echo "===== $f ====="; \
       nim c -d:tccLive -r --hints:off tests/live/$f.nim || status=1; \
     done; exit $status
+
+# The Linux live capture suite (GS5): the real `guiassert` with the four
+# Linux capture backends against display servers the suite starts for itself
+# (a private Xvfb, a private headless sway with PipeWire and the wlroots
+# portal, a private headless GNOME Shell), never the operator's display. A
+# server that cannot start FAILS its tests with a `GS5-LINUX BLOCKED:` line.
+# Run inside `nix develop` (it pins every server and tool the suite starts).
+test-live-linux: build-cli
+    nim c -r --hints:off tests/live/tcapture_linux.nim
 
 # The tesseract OCR engine (GS6) through the real `guiassert`, against the
 # tesseract and ffmpeg the flake pins (run inside `nix develop`). Needs no

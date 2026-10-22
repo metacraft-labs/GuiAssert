@@ -121,4 +121,51 @@ suite "mp4 probe":
     let good = movie(hdlr & box("mdhd", repeat('\0', 12) & be(10) & be(5)) & minf)
     check probeMp4(good) == Mp4Info(durationMs: 500, frames: 5, width: 64, height: 48)
 
+  test "test_mp4_probe_counts_only_frames_within_the_track_duration":
+    # A constant-rate recorder (wf-recorder -r) may end the track with a
+    # sample of zero duration at the track's end: stts (4 x 1 tick, 1 x 0),
+    # duration 4 ticks. No player presents it; it is not a frame.
+    proc be(v: uint32): string =
+      result = newString(4)
+      for k in 0 .. 3: result[k] = char((v shr (24 - 8 * k)) and 0xff)
+    proc box(kind, payload: string): string = be(uint32(8 + payload.len)) & kind & payload
+    let hdlr = box("hdlr", repeat('\0', 8) & "vide")
+    let tkhd = box("tkhd", repeat('\0', 76) & be(64'u32 shl 16) & be(48'u32 shl 16))
+    let mdhd = box("mdhd", repeat('\0', 12) & be(10) & be(4))
+    proc movie(stts: string): string =
+      let stbl = box("stbl", box("stsz", repeat('\0', 8) & be(5)) & stts)
+      box("mdat", "data") & box("moov", box("trak", box("mdia", hdlr & mdhd &
+        box("minf", stbl)) & tkhd))
+    let trailing = box("stts", repeat('\0', 4) & be(2) & be(4) & be(1) & be(1) & be(0))
+    check probeMp4(movie(trailing)) == Mp4Info(durationMs: 400, frames: 4, width: 64,
+                                                height: 48)
+    # Control: five one-tick samples in a four-tick track also present four;
+    # with the duration they need, all five count.
+    let even = box("stts", repeat('\0', 4) & be(1) & be(5) & be(1))
+    check probeMp4(movie(even)).frames == 4
+    let mdhd5 = box("mdhd", repeat('\0', 12) & be(10) & be(5))
+    let stbl5 = box("stbl", box("stsz", repeat('\0', 8) & be(5)) & even)
+    check probeMp4(box("mdat", "data") & box("moov", box("trak", box("mdia", hdlr & mdhd5 &
+      box("minf", stbl5)) & tkhd))).frames == 5
+    # A malformed entry count runs into the end of the box: refused.
+    let overrun = box("stts", repeat('\0', 4) & be(9) & be(2) & be(1))
+    expect Mp4Error: discard probeMp4(movie(overrun))
+    # A real file whose track duration is cut to four of its five frames
+    # (mdhd patched in place): four frames, 400 ms. (ffprobe presents by the
+    # edit list, which still spans five; the recorders' files that motivate
+    # the rule have an edit list as long as the track, see the live suite.)
+    let p = work / "cut-duration.mp4"
+    makeMp4(p, 5, 10, 64, 48)
+    var bytes = readFile(p)
+    let at = bytes.find("mdhd")
+    check at > 0 and bytes[at + 4] == '\0'          # version 0
+    let field = at + 4 + 16                          # duration (after the timescale)
+    var d = 0'u32
+    for k in 0 .. 3: d = (d shl 8) or uint32(ord(bytes[field + k]))
+    let cut = be(d * 4 div 5)
+    for k in 0 .. 3: bytes[field + k] = cut[k]
+    writeFile(p, bytes)
+    let got = probeMp4File(p)
+    check got.frames == 4 and got.durationMs == 400
+
 removeDir(work)
