@@ -24,7 +24,11 @@
 ## with `pulse` its blue channel alternates by one step every 100 ms so a
 ## screen cast that sends frames only on damage has frames to send) and
 ## `x11_probe window` (an X11 window of one solid colour at a requested
-## geometry). Recordings are measured by the real ffprobe.
+## geometry). Recordings are measured by the real ffprobe. One fault is
+## injected: `slow_x264.c`, preloaded into the linux-wlr recorder's encoder,
+## delays one libx264 encode call (an encoder latency spike, the cause of an
+## earlier flake), because no real encoder stalls on demand; the encoder
+## still encodes every frame.
 ##
 ## Negative controls: pixels outside the fixture window are the background,
 ## not its colour; a moved window's crop follows the compositor's new
@@ -340,6 +344,35 @@ suite "linux-wlr and linux-portal-pipewire in a private sway":
   test "test_live_recording_metadata_measured_and_killed_recorder_is_exit_5 [linux-wlr]":
     live problem:
       checkRecorder(env, st, work, "linux-wlr", @[], stderrs)
+
+  test "test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall":
+    # The cause of the linux-wlr flake (GS5 Outstanding Tasks): an encoder
+    # busy on one frame for longer than the rest of the recording. Here the
+    # stall is injected, longer than the recording itself: the second libx264
+    # encode call waits 2.5 s. A recorder that drops what it captured while
+    # the encoder was busy (wf-recorder kept the first frame only) fails;
+    # the stall may delay the stop, never shorten the file.
+    live problem:
+      let shim = slowX264Shim(work)
+      let mark = work / "stall-served"
+      let stalled = runEnv(st, t.sessionEnv, [("LD_PRELOAD", shim),
+        ("SLOW_X264_AT", "2"), ("SLOW_X264_MS", "2500"), ("SLOW_X264_MARK", mark)])
+      let outPath = work / "wlr-stalled.mp4"
+      let (x, e, err) = run(@["--capture-backend", "linux-wlr", "record", "--out", outPath,
+                              "--duration-ms", "1500", "--fps", "10"], stalled)
+      stderrs.add err
+      if x != 0: checkpoint $e & "\n" & err
+      check x == 0
+      check fileExists(mark)                       # the stall reached the encoder
+      if x == 0:
+        let r = e["data"]["recording"]
+        let p = ffprobeVideo(outPath)
+        checkpoint "reported " & $r & "; ffprobe " & $p
+        check r["state"].getStr == "stopped"
+        check r["frames"].getInt == p.frames
+        # 1.5 s at 10 fps: 15 frames after the first, which is copied at 0.
+        check p.frames >= 15
+        check p.durationMs >= 1500
 
   test "test_capture_backends_report_their_features_and_name_them_on_exit_4_6 [linux-wlr]":
     live problem:

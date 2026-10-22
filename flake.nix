@@ -44,12 +44,13 @@
             ];
           };
           # The Linux capture backends (spec §4.2) run GuiAssert's own C
-          # helpers (`helpers/linux`: `x11_probe` for linux-x11 and
-          # `portal_screencast` for linux-portal-pipewire, beside the
-          # desktop-environment targets' `wm_probe` and `virtual_pointer`)
-          # and these tools: grim and wf-recorder (linux-wlr), swaymsg
-          # (sway's IPC, linux-wlr), gdbus (GNOME Shell, linux-gnome) and
-          # ffmpeg (the linux-x11 and portal recorders, via FFMPEG_BIN).
+          # helpers (`helpers/linux`: `x11_probe` for linux-x11,
+          # `portal_screencast` for linux-portal-pipewire and `wlr_screencopy`
+          # for linux-wlr recordings, beside the desktop-environment targets'
+          # `wm_probe` and `virtual_pointer`) and these tools: grim (linux-wlr
+          # stills), swaymsg (sway's IPC, linux-wlr), gdbus (GNOME Shell,
+          # linux-gnome) and ffmpeg (the encoder of every Linux recorder
+          # helper, via FFMPEG_BIN).
           linuxHelperInputs = with pkgs; [
             wayland
             wayland-protocols
@@ -61,7 +62,6 @@
           ];
           linuxCaptureTools = with pkgs; [
             grim
-            wf-recorder
             sway
             glib.bin
             ffmpeg
@@ -69,6 +69,7 @@
           linuxHelpers = [
             "x11_probe"
             "portal_screencast"
+            "wlr_screencopy"
             "wm_probe"
             "virtual_pointer"
           ];
@@ -186,8 +187,10 @@
         # (the session-following default with only DISPLAY set) must probe
         # `supported`, take a screenshot of the expected size, and record a
         # finalized MP4 (its helper from GUI_ASSERT_HELPER_DIR, its encoder
-        # from FFMPEG_BIN), so a package that lost its helpers or tools
-        # fails here instead of answering `missing-tool` to a consumer.
+        # from FFMPEG_BIN). Then, against a private headless sway (pixman
+        # renderer, no GPU), linux-wlr must record a finalized MP4 through
+        # its `wlr_screencopy` helper. A package that lost its helpers or
+        # tools fails here instead of answering `missing-tool` to a consumer.
         // lib.optionalAttrs pkgs.stdenv.isLinux {
           guiassert-packaged-linux-capture =
             pkgs.runCommand "guiassert-packaged-linux-capture"
@@ -221,6 +224,31 @@
                 ga record --out "$TMPDIR/rec.mp4" --duration-ms 1000 --fps 10 > rec.json
                 jq -e '.ok == true and .data.recording.state == "stopped" and
                        .data.recording.frames >= 5' rec.json
+                # linux-wlr in a private headless sway (unwrapped: the wrapper
+                # starts it under dbus-run-session, and no bus is needed here).
+                run="$TMPDIR/run"
+                mkdir -m 700 "$run"
+                printf 'output HEADLESS-1 mode 320x240\nxwayland disable\n' > sway.conf
+                env XDG_RUNTIME_DIR="$run" WLR_BACKENDS=headless WLR_RENDERER=pixman \
+                  WLR_LIBINPUT_NO_DEVICES=1 ${pkgs.sway-unwrapped}/bin/sway -c sway.conf > sway.log 2>&1 &
+                sway=$!
+                trap 'kill $xvfb $sway' EXIT
+                # Its IPC and Wayland sockets (stdenv globs with nullglob, so an
+                # unmatched pattern is an empty loop).
+                sock= wl=
+                for _ in $(seq 100); do
+                  for f in "$run"/sway-ipc.*.sock; do [ -S "$f" ] && sock=$f; done
+                  for f in "$run"/wayland-[0-9]; do [ -S "$f" ] && wl=$(basename "$f"); done
+                  [ -n "$sock" ] && [ -n "$wl" ] && break
+                  sleep 0.1
+                done
+                [ -n "$sock" ] && [ -n "$wl" ] || { cat sway.log; exit 1; }
+                env -i HOME="$HOME" XDG_RUNTIME_DIR="$run" WAYLAND_DISPLAY="$wl" \
+                  SWAYSOCK="$sock" ${guiassert}/bin/guiassert --state-dir "$TMPDIR/state-wlr" \
+                  record --out "$TMPDIR/rec-wlr.mp4" --duration-ms 1000 --fps 10 > rec-wlr.json \
+                  || { cat rec-wlr.json sway.log; exit 1; }
+                jq -e '.ok == true and .data.recording.state == "stopped" and
+                       .data.recording.width == 320 and .data.recording.frames >= 10' rec-wlr.json
                 touch "$out"
               '';
         }
@@ -262,7 +290,9 @@
             gnome-shell
             xdg-desktop-portal-gnome
             # The Linux capture backends (GS5) and their live tests:
-            # `linux-wlr` records with wf-recorder; `linux-x11` captures an
+            # `linux-wlr` records through the `wlr_screencopy` helper
+            # (wlr-screencopy into ffmpeg; wf-recorder stays for the legacy
+            # `gui_assert/capture` API); `linux-x11` captures an
             # Xvfb server through the `x11_probe` helper (XGetImage; this
             # ffmpeg has no x11grab), which also lists and draws its windows,
             # compiled against libX11 and libXres;

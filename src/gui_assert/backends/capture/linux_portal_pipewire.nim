@@ -33,7 +33,7 @@
 ## ScreenCast portal: https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.ScreenCast.html ;
 ## PipeWire streams: https://docs.pipewire.org/page_streams.html
 
-import std/[options, os, strutils, tables]
+import std/[options, os, tables]
 
 import ../../core/[geometry, desktop_types, interfaces, image]
 import ../../state_store
@@ -123,8 +123,6 @@ proc capture(cfg: LinuxCaptureConfig, req: CaptureRequest): ImageRef =
     try: removeDir(dir)
     except OSError: discard
 
-proc fpsText(fps: float): string = formatFloat(fps, ffDecimal, 3)
-
 proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
   refuseTarget(req.target, false)
   cfg.requireBus()
@@ -135,15 +133,8 @@ proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
       let tmp = outputTemp(linuxPortalPipewireName, outPath, id, ".mp4")
       let status = controlDir / "status"
       RecorderLaunch(
-        argv: cfg.helperArgs(status, true) & @["--fps", fpsText(req.fps), "--", ffmpeg,
-          "-v", "error", "-nostdin", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-          "-s", "%W%x%H%", "-r", fpsText(req.fps), "-i", "-",
-          # H.264 in 4:2:0 needs even dimensions; an odd edge is padded.
-          "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
-          # No B-frames: the track then needs no presentation delay, so its
-          # duration and its edit list agree (what core/mp4 and ffprobe read).
-          "-bf", "0", "-pix_fmt", "yuv420p",
-          "-f", "mp4", tmp],
+        argv: cfg.helperArgs(status, true) & @["--fps", fpsText(req.fps), "--"] &
+          rawRgbEncoder(ffmpeg, "%W%", "%H%", req.fps, tmp),
         tmpPath: tmp, statusPath: status, startedStates: @["streaming"],
         source: ImageSource(kind: iskDisplay, id: none(string), session: some(req.session))))
 

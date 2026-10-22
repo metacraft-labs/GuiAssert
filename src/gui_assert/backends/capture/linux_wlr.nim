@@ -1,7 +1,7 @@
 ## The `linux-wlr` capture backend: wlroots compositors through
-## wlr-screencopy (`grim` stills, `wf-recorder` recordings), with displays and
-## windows read from sway's IPC (spec §4.2). It is the default capture
-## backend of a sway session.
+## wlr-screencopy (`grim` stills, GuiAssert's `wlr_screencopy` helper for
+## recordings), with displays and windows read from sway's IPC (spec §4.2). It
+## is the default capture backend of a sway session.
 ##
 ## * **Displays** are sway's active outputs (`swaymsg -t get_outputs`): the
 ##   output name is the id, `rect` the bounds in layout (logical)
@@ -30,10 +30,24 @@
 ##   `unsupported-option`, `details.feature` `own-pixels-capture`): a crop
 ##   shows whatever covers the window. The scale is measured from the image
 ##   (its pixel width over the logical width captured).
-## * **Recordings** are `wf-recorder` (H.264 in MP4, constant frame rate,
-##   frames copied without waiting for damage so a still screen still yields
-##   frames), finalized on SIGINT and measured from the file
-##   (`linux_common`).
+## * **Recordings** are the `wlr_screencopy` helper (`helpers/linux`): one
+##   wlr-screencopy copy of the output (or of the target's rectangle on it)
+##   every 1/fps seconds, made with `copy`, not `copy_with_damage`, so a
+##   still screen still yields frames, written as raw RGB24 to ffmpeg
+##   (`linux_common.rawRgbEncoder`: H.264 in MP4, constant frame rate). On
+##   SIGINT the helper closes ffmpeg's input and ffmpeg encodes every frame
+##   it was given before it finalizes, so a slow encoder delays the stop but
+##   never shortens the file. The file is measured as every Linux recording
+##   is (`linux_common`). A region or window recording copies the target's
+##   rectangle from the display that holds most of it, in that display's
+##   own coordinates.
+##
+##   wf-recorder was used before: it encodes on a second thread from a pool
+##   of 16 frames, stops copying while the pool is full, and on SIGINT ends
+##   that thread without encoding the frames still pooled. One encoder stall
+##   longer than the rest of the recording (measured on a loaded host:
+##   libx264 busy on one frame for over a second, in about one recording in
+##   fifty) left a file of the first frame or two.
 ##
 ## Sway IPC: https://man.archlinux.org/man/sway-ipc.7 ;
 ## wlr-screencopy: https://wayland.app/protocols/wlr-screencopy-unstable-v1
@@ -124,8 +138,25 @@ proc parseSwayTree*(text: string): seq[Window] =
   for r in rows: result.add r.w
 
 proc grimGeometry*(r: Rect): string =
-  ## A rectangle as `grim -g` and `wf-recorder -g` spell it: `x,y wxh`.
+  ## A rectangle as `grim -g` spells it: `x,y wxh`.
   $r.x & "," & $r.y & " " & $r.width & "x" & $r.height
+
+proc outputLocal*(r: Rect, d: Display): Rect =
+  ## `r` (layout coordinates) in the coordinates of display `d`'s own
+  ## output, clipped to it: what wlr-screencopy's `capture_output_region`
+  ## takes (https://wayland.app/protocols/wlr-screencopy-unstable-v1#zwlr_screencopy_manager_v1:request:capture_output_region).
+  let c = intersection(r, d.bounds)
+  rect(c.x - d.bounds.x, c.y - d.bounds.y, c.width, c.height)
+
+proc screencopyRecordArgs*(helper, output: string, local: Option[Rect], fps: float,
+                           report: string): seq[string] =
+  ## The `wlr_screencopy record` command line up to its `--` (the encoder
+  ## follows).
+  result = @[helper, "record", "--output", output]
+  if local.isSome:
+    let r = local.get
+    result.add @["--region", $r.x & "," & $r.y & "," & $r.width & "," & $r.height]
+  result.add @["--fps", fpsText(fps), "--report", report, "--"]
 
 # ---------------------------------------------------------------------------
 # The compositor
@@ -160,10 +191,12 @@ proc readWindows(cfg: LinuxCaptureConfig): seq[Window] =
   except ValueError as e: raise captureFailed(linuxWlrName, e.msg)
 
 type Target = object
-  grimArgs: seq[string]    ## grim's / wf-recorder's target arguments
+  grimArgs: seq[string]    ## grim's target arguments
+  output: string           ## the display (sway output) the target is on
+  local: Option[Rect]      ## the target's rectangle in that output's own
+                           ## logical coordinates; none for the whole output
   origin: Point
   size: Size               ## logical
-  scale: float
   source: ImageSource
 
 proc resolveTarget(cfg: LinuxCaptureConfig, session: string, t: CaptureTarget,
@@ -174,16 +207,18 @@ proc resolveTarget(cfg: LinuxCaptureConfig, session: string, t: CaptureTarget,
   case t.kind
   of ctkDisplay:
     let d = pickDisplay(linuxWlrName, displays, t.id)
-    Target(grimArgs: @["-o", d.id], origin: point(d.bounds.x, d.bounds.y),
-           size: d.bounds.size, scale: d.scale,
+    Target(grimArgs: @["-o", d.id], output: d.id, local: none(Rect),
+           origin: point(d.bounds.x, d.bounds.y),
+           size: d.bounds.size,
            source: ImageSource(kind: iskDisplay, id: some(d.id), session: some(session)))
   of ctkRegion:
     requireRegionOnOneDisplay(t.region, displays)
-    var scale = 1.0
+    var on: Display
     for d in displays:
-      if d.bounds.contains(t.region): scale = d.scale
-    Target(grimArgs: @["-g", grimGeometry(t.region)], origin: point(t.region.x, t.region.y),
-           size: t.region.size, scale: scale,
+      if d.bounds.contains(t.region): on = d
+    Target(grimArgs: @["-g", grimGeometry(t.region)], output: on.id,
+           local: some(outputLocal(t.region, on)), origin: point(t.region.x, t.region.y),
+           size: t.region.size,
            source: ImageSource(kind: iskRegion, id: none(string), session: some(session)))
   of ctkWindow:
     if ownPixels:
@@ -204,11 +239,14 @@ proc resolveTarget(cfg: LinuxCaptureConfig, session: string, t: CaptureTarget,
     if not w.onScreen or w.bounds.isEmpty or displayOfRect(w.bounds, displays).isNone:
       raise captureFailed(linuxWlrName, "window '" & w.id &
         "' is not on screen; a window-crop capture shows only what is on a display")
-    var scale = 1.0
+    # A recording copies from one output: the one holding most of the window.
+    let onId = displayOfRect(w.bounds, displays).get
+    var on: Display
     for d in displays:
-      if some(d.id) == w.display: scale = d.scale
-    Target(grimArgs: @["-g", grimGeometry(w.bounds)], origin: point(w.bounds.x, w.bounds.y),
-           size: w.bounds.size, scale: scale,
+      if d.id == onId: on = d
+    Target(grimArgs: @["-g", grimGeometry(w.bounds)], output: on.id,
+           local: some(outputLocal(w.bounds, on)), origin: point(w.bounds.x, w.bounds.y),
+           size: w.bounds.size,
            source: ImageSource(kind: iskWindowCrop, id: some(w.id), session: some(session)))
 
 proc capture(cfg: LinuxCaptureConfig, req: CaptureRequest): ImageRef =
@@ -234,17 +272,19 @@ proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
   if req.target.kind == ctkWindow and req.target.id.isNone:
     raise badArgs("missing-argument", "a window recording names the window")
   let t = cfg.resolveTarget(req.session, req.target, false)
-  let recorder = cfg.findTool(linuxWlrName, "wf-recorder")
+  let helper = cfg.helperPath(linuxWlrName, "wlr_screencopy")
+  let ffmpeg = cfg.findTool(linuxWlrName, "ffmpeg", overrideVar = "FFMPEG_BIN")
   let outPath = absolutePath(req.outPath)
   startRecording(cfg, linuxWlrName, "wlr", req,
     proc (id, controlDir: string): RecorderLaunch =
       let tmp = outputTemp(linuxWlrName, outPath, id, ".mp4")
+      let status = controlDir / "status"
       RecorderLaunch(
-        argv: @[recorder] & t.grimArgs & @["-r", $req.fps, "-D", "-y", "-c", "libx264", "-p", "bf=0",
-          "-x", "yuv420p", "-m", "mp4", "-f", tmp],
-        tmpPath: tmp,
-        width: int(t.size.width.float * t.scale + 0.5),
-        height: int(t.size.height.float * t.scale + 0.5),
+        argv: screencopyRecordArgs(helper, t.output, t.local, req.fps, status) &
+          rawRgbEncoder(ffmpeg, "%W%", "%H%", req.fps, tmp),
+        tmpPath: tmp, statusPath: status, startedStates: @["recording"],
+        # The frame size is the first copy's (read from the status file).
+        width: 0, height: 0,
         source: t.source))
 
 proc wlrFeatures(cfg: LinuxCaptureConfig, probe: bool): seq[Feature] =
@@ -267,7 +307,13 @@ proc wlrFeatures(cfg: LinuxCaptureConfig, probe: bool): seq[Feature] =
     except BackendUnavailableError as e: e.msg
   let swayMissing = tool("swaymsg")
   let grimMissing = tool("grim")
-  let recorderMissing = tool("wf-recorder")
+  let ffmpegMissing =
+    try: (discard cfg.findTool(n, "ffmpeg", overrideVar = "FFMPEG_BIN"); "")
+    except BackendUnavailableError as e: e.msg
+  let helperMissing =
+    try: (discard cfg.helperPath(n, "wlr_screencopy"); "")
+    except BackendUnavailableError as e: e.msg
+  let recorderMissing = if helperMissing.len > 0: helperMissing else: ffmpegMissing
   var enumState = fsAvailable
   var enumReason, enumRemedy = ""
   var captureState = fsAvailable

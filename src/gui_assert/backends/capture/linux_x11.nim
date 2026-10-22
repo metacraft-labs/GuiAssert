@@ -37,7 +37,7 @@
 ##
 ## Xlib: https://www.x.org/releases/current/doc/libX11/libX11/libX11.html
 
-import std/[algorithm, json, options, os, strutils, tables]
+import std/[algorithm, json, options, os, tables]
 
 import ../../core/[geometry, desktop_types, interfaces, image, contract]
 import ../../state_store
@@ -183,8 +183,6 @@ proc capture(cfg: LinuxCaptureConfig, req: CaptureRequest): ImageRef =
     removeQuietly(tmpPpm)
     removeQuietly(tmpPng)
 
-proc fpsText(fps: float): string = formatFloat(fps, ffDecimal, 3)
-
 proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
   let t = cfg.resolveTarget(req.session, req.target, false)
   let probe = cfg.helperPath(linuxX11Name, "x11_probe")
@@ -196,15 +194,8 @@ proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
       let status = controlDir / "status"
       RecorderLaunch(
         argv: @[probe, "record", "--geometry", x11Geometry(t.rect), "--fps", fpsText(req.fps),
-          "--report", status, "--", ffmpeg, "-v", "error", "-nostdin", "-y",
-          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", $t.rect.width & "x" & $t.rect.height,
-          "-r", fpsText(req.fps), "-i", "-",
-          # H.264 in 4:2:0 needs even dimensions; an odd edge is padded.
-          "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
-          # No B-frames: the track then needs no presentation delay, so its
-          # duration and its edit list agree (what core/mp4 and ffprobe read).
-          "-bf", "0", "-pix_fmt", "yuv420p",
-          "-f", "mp4", tmp],
+          "--report", status, "--"] &
+          rawRgbEncoder(ffmpeg, $t.rect.width, $t.rect.height, req.fps, tmp),
         tmpPath: tmp, statusPath: status, startedStates: @["recording"],
         width: t.rect.width, height: t.rect.height, source: t.source))
 

@@ -120,6 +120,15 @@ proc recorderPid*(stateDir, id: string): int =
 
 proc nonce*(): string = "Gx" & $getCurrentProcessId() & "t" & $(epochTime() * 1000).int64
 
+proc slowX264Shim*(dir: string): string =
+  ## `tests/live/slow_x264.c` compiled into `dir`: an LD_PRELOAD library that
+  ## delays one libx264 encode call (an encoder latency spike; see the file).
+  let cc = requireExe("cc")
+  result = dir / "slow_x264.so"
+  let (o, code) = execCmdEx(quoteShellCommand([cc, "-shared", "-fPIC", "-O1", "-Wall",
+    "-Werror", "-o", result, currentSourcePath().parentDir / "slow_x264.c", "-ldl"]))
+  if code != 0: raise blocked("the encoder-stall injector did not compile: " & o.strip)
+
 # ---------------------------------------------------------------------------
 # Servers
 # ---------------------------------------------------------------------------

@@ -448,6 +448,27 @@ proc outputTemp*(backend, outPath, tag, ext: string): string =
     raise notFound(backend, "file", "the output directory does not exist: " & dir)
   dir / ("." & outPath.extractFilename & ".partial-" & tag & ext)
 
+proc fpsText*(fps: float): string =
+  ## A frame rate as the recorders' command lines spell it.
+  formatFloat(fps, ffDecimal, 3)
+
+proc rawRgbEncoder*(ffmpeg, width, height: string, fps: float, outPath: string): seq[string] =
+  ## The encoder every Linux recorder helper feeds (`x11_probe record`,
+  ## `portal_screencast --fps`, `wlr_screencopy record`): ffmpeg reading raw
+  ## RGB24 frames of `width`x`height` at a constant `fps` on its standard
+  ## input, and writing H.264 in MP4 to `outPath` once its input ends. The
+  ## size may be the helpers' `%W%` / `%H%` placeholders, which they replace
+  ## by the size of the first frame.
+  @[ffmpeg, "-v", "error", "-nostdin", "-y",
+    "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", width & "x" & height,
+    "-r", fpsText(fps), "-i", "-",
+    # H.264 in 4:2:0 needs even dimensions; an odd edge is padded.
+    "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
+    # No B-frames: the track then needs no presentation delay, so its
+    # duration and its edit list agree (what core/mp4 and ffprobe read).
+    "-bf", "0", "-pix_fmt", "yuv420p",
+    "-f", "mp4", outPath]
+
 proc adoptPng*(backend, tmp, outPath: string, origin: Point, logicalWidth: int,
                source: ImageSource): ImageRef =
   ## Rename the PNG a tool wrote at `tmp` to `outPath` and describe it. The

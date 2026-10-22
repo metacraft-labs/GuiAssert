@@ -138,6 +138,26 @@ suite "linux-wlr: reading sway's answers":
   test "grim geometry":
     check grimGeometry(rect(10, 20, 300, 40)) == "10,20 300x40"
 
+  test "recordings: the wlr_screencopy command line and output-local rectangles":
+    let ds = parseSwayOutputs(swayOutputs)
+    # A rectangle on the second display, in that output's own coordinates.
+    let dp = ds[1]
+    let r = rect(dp.bounds.x + 10, dp.bounds.y + 20, 300, 40)
+    check outputLocal(r, dp) == rect(10, 20, 300, 40)
+    # A rectangle that leaves its output is clipped to it.
+    check outputLocal(rect(-5, -5, 20, 20), ds[0]) == rect(0, 0, 15, 15)
+    check screencopyRecordArgs("/h/wlr_screencopy", "DP-2", some(rect(10, 20, 300, 40)),
+                               12.5, "/s/status") ==
+      @["/h/wlr_screencopy", "record", "--output", "DP-2", "--region", "10,20,300,40",
+        "--fps", "12.500", "--report", "/s/status", "--"]
+    check screencopyRecordArgs("/h/w", "HEADLESS-1", none(Rect), 10, "/s") ==
+      @["/h/w", "record", "--output", "HEADLESS-1", "--fps", "10.000", "--report", "/s", "--"]
+    # The encoder every recorder helper feeds reads all it is given (stdin)
+    # and takes the frame size the helper substitutes.
+    let enc = rawRgbEncoder("ffmpeg", "%W%", "%H%", 10, "/o/x.mp4")
+    check enc[0] == "ffmpeg" and enc[^1] == "/o/x.mp4"
+    check "%W%x%H%" in enc and "-" in enc and "libx264" in enc
+
 suite "linux-x11: reading x11_probe":
 
   test "front to back, the focus, unknown pids and classes, override-redirect":
