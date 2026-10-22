@@ -2,7 +2,7 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; an intermittent wf-recorder stall on headless sway, about one recording in forty, is an Outstanding Task for companion/linux); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :next_steps: GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux (tesseract live run, packaged tesseract pin) is claimable by the companion. GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
   :last_updated: 2026-10-22
   :current_milestone: GS6
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session).
@@ -1451,7 +1451,7 @@
    :depends_on: GS2
    :owner: split
    :platform_status: macos=in_progress linux=completed windows=planned
-   :linux_status_note: companion/linux, 2026-10-21: linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire implemented; every Linux verification entry passed on Linux x86_64 (just test-live-linux 14/14). Independently verified 2026-10-22 (review agent, Linux x86_64): just test 374, test-core 39, test-contract 114, test-desktop-env 31, test-live-linux 14/14 on four of five runs (the fourth: one linux-wlr recording that wf-recorder delivered as two frames, an intermittent recorder stall, see Outstanding Tasks), 0 skipped; review fixes and the flake package now carries the Linux helpers and tools (see Deviations)
+   :linux_status_note: companion/linux, 2026-10-21: linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire implemented; every Linux verification entry passed on Linux x86_64 (just test-live-linux 14/14). Independently verified 2026-10-22 (review agent, Linux x86_64): just test 374, test-core 39, test-contract 114, test-desktop-env 31, test-live-linux 14/14 on four of five runs (the fourth: one linux-wlr recording that wf-recorder delivered as two frames, an intermittent recorder stall, see Outstanding Tasks), 0 skipped; review fixes and the flake package now carries the Linux helpers and tools (see Deviations). The linux-wlr flake fixed 2026-10-22 by companion/linux (recordings through the wlr_screencopy helper; just test-live-linux 15/15 on ten consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 skipped; see Outstanding Tasks); the fix independently verified 2026-10-22 by review (just test-live-linux 15/15 on five consecutive runs, the stall mutation red with a 1-frame file, 0 of 120 short linux-wlr recordings through the packaged guiassert)
    :requires: desktop.automation
    :complexity: large
    :END:
@@ -1469,7 +1469,9 @@
       - [X] Missing Screen Recording grant is exit 6 / =tcc-screen-recording=
         with the bundle identity and click-path in =remedy=.
     - Linux (claimable by =companion/linux=)
-      - [X] =linux_wlr.nim= (grim / wf-recorder; window capture reported as
+      - [X] =linux_wlr.nim= (grim stills; recordings through the
+        =wlr_screencopy= helper since 2026-10-22, wf-recorder before; window
+        capture reported as
         =window-crop=; =--own-pixels= refused), =linux_gnome.nim=,
         =linux_x11.nim=, =linux_portal_pipewire.nim=. (Implemented
         2026-10-21 by =companion/linux=, with the shared
@@ -1531,7 +1533,13 @@
     - test_name: just test-live-linux
       description: The Linux live capture suite (tests/live/tcapture_linux.nim) inside nix develop; it starts its own Xvfb, headless sway with the portal stack, and headless GNOME Shell, never the operator's display; a server that cannot start fails its tests with GS5-LINUX BLOCKED.
       status: passed
-      as_built: recipe added; 14 of 14 tests green on Linux x86_64 (2026-10-21), on three consecutive full runs after the last change. Review re-runs (2026-10-22): 14/14 on four of five runs; one run 13/14 from an intermittent wf-recorder stall (GS5 Outstanding Tasks).
+      as_built: recipe added; 14 of 14 tests green on Linux x86_64 (2026-10-21), on three consecutive full runs after the last change. Review re-runs (2026-10-22): 14/14 on four of five runs; one run 13/14 from an intermittent wf-recorder stall (GS5 Outstanding Tasks). After the fix (2026-10-22, companion/linux): 15 tests (test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall added), 15/15 on ten consecutive runs.
+    - test_name: test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall
+      file: tests/live/tcapture_linux.nim
+      description: Regression test of the linux-wlr flake. A 1.5 s linux-wlr record at 10 fps with the encoder's second libx264 encode call delayed 2.5 s (tests/live/slow_x264.c, preloaded into the recorder's encoder; it writes a marker once the delay is served) must exit 0 with every frame: frames equal to ffprobe's count, >= 15, duration >= 1500 ms.
+      status: passed
+      as_built: passed 2026-10-22 (Linux x86_64, sway 1.11 headless, pixman) on ten consecutive just test-live-linux runs: 16 frames, the stall marker present.
+      falsifying_mutation_linux: linux-wlr recording through wf-recorder again (the old argv) => red: the file holds 1 frame (durationMs 100), the original failure signature.
     - test_name: tests/tlinux_capture.nim
       description: Default-suite unit tests of the Linux backends' pure parts (sway, x11_probe and GNOME Shell answers; filters; regions; PPM; status files; the session-following default; finalizing ffmpeg-encoded MP4s) and, on Linux, the process machinery (tools run with the invocation's environment only, deadlines, detached recorders named by pid and start time); off Linux every backend is wrong-platform.
       status: passed
@@ -1562,9 +1570,9 @@
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C12, per platform recorder (SCStream; wf-recorder, portal/PipeWire, ffmpeg x11grab; the Windows recorder): record and record-stop report frames, duration and size equal to ffprobe's count of the file; a recorder killed before finalizing yields exit 5 / capture-failed with details.recording state failed, never stopped.
       status: failing (BLOCKED: locked GUI session)
-      as_built: macOS (SCStream) implemented in tests/live/tcapture_macos.nim; BLOCKED on the locked session. The finalization logic itself is green in tests/tmacos_capture.nim on ffmpeg-encoded files (measured and renamed; moov removed => failed and removed). Linux (2026-10-21, x86_64, just test-live-linux): passed for all three Linux recorders (wf-recorder on a private sway, the x11_probe XGetImage grabber into ffmpeg on a private Xvfb, the portal/PipeWire helper into ffmpeg): record-stop and the blocking record report frames, width, height and durationMs equal to ffprobe's decoded count (duration within 1 ms); nothing at --out until finalized, no .partial sibling left; a recorder SIGKILLed before finalizing gives exit 5 / capture-failed with details.recording state failed and frames null, no file, and recordings lists it failed. The finalization logic is also unit-tested in tests/tlinux_capture.nim. Windows recorder: pending (later).
+      as_built: macOS (SCStream) implemented in tests/live/tcapture_macos.nim; BLOCKED on the locked session. The finalization logic itself is green in tests/tmacos_capture.nim on ffmpeg-encoded files (measured and renamed; moov removed => failed and removed). Linux (2026-10-21, x86_64, just test-live-linux): passed for all three Linux recorders (wf-recorder on a private sway, since 2026-10-22 the wlr_screencopy helper into ffmpeg, with the same checks green, the x11_probe XGetImage grabber into ffmpeg on a private Xvfb, the portal/PipeWire helper into ffmpeg): record-stop and the blocking record report frames, width, height and durationMs equal to ffprobe's decoded count (duration within 1 ms); nothing at --out until finalized, no .partial sibling left; a recorder SIGKILLed before finalizing gives exit 5 / capture-failed with details.recording state failed and frames null, no file, and recordings lists it failed. The finalization logic is also unit-tested in tests/tlinux_capture.nim. Windows recorder: pending (later).
       linux_status: passed (2026-10-21, Linux x86_64)
-      falsifying_mutation_linux: wf-recorder writing straight to --out (no temp-and-rename) => red; core/mp4 counting every stsz sample instead of those within the track duration (wf-recorder ends a -r track with a zero-duration sample) => red; a file without moov finalized as stopped => red (exit 0 instead of 5, wlr); the portal helper killing its encoder at stop => red.
+      falsifying_mutation_linux: wf-recorder writing straight to --out (no temp-and-rename) => red (2026-10-21; the temp-and-rename is now linux_common's for every Linux recorder); core/mp4 counting every stsz sample instead of those within the track duration (wf-recorder ends a -r track with a zero-duration sample) => red; a file without moov finalized as stopped => red (exit 0 instead of 5, wlr); the portal helper killing its encoder at stop => red.
     - test_name: test_capture_backends_report_their_features_and_name_them_on_exit_4_6
       file: tests/live/tcapture_<os>.nim
       description: (GS2.1 obligation) C7: capabilities with each capture backend selected lists the capture features of spec §7.5 with probed states (window-crop and titles-redacted degradations where they apply); an unsupported capture (--own-pixels on linux-wlr) and a missing grant name their feature in details.feature.
@@ -1646,7 +1654,23 @@
         =SWAYSOCK=; another wlroots compositor is exit 4 /
         =display-server-unsupported= naming that. Window order is: focused,
         then floating (top-most first), then tiled (sway states no z-order).
-        Its wf-recorder runs =-r <fps> -D -p bf=0=.
+        Its recordings run GuiAssert's =wlr_screencopy= helper
+        (=helpers/linux=, since 2026-10-22; wf-recorder =-r <fps> -D -p bf=0=
+        before): one wlr-screencopy =copy= (not =copy_with_damage=, so a
+        still screen still yields frames) of the output, or of the
+        target's rectangle in the coordinates of the output holding most
+        of it, every 1/fps seconds, written as raw RGB24 to ffmpeg
+        (=linux_common.rawRgbEncoder=, now shared with the linux-x11 and
+        portal recorders). A slow encoder makes the write block and the
+        copies after it catch up back to back; at stop ffmpeg encodes every
+        frame it was given, so a stall delays the stop and never shortens
+        the file. Cursor overlaid, as wf-recorder did.
+      - Spec text to update (for =substrate/macos=, the spec owner): §4.2's
+        capability table says linux-wlr records "via =wf-recorder="; it
+        records through GuiAssert's =wlr_screencopy= helper into ffmpeg
+        (why: GS5 Outstanding Tasks, the wf-recorder task). The same row's
+        "recordings via ffmpeg =x11grab=" for linux-x11 already deviates
+        (XGetImage frames from =x11_probe= into ffmpeg, above).
       - =linux-gnome= needs a shell that answers =Eval= and the screenshot API
         (unsafe mode: GuiAssert's private headless shell); a normal session's
         shell is exit 4 / =display-server-unsupported= with that remedy. Its
@@ -1692,11 +1716,14 @@
         =guiassert= (the one Agent Harbor consumes) builds them in its
         derivation into =libexec/guiassert= and its wrapper sets
         =GUI_ASSERT_HELPER_DIR= there (=--set-default=) and puts the pinned
-        grim, wf-recorder, swaymsg, gdbus and ffmpeg first on its =PATH=, so
-        it captures with no dev shell. The flake check
+        grim, swaymsg, gdbus and ffmpeg (and wf-recorder until 2026-10-22)
+        first on its =PATH=, so it captures with no dev shell. The flake check
         =guiassert-packaged-linux-capture= runs the package from an empty
         environment against a private Xvfb (linux-x11 probed supported, a
-        screenshot, a finalized recording).
+        screenshot, a finalized recording) and, since 2026-10-22, against a
+        private headless sway (a finalized linux-wlr recording of at least ten
+        frames through the packaged =wlr_screencopy=; with the helper left
+        out of the package the check fails with missing-tool).
       - A probe that fails with exit 5 (a portal refusal, an unreadable
         answer) reports its feature =unavailable= with reason
         =display-server-unsupported= (=linux_common.unavailableReason=):
@@ -1759,7 +1786,7 @@
       sway's variables (no =PATH=) probed every linux-wlr feature, listed
       HEADLESS-1 and a wm_probe window, took display and window-crop
       screenshots with the window's colour, and recorded a 14-frame MP4.)
-    - [ ] =companion/linux=: wf-recorder (0.6.0, =-r <fps> -D=) on a headless
+    - [X] =companion/linux=: wf-recorder (0.6.0, =-r <fps> -D=) on a headless
       sway 1.11 output intermittently stalls: the file holds the first frame
       and the one flushed at SIGINT, nothing between. Measured by the review
       (2026-10-22) with a pulsing wm_probe window: 1 of 40, 0 of 40 and 1 of
@@ -1773,6 +1800,80 @@
       a wf-recorder/wlroots fix upstream and recording the screencopy
       frames with a GuiAssert helper as linux-x11 and the portal already do,
       then require the live suite clean on ten consecutive runs.
+      Done 2026-10-22 (=companion/linux=, Linux x86_64, inside =nix develop=).
+      Root cause: a wf-recorder defect exposed by encoder latency, not
+      timestamps, not damage and not GuiAssert's stop. wf-recorder copies
+      frames on its main thread into a pool of at most 16 buffers and
+      encodes them on a second thread; when the pool is full it stops
+      copying, and on SIGINT the encoder thread exits at once without
+      encoding the frames still pooled. Evidence: a wf-recorder 0.6.0 built
+      with a trace of every copy, every encode and every frame out of its
+      fps filter, run in a loop of 1.5 s recordings of the pulsing wm_probe
+      window (8 of 250 failed while the host was loaded): in every failed
+      run copies went on at the output's 60 Hz with monotonic compositor
+      timestamps (so not (a) timestamps, and not (b) damage: frames kept
+      arriving) while encodes stopped after the first one or two frames
+      until the pool filled; =gdb= stacks taken by a watchdog at the stall
+      (3 of 3) had the encoder thread inside libx264
+      (=x264_encoder_encode= / rate control), busy, not blocked, the main
+      thread waiting for a free buffer. The file then held the frames
+      encoded before the stall: the first, plus at most one more, which
+      with =-r= ends the track as a zero-duration sample (=frames= 1, or
+      exit 5 / zero duration). Not (c): the same failure reproduced with
+      wf-recorder alone, without =guiassert=. Failure rate before the fix,
+      no injection: wf-recorder alone 2 of 150 and 8 of 250 (trace build),
+      through =guiassert record= 4 of 150; 0 of 450 once 20 leaked
+      wf-recorder processes from an earlier run (three of them spinning
+      inside libx264 at 230% CPU since their compositor exited) were
+      killed and the host was quieter, so the trigger is a libx264 stall
+      of over a second, which host load makes likely. Reproduced on demand
+      by an LD_PRELOAD shim that delays one libx264 encode call by 1.6 s
+      (the same as =tests/live/slow_x264.c=): wf-recorder 20 of 20
+      recordings with 1 frame.
+      Fix: =linux-wlr= records through a GuiAssert helper,
+      =helpers/linux/wlr_screencopy.c= (wlr-screencopy =copy= every 1/fps,
+      raw RGB24 into ffmpeg, the frames' size from the first copy), as the
+      linux-x11 and portal recorders already do; built by
+      =helpers/linux/build.sh= and installed by the flake package, whose
+      check =guiassert-packaged-linux-capture= now also records with
+      linux-wlr in a private headless sway. A slow encoder blocks the write
+      and the copies catch up after it; at stop ffmpeg encodes every frame
+      it was given. Static screens: the spec asks nothing of them beyond
+      C12; =copy= is answered at the next output commit whether or not
+      anything changed, so a still screen yields frames (16 frames per
+      1.5 s with a non-pulsing window, 5 of 5). After: =guiassert record=
+      1.5 s at 10 fps, 0 of 250 failed (16 frames each); with the stall
+      injected, 0 of 200 failed (15 or 16 frames each) where wf-recorder
+      failed 20 of 20; =just test-live-linux= 15/15 on ten consecutive
+      runs; =just test= 375, =just test-core= 39, =just test-contract= 114,
+      =just test-desktop-env= 31, =just lint= clean, =nix flake check=
+      green, 0 failed and 0 skipped. Regression test:
+      =test_linux_wlr_recording_keeps_every_frame_through_an_encoder_stall=
+      (Verification); with linux-wlr switched back to wf-recorder it is red
+      with a 1-frame file. No upstream report filed yet: the drain-at-stop
+      defect is in wf-recorder's =write_loop= (it breaks on
+      =exit_main_loop= with frames still available), worth reporting to
+      ammen99/wf-recorder.
+      Independently verified 2026-10-22 (review agent, Linux x86_64, inside
+      =nix develop=, host under load from other builds): review fixes to
+      =wlr_screencopy.c= (a malformed =--region= is a usage error instead
+      of silently recording the whole output; the compositor-chosen stride
+      and size are bounds-checked before a frame is read; the copy retry
+      is documented). =just test= 375, =just test-core= 39,
+      =just test-contract= 114, =just test-desktop-env= 31, =just lint=
+      (no linters configured yet),
+      =just test-live-linux= 15/15 on five consecutive runs, 0 failed and
+      0 skipped (one earlier =just test= run failed
+      =test_subsecond_preview_rerender=, a wall-clock editor check, at a
+      load average of 45; green on re-run, and under 45 busy loops it
+      failed 1 of 10 on origin/agents without this change and 0 of 10
+      with it: load-sensitive, not caused here). Mutation: linux-wlr back on
+      wf-recorder => the regression test red (1 frame, durationMs 100).
+      =nix build .#guiassert= ships =wlr_screencopy= and no wf-recorder or
+      =slow_x264= in its closure; =guiassert-packaged-linux-capture=
+      green. The packaged =guiassert record= (1.5 s, 10 fps) on a private
+      headless sway: 0 of 120 short (16 frames each, equal to ffprobe), and
+      0 of 25 with =slow_x264= preloaded.
     - [ ] Proposal (not contract surface yet): a VNC framebuffer capture
       backend (for example =linux-vnc=) that captures a session through its
       loopback VNC endpoint (=wayvnc= / =x11vnc=, spec §6.3 =--vnc=). It
