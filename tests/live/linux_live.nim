@@ -1,9 +1,9 @@
-## Shared support of the Linux live capture suite
-## (`tests/live/tcapture_linux.nim`): the private display servers it starts
-## (headless sway, headless GNOME Shell, Xvfb, and the portal stack of
-## PipeWire, WirePlumber and xdg-desktop-portal with its wlroots backend on a
-## private sway), the fixture windows, the environment a `guiassert` run
-## gets, and reading what a run left behind.
+## Shared support of the Linux live suites (`tests/live/tcapture_linux.nim`,
+## capture, and `tests/live/tocr_linux.nim`, OCR over captures): the private
+## display servers they start (headless sway, headless GNOME Shell, Xvfb, and
+## the portal stack of PipeWire, WirePlumber and xdg-desktop-portal with its
+## wlroots backend on a private sway), the fixture windows, the environment a
+## `guiassert` run gets, and reading what a run left behind.
 ##
 ## Every server is the run's own: a private runtime directory, a private
 ## session bus, nothing connected to the operator's display. A server that
@@ -200,9 +200,11 @@ proc waitPidWindow*(t: TargetEnvironment, pid: int): EnvWindow =
     if w.pid == pid: return w
 
 proc probeWindow*(t: TargetEnvironment, rgb: string, title: string, holdMs = 900_000,
-                  pulse = false): Process =
-  ## wm_probe's mapped 320x200 window of colour `rgb`, titled `title`.
-  var args = @[helper("wm_probe"), "title=" & title, "map", "rgb=" & rgb, "hold=" & $holdMs]
+                  pulse = false, image = ""): Process =
+  ## wm_probe's mapped 320x200 window of colour `rgb`, titled `title`; with
+  ## `image` (a binary PPM), a window of the image's size showing it instead.
+  var args = @[helper("wm_probe"), "title=" & title, "map",
+               (if image.len > 0: "image=" & image else: "rgb=" & rgb), "hold=" & $holdMs]
   if pulse: args.add "pulse"
   t.spawn(args)
 
@@ -242,14 +244,16 @@ proc stop*(x: var Xvfb) =
     x.process.close()
     x.process = nil
 
-proc x11Window*(x: Xvfb, geometry, rgb, title: string, holdMs = 900_000):
+proc x11Window*(x: Xvfb, geometry, rgb, title: string, holdMs = 900_000, image = ""):
     tuple[process: Process, id: string] =
-  ## x11_probe's window of colour `rgb` at `geometry` (`WxH+X+Y`).
+  ## x11_probe's window of colour `rgb` at `geometry` (`WxH+X+Y`); with
+  ## `image` (a binary PPM of the geometry's size), showing the image instead.
   var env = newStringTable(modeCaseSensitive)
   for k, v in envPairs(): env[k] = v
   env["DISPLAY"] = x.display
   let p = startProcess(helper("x11_probe"), args = ["window", "--geometry", geometry,
-    "--rgb", rgb, "--title", title, "--hold", $holdMs], env = env, options = {})
+    (if image.len > 0: "--image" else: "--rgb"), (if image.len > 0: image else: rgb),
+    "--title", title, "--hold", $holdMs], env = env, options = {})
   var line: string
   if not p.outputStream.readLine(line):
     raise blocked("x11_probe's window did not open on " & x.display)

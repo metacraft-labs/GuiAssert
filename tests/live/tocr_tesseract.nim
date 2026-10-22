@@ -22,88 +22,11 @@
 when not defined(posix):
   {.error: "tests/live/tocr_tesseract.nim runs on Linux and macOS".}
 
-import std/[json, os, osproc, random, strtabs, strutils, unittest]
+import std/[json, os, strtabs, strutils, unittest]
 
 import ../contract/harness
-import ../../src/gui_assert/core/[image, png, geometry]
-
-const
-  inkSlack = 3
-  fontSize = 44
-
-# ---------------------------------------------------------------------------
-# Invented images
-# ---------------------------------------------------------------------------
-
-proc ffmpegBin(): string =
-  result = getEnv("FFMPEG_BIN")
-  if result.len == 0: result = findExe("ffmpeg")
-  doAssert result.len > 0, "ffmpeg not found: run inside `nix develop`"
-
-proc drawtextEscape(s: string): string =
-  ## A value for drawtext's `text=` inside single quotes (letters, digits
-  ## and spaces only are used here, so nothing needs escaping but the check).
-  for c in s: doAssert c in {'A'..'Z', 'a'..'z', '0'..'9', ' '}, "unsupported character"
-  s
-
-proc renderLines(path: string, size: Size, lines: openArray[(string, Point)],
-                 fg = "black", bg = "white") =
-  ## `lines` drawn by ffmpeg at their top-left points in DejaVu Sans at
-  ## `fontSize`, `fg` on `bg`, one PNG frame at `path`.
-  var vf = "color=c=" & bg & ":s=" & $size.width & "x" & $size.height
-  for (text, at) in lines:
-    vf.add ",drawtext=font='DejaVu Sans':fontsize=" & $fontSize & ":fontcolor=" & fg &
-      ":text='" & drawtextEscape(text) & "':x=" & $at.x & ":y=" & $at.y
-  let (o, code) = execCmdEx(quoteShell(ffmpegBin()) & " -y -hide_banner -loglevel error " &
-    "-f lavfi -i " & quoteShell(vf) & " -frames:v 1 " & quoteShell(path))
-  doAssert code == 0, "ffmpeg failed: " & o
-
-proc inkWords(path: string, band: tuple[top, bottom: int], dark: bool): seq[Rect] =
-  ## The ink rectangles of the words in rows `band` of the image at `path`:
-  ## columns holding ink (luma below 128 when `dark`, above it otherwise),
-  ## split into words at gaps of at least a quarter of the font size, each
-  ## word's rows of ink.
-  let g = decodePngGray(readFile(path))
-  proc ink(x, y: int): bool =
-    let v = ord(g.pixels[y * g.width + x])
-    if dark: v < 128 else: v >= 128
-  var cols = newSeq[bool](g.width)
-  for x in 0 ..< g.width:
-    for y in band.top ..< band.bottom:
-      if ink(x, y):
-        cols[x] = true
-        break
-  var x = 0
-  while x < g.width:
-    if not cols[x]:
-      inc x
-      continue
-    var x1 = x
-    var gap = 0
-    var j = x
-    while j < g.width:
-      if cols[j]:
-        x1 = j
-        gap = 0
-      else:
-        inc gap
-        if gap >= fontSize div 4: break
-      inc j
-    var y0 = high(int)
-    var y1 = -1
-    for xx in x .. x1:
-      for y in band.top ..< band.bottom:
-        if ink(xx, y):
-          y0 = min(y0, y)
-          y1 = max(y1, y)
-    result.add rect(x, y0, x1 - x + 1, y1 - y0 + 1)
-    x = x1 + 1
-
-proc planted(): string =
-  ## A word that appears nowhere but in the image this run draws.
-  randomize()
-  result = "PLANTED"
-  for i in 0 ..< 5: result.add char(ord('2') + rand(7))
+import ./ocr_live
+import ../../src/gui_assert/core/geometry
 
 # ---------------------------------------------------------------------------
 # Running the binary
@@ -114,14 +37,6 @@ proc tessEnv(stateDir: string): StringTableRef =
   ## without GUIASSERT_* variables, with the state directory.
   result = baseEnv()
   result["GUIASSERT_STATE_DIR"] = stateDir
-
-proc bboxOf(w: JsonNode): Rect =
-  let b = w["bbox"]
-  rect(b[0].getInt, b[1].getInt, b[2].getInt, b[3].getInt)
-
-proc wordsNamed(data: JsonNode, text: string): seq[JsonNode] =
-  for w in data["words"]:
-    if w["text"].getStr == text: result.add w
 
 # The helpers that check are templates, not procs: `check` marks the test
 # that runs it as failed only when it expands inside the test's own scope.

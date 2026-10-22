@@ -64,3 +64,4 @@ tests/live/tcapture_linux
 tests/contract/tocr_verbs
 tests/live/tocr_macos
 tests/live/tocr_tesseract
+tests/live/tocr_linux

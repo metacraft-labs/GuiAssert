@@ -6,7 +6,9 @@
 ## in a private temporary directory (`backends/ocr/engine_process`), so the
 ## recognized text never passes through a stream GuiAssert reads as
 ## diagnostics, and tesseract's own diagnostics are never passed through to
-## GuiAssert's stderr (C15). A missing program is exit 4 / `missing-tool`.
+## GuiAssert's stderr (C15). A missing program is exit 4 / `missing-tool`, and
+## so is an installation without the default language's traineddata when no
+## `--lang` is given (with a remedy naming the traineddata).
 ##
 ## **Options**, each honoured exactly or refused (spec §2):
 ##
@@ -53,6 +55,8 @@ const
   maxTsvBytes = 64 * 1024 * 1024
   missingToolRemedy = "install tesseract (the GuiAssert flake pins it; or a " &
     "distribution or Homebrew package) or set TESSERACT_BIN"
+  traineddataRemedy = "install tesseract's 'eng' traineddata (the GuiAssert " &
+    "flake pins it), or point TESSDATA_PREFIX at a directory that has it"
 
 type
   TesseractConfig* = object
@@ -162,9 +166,9 @@ proc unscale*(words: var seq[OcrWord], upscale: float) =
 # The program
 # ---------------------------------------------------------------------------
 
-proc missingTool(msg: string): ref BackendUnavailableError =
+proc missingTool(msg: string, remedy = missingToolRemedy): ref BackendUnavailableError =
   result = unavailable(tesseractName, "missing-tool", msg)
-  result.remedy = missingToolRemedy
+  result.remedy = remedy
 
 proc failed(msg: string): ref BackendError =
   newBackendError(BackendError, tesseractName, "ocr-failed", msg)
@@ -230,6 +234,13 @@ proc recognizeWithTesseract(cfg: TesseractConfig, req: OcrRequest): OcrResult =
       "no image at " & req.imagePath)
   let exe = tesseractBinary()
   let installed = installedLanguages(cfg)
+  if req.languages.len == 0 and defaultTesseractLanguage notin installed:
+    # Nothing was asked for, so no option is refused: the installation lacks
+    # the data the engine needs to run at all (what `capabilities --probe`
+    # reports as `missing-tool` too).
+    raise missingTool("the installed tesseract has no '" & defaultTesseractLanguage &
+      "' traineddata (" & $installed.len & " languages installed; see tesseract " &
+      "--list-langs)", traineddataRemedy)
   for l in langs:
     if l notin installed:
       raise unsupported("the installed tesseract has no '" & l & "' traineddata (" &
@@ -285,8 +296,7 @@ proc tesseractFeatures*(cfg: TesseractConfig, probe: bool): seq[Feature] =
     discard tesseractBinary()
     if not probe: return @[f(fsAvailable)]
     if defaultTesseractLanguage in installedLanguages(cfg): return @[f(fsSupported)]
-    return @[f(fsUnavailable, "missing-tool",
-               "install tesseract's '" & defaultTesseractLanguage & "' traineddata")]
+    return @[f(fsUnavailable, "missing-tool", traineddataRemedy)]
   except BackendUnavailableError as e:
     return @[f(fsUnavailable, e.reason, e.remedy)]
   except BackendError as e:

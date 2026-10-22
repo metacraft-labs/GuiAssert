@@ -191,6 +191,11 @@
         # renderer, no GPU), linux-wlr must record a finalized MP4 through
         # its `wlr_screencopy` helper. A package that lost its helpers or
         # tools fails here instead of answering `missing-tool` to a consumer.
+        # It also reads text from a capture with the packaged tesseract (the
+        # Linux default OCR engine, GS6): an invented two-line label, drawn
+        # here by ffmpeg in DejaVu Sans and shown in an `x11_probe` window,
+        # must come back word for word from `ocr --window`, in reading order,
+        # with the window's origin, and from `ocr --region` with the region's.
         // lib.optionalAttrs pkgs.stdenv.isLinux {
           guiassert-packaged-linux-capture =
             pkgs.runCommand "guiassert-packaged-linux-capture"
@@ -198,7 +203,10 @@
                 nativeBuildInputs = [
                   pkgs.jq
                   pkgs.xorg.xvfb
+                  pkgs.ffmpeg
                 ];
+                # Only the label is drawn with a font; the package needs none.
+                FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; };
               }
               ''
                 export HOME="$TMPDIR"
@@ -224,6 +232,37 @@
                 ga record --out "$TMPDIR/rec.mp4" --duration-ms 1000 --fps 10 > rec.json
                 jq -e '.ok == true and .data.recording.state == "stopped" and
                        .data.recording.frames >= 5' rec.json
+                # OCR of a capture with the packaged tesseract: the label in a
+                # window at (10, 60), read through linux-x11.
+                ffmpeg -hide_banner -loglevel error -f lavfi -i \
+                  "color=c=white:s=300x100,drawtext=font='DejaVu Sans':fontsize=28:fontcolor=black:text='QUARTZ 4719':x=12:y=14,drawtext=font='DejaVu Sans':fontsize=28:fontcolor=black:text='PELICAN DOCK':x=12:y=58" \
+                  -frames:v 1 -pix_fmt rgb24 label.ppm
+                env -i DISPLAY=:71 ${guiassert}/libexec/guiassert/x11_probe window \
+                  --geometry 300x100+10+60 --image label.ppm --title label --hold 120000 \
+                  > win.json 2> win.log &
+                win=$!
+                trap 'kill $xvfb $win' EXIT
+                for _ in $(seq 100); do
+                  [ -s win.json ] && break
+                  sleep 0.1
+                done
+                [ -s win.json ] || { cat win.log; exit 1; }
+                id=$(jq -r .id win.json)
+                ga ocr --window "$id" --out "$TMPDIR/ocr.png" > ocr.json 2> ocr.err \
+                  || { cat ocr.json ocr.err; exit 1; }
+                [ ! -s ocr.err ] || { cat ocr.err; exit 1; }
+                jq -e '.ok == true and .data.backend == "tesseract" and
+                       .data.languages == ["eng"] and
+                       .data.text == "QUARTZ 4719\nPELICAN DOCK" and
+                       .data.image.origin == [10, 60] and
+                       ([.data.words[].text] == ["QUARTZ", "4719", "PELICAN", "DOCK"]) and
+                       ([.data.words[] | select(.confidence >= 50 and .confidence <= 100)]
+                        | length == 4)' ocr.json || { cat ocr.json; exit 1; }
+                ga ocr --region 14,64,280,44 --out "$TMPDIR/ocr-region.png" > ocr-region.json
+                jq -e '.ok == true and .data.text == "QUARTZ 4719" and
+                       .data.image.origin == [14, 64]' ocr-region.json || { cat ocr-region.json; exit 1; }
+                kill $win
+                trap 'kill $xvfb' EXIT
                 # linux-wlr in a private headless sway (unwrapped: the wrapper
                 # starts it under dbus-run-session, and no bus is needed here).
                 run="$TMPDIR/run"

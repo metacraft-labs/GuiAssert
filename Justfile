@@ -13,10 +13,11 @@
 #                    and the fixture backends only).
 # `just test-live-macos` - the macOS live suites: capture (GS5, TCC-gated)
 #                    and OCR (GS6: Apple Vision over files, and over captures).
-# `just test-live-linux` - the Linux live capture suite (GS5): linux-x11 in a
+# `just test-live-linux` - the Linux live suites: capture (GS5): linux-x11 in a
 #                    private Xvfb, linux-wlr and linux-portal-pipewire in a
 #                    private headless sway, linux-gnome in a private headless
-#                    GNOME Shell (inside `nix develop`).
+#                    GNOME Shell; and OCR (GS6): tesseract over captures from
+#                    each of them (inside `nix develop`).
 # `just test-live-tesseract` - the tesseract OCR engine against the pinned
 #                    tesseract (GS6; Linux and macOS, inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
@@ -90,9 +91,16 @@ test-live-macos: build-cli
 # (a private Xvfb, a private headless sway with PipeWire and the wlroots
 # portal, a private headless GNOME Shell), never the operator's display. A
 # server that cannot start FAILS its tests with a `GS5-LINUX BLOCKED:` line.
-# Run inside `nix develop` (it pins every server and tool the suite starts).
+# The OCR suite (GS6, tests/live/tocr_linux.nim) then reads invented labels
+# through the same backends with the pinned tesseract (`GS6-LINUX BLOCKED:`
+# likewise). Both suites run even when the first fails; the recipe fails when
+# either does. Run inside `nix develop` (it pins every server and tool the
+# suites start).
 test-live-linux: build-cli
-    nim c -r --hints:off tests/live/tcapture_linux.nim
+    @status=0; for f in tcapture_linux tocr_linux; do \
+      echo "===== $f ====="; \
+      nim c -r --hints:off tests/live/$f.nim || status=1; \
+    done; exit $status
 
 # The tesseract OCR engine (GS6) through the real `guiassert`, against the
 # tesseract and ffmpeg the flake pins (run inside `nix develop`). Needs no

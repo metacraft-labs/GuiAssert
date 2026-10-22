@@ -27,9 +27,11 @@
  *     (UTF-8), else WM_NAME. `focus` is the client holding the input focus
  *     (XGetInputFocus, mapped to its client), or null.
  *
- *   x11_probe window --geometry WxH+X+Y --rgb RRGGBB [--title T]
- *                    [--class C] [--hold MS]
- *     Opens a mapped top-level window filled with the colour, its WM_CLASS
+ *   x11_probe window --geometry WxH+X+Y (--rgb RRGGBB | --image PPM)
+ *                    [--title T] [--class C] [--hold MS]
+ *     Opens a mapped top-level window filled with the colour, or showing
+ *     the binary PPM of exactly WxH pixels (`ppm_image.h`; the live OCR
+ *     suite draws invented text into it) as its background, its WM_CLASS
  *     `C` (default `gui-assert-x11-probe`), its title, and its _NET_WM_PID,
  *     waits for the first Expose, prints {"id":ID} and keeps it painted for
  *     MS milliseconds (default 60000), or until SIGTERM.
@@ -62,6 +64,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
+#include "ppm_image.h"
 
 static Atom a_wm_state, a_net_wm_pid, a_net_wm_name, a_utf8, a_net_check;
 
@@ -296,10 +300,34 @@ static void on_term(int sig) {
   stop_requested = 1;
 }
 
+/* The pixel value of an RGB colour in a TrueColor visual's channel masks. */
+static unsigned long true_color_pixel(const Visual *visual, unsigned r, unsigned g,
+                                      unsigned b) {
+  unsigned long pixel = 0;
+  unsigned long masks[3] = {visual->red_mask, visual->green_mask, visual->blue_mask};
+  unsigned long channels[3] = {r & 0xff, g & 0xff, b & 0xff};
+  for (int c = 0; c < 3; c++) {
+    unsigned long m = masks[c];
+    int shift = 0, bits = 0;
+    while (m && !(m & 1)) {
+      m >>= 1;
+      shift++;
+    }
+    while (m & 1) {
+      m >>= 1;
+      bits++;
+    }
+    /* Scale the 8-bit channel to the mask's width (wider masks: depth 30). */
+    unsigned long v = bits <= 8 ? channels[c] >> (8 - bits) : channels[c] << (bits - 8);
+    pixel |= v << shift;
+  }
+  return pixel;
+}
+
 static int open_window(Display *d, int argc, char **argv) {
   int w = 0, h = 0, x = 0, y = 0;
   unsigned long rgb = 0x808080;
-  const char *title = NULL, *klass = "gui-assert-x11-probe";
+  const char *title = NULL, *klass = "gui-assert-x11-probe", *image = NULL;
   long hold_ms = 60000;
   int have_geometry = 0;
   for (int i = 2; i < argc; i++) {
@@ -307,6 +335,8 @@ static int open_window(Display *d, int argc, char **argv) {
       have_geometry = sscanf(argv[++i], "%dx%d+%d+%d", &w, &h, &x, &y) == 4;
     } else if (strcmp(argv[i], "--rgb") == 0 && i + 1 < argc) {
       rgb = strtoul(argv[++i], NULL, 16);
+    } else if (strcmp(argv[i], "--image") == 0 && i + 1 < argc) {
+      image = argv[++i];
     } else if (strcmp(argv[i], "--title") == 0 && i + 1 < argc) {
       title = argv[++i];
     } else if (strcmp(argv[i], "--class") == 0 && i + 1 < argc) {
@@ -328,29 +358,59 @@ static int open_window(Display *d, int argc, char **argv) {
     fprintf(stderr, "x11_probe window: the default visual is not TrueColor\n");
     return 1;
   }
-  /* The pixel value of the colour in the TrueColor visual's channel masks. */
-  unsigned long pixel = 0;
-  unsigned long masks[3] = {visual->red_mask, visual->green_mask, visual->blue_mask};
-  unsigned long channels[3] = {(rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff};
-  for (int c = 0; c < 3; c++) {
-    unsigned long m = masks[c];
-    int shift = 0, bits = 0;
-    while (m && !(m & 1)) {
-      m >>= 1;
-      shift++;
-    }
-    while (m & 1) {
-      m >>= 1;
-      bits++;
-    }
-    pixel |= ((channels[c] >> (8 - bits)) << shift);
-  }
   XSetWindowAttributes sa = {0};
-  sa.background_pixel = pixel;
+  unsigned long attr_mask = CWEventMask;
   sa.event_mask = ExposureMask | StructureNotifyMask;
+  Pixmap background = None;
+  if (image) {
+    /* The image becomes the window's background pixmap, so the server
+     * repaints it on every exposure. */
+    int iw = 0, ih = 0;
+    const char *why = "";
+    unsigned char *rgb24 = read_ppm(image, &iw, &ih, &why);
+    if (!rgb24) {
+      fprintf(stderr, "x11_probe window: %s: %s\n", image, why);
+      return 1;
+    }
+    if (iw != w || ih != h) {
+      fprintf(stderr, "x11_probe window: %s is %dx%d, not the window's %dx%d\n",
+              image, iw, ih, w, h);
+      free(rgb24);
+      return 2;
+    }
+    int depth = DefaultDepth(d, screen);
+    char *data = malloc((size_t)w * h * 4);
+    XImage *xi = data ? XCreateImage(d, visual, (unsigned)depth, ZPixmap, 0, data,
+                                     (unsigned)w, (unsigned)h, 32, 0)
+                      : NULL;
+    if (!xi) {
+      fprintf(stderr, "x11_probe window: cannot create the image\n");
+      free(data);
+      free(rgb24);
+      return 1;
+    }
+    for (int row = 0; row < h; row++)
+      for (int col = 0; col < w; col++) {
+        const unsigned char *p = rgb24 + ((size_t)row * w + col) * 3;
+        XPutPixel(xi, col, row, true_color_pixel(visual, p[0], p[1], p[2]));
+      }
+    free(rgb24);
+    background = XCreatePixmap(d, RootWindow(d, screen), (unsigned)w, (unsigned)h,
+                               (unsigned)depth);
+    GC gc = XCreateGC(d, background, 0, NULL);
+    XPutImage(d, background, gc, xi, 0, 0, 0, 0, (unsigned)w, (unsigned)h);
+    XFreeGC(d, gc);
+    XDestroyImage(xi); /* frees `data` too */
+    sa.background_pixmap = background;
+    attr_mask |= CWBackPixmap;
+  } else {
+    sa.background_pixel =
+        true_color_pixel(visual, (rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+    attr_mask |= CWBackPixel;
+  }
   Window win = XCreateWindow(d, RootWindow(d, screen), x, y, w, h, 0,
                              CopyFromParent, InputOutput, CopyFromParent,
-                             CWBackPixel | CWEventMask, &sa);
+                             attr_mask, &sa);
   XSizeHints *size = XAllocSizeHints();
   size->flags = PPosition | PSize | USPosition | USSize;
   size->x = x;
@@ -399,6 +459,8 @@ static int open_window(Display *d, int argc, char **argv) {
     poll(&pfd, 1, 100);
   }
   XDestroyWindow(d, win);
+  if (background != None)
+    XFreePixmap(d, background);
   XCloseDisplay(d);
   return 0;
 }
@@ -630,7 +692,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], modes[i]) == 0)
       mode = i;
   if (mode < 0) {
-    fprintf(stderr, "usage: %s list | window --geometry WxH+X+Y --rgb RRGGBB "
+    fprintf(stderr, "usage: %s list | window --geometry WxH+X+Y (--rgb RRGGBB | --image PPM) "
                     "[--title T] [--class C] [--hold MS] | grab --geometry WxH+X+Y "
                     "--out FILE | record --geometry WxH+X+Y --fps F --report FILE "
                     "-- ARGV...\n", argv[0]);

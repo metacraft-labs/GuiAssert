@@ -44,6 +44,12 @@
  *
  *   rgb=RRGGBB     with `map`: the window's colour (hex), instead of grey.
  *
+ *   image=PATH     with `map`: the window shows this binary PPM
+ *                  (`ppm_image.h`) at its size, instead of one colour, so a test
+ *                  can read known content in it (the live OCR suite draws
+ *                  invented text). With `pulse` the alternate buffer is the
+ *                  image with every blue channel XOR 1.
+ *
  *   title=TEXT     the toplevel's title (`xdg_toplevel.set_title`).
  *
  *   pulse          with `hold`: repaint every 100 ms, alternating between
@@ -65,6 +71,7 @@
 #include <string.h>
 #include <wayland-client.h>
 
+#include "ppm_image.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
@@ -202,7 +209,7 @@ int main(int argc, char **argv) {
   int fixed = 0, map = 0, pulse = 0;
   long hold_ms = 0;
   unsigned long rgb = 0x808080;
-  const char *title = NULL;
+  const char *title = NULL, *image = NULL;
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "client") == 0 || strcmp(argv[i], "server") == 0)
       requested = argv[i];
@@ -216,11 +223,13 @@ int main(int argc, char **argv) {
       rgb = strtoul(argv[i] + 4, NULL, 16) & 0xffffff;
     else if (strncmp(argv[i], "title=", 6) == 0)
       title = argv[i] + 6;
+    else if (strncmp(argv[i], "image=", 6) == 0)
+      image = argv[i] + 6;
     else if (strcmp(argv[i], "pulse") == 0)
       pulse = 1;
     else {
       fprintf(stderr, "usage: %s [client|server] [fixed] [title=TEXT] "
-                      "[map [rgb=RRGGBB] [hold=MS [pulse]]]\n", argv[0]);
+                      "[map [rgb=RRGGBB | image=PPM] [hold=MS [pulse]]]\n", argv[0]);
       return 2;
     }
   }
@@ -274,27 +283,44 @@ int main(int argc, char **argv) {
   }
   int maximize_honoured = -1, fullscreen_honoured = -1;
   if (map) {
-    /* A 320x200 XRGB8888 buffer from an anonymous shared-memory file. */
+    /* An XRGB8888 buffer from an anonymous shared-memory file: 320x200, or
+     * the size of `image=`. */
     if (!shm) {
       fprintf(stderr, "wm_probe: the compositor offers no wl_shm\n");
       return 1;
     }
-    /* Two buffers in one pool: the colour, and the pulse colour. */
-    int w = 320, h = 200, stride = w * 4, size = stride * h * 2;
+    int w = 320, h = 200;
+    unsigned char *rgb24 = NULL;
+    if (image) {
+      const char *why = "";
+      rgb24 = read_ppm(image, &w, &h, &why);
+      if (!rgb24) {
+        fprintf(stderr, "wm_probe: %s: %s\n", image, why);
+        return 1;
+      }
+    }
+    /* Two buffers in one pool: the content, and the pulse content. */
+    int stride = w * 4, size = stride * h * 2;
     int fd = memfd_create("wm_probe", MFD_CLOEXEC);
     if (fd < 0 || ftruncate(fd, size) < 0) {
       fprintf(stderr, "wm_probe: cannot allocate a buffer\n");
+      free(rgb24);
       return 1;
     }
     uint32_t *px = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (px == MAP_FAILED) {
       fprintf(stderr, "wm_probe: cannot map the buffer\n");
+      free(rgb24);
       return 1;
     }
     for (int i = 0; i < w * h; i++) {
-      px[i] = 0xff000000u | (uint32_t)rgb;
-      px[w * h + i] = 0xff000000u | ((uint32_t)rgb ^ 1u);
+      uint32_t c = rgb24 ? ((uint32_t)rgb24[i * 3] << 16) |
+                               ((uint32_t)rgb24[i * 3 + 1] << 8) | rgb24[i * 3 + 2]
+                         : (uint32_t)rgb;
+      px[i] = 0xff000000u | c;
+      px[w * h + i] = 0xff000000u | (c ^ 1u);
     }
+    free(rgb24);
     struct wl_shm_pool *pool = wl_shm_create_pool(shm, fd, size);
     struct wl_buffer *buf =
         wl_shm_pool_create_buffer(pool, 0, w, h, stride, WL_SHM_FORMAT_XRGB8888);

@@ -23,6 +23,10 @@ import ../desktop_env, ./helpers, ./session_bus, ./wayland_probe
 type
   SwayTarget* = ref object of TargetEnvironment
     width*, height*: int
+      ## The headless output's mode, in physical pixels.
+    scale*: float
+      ## The headless output's scale (physical pixels per logical pixel);
+      ## its logical size is the mode divided by it. 1 unless asked.
     floatingAppIds*: seq[string]
       ## App ids sway floats on map (a `for_window … floating enable` rule),
       ## so a scenario can move and resize them. Tiled otherwise.
@@ -35,17 +39,21 @@ type
     probed: bool
 
 proc newSwayTarget*(width = 1920; height = 1080;
-                    floatingAppIds: seq[string] = @[]): SwayTarget =
-  SwayTarget(name: "sway", width: width, height: height,
+                    floatingAppIds: seq[string] = @[]; scale = 1.0): SwayTarget =
+  SwayTarget(name: "sway", width: width, height: height, scale: scale,
              floatingAppIds: floatingAppIds,
              sessionEnv: newStringTable(modeCaseSensitive))
+
+proc outputScale(t: SwayTarget): float =
+  ## `scale`, or 1 for a target built without one (`attachSwayTarget`).
+  if t.scale > 0: t.scale else: 1.0
 
 proc swayConfig(t: SwayTarget): string =
   # No `bg`: sway hands it to `swaybg` and waits for that before opening
   # its socket, so a missing `swaybg` is a hang. The headless output is
   # black without it.
   result = "output HEADLESS-1 {\n  mode " & $t.width & "x" & $t.height &
-           "@60Hz\n  pos 0 0\n}\n" &
+           "@60Hz\n  pos 0 0\n  scale " & $t.outputScale & "\n}\n" &
            "default_border none\ntitlebar_border_thickness 0\n" &
            "titlebar_padding 0\nbar {\n  mode invisible\n}\n" &
            "focus_follows_mouse no\nxwayland disable\n"
@@ -93,10 +101,16 @@ proc outputExtent(t: SwayTarget): (int, int) =
       result = (max(result[0], r["x"].getInt + r["width"].getInt),
                 max(result[1], r["y"].getInt + r["height"].getInt))
 
+proc logicalWidth(t: SwayTarget): int =
+  ## The output's logical width: what absolute pointer positions span.
+  int(t.width.float / t.outputScale + 0.5)
+
+proc logicalHeight(t: SwayTarget): int = int(t.height.float / t.outputScale + 0.5)
+
 proc startPointer(t: SwayTarget) =
   try:
     t.pointer = startProcess(helper("virtual_pointer"),
-                             args = @[$t.width, $t.height], options = {})
+                             args = @[$t.logicalWidth, $t.logicalHeight], options = {})
   except OSError as e:
     raise t.envError("start", "the pointer helper: " & e.msg)
   var line: string
