@@ -20,6 +20,27 @@
       ];
       forAllSystems = lib.genAttrs systems;
       pkgsFor = system: import nixpkgs { inherit system; };
+      # at-spi2-core whose bus launcher runs the PINNED dbus-daemon for the
+      # accessibility bus it starts (GS7). nixpkgs builds the launcher to
+      # spawn /run/current-system/sw/bin/dbus-daemon, and to prefer a
+      # dbus-broker-launch there, which is the host's (NixOS) or nothing (any
+      # other host, and the Nix build sandbox, where the launcher then fails).
+      # The broker path is pointed where none exists, so the launcher always
+      # takes the daemon. Only the launcher is taken from this build; GTK keeps
+      # nixpkgs' at-spi2-core.
+      atspiLauncherFor =
+        pkgs:
+        pkgs.at-spi2-core.overrideAttrs (old: {
+          mesonFlags = map (
+            flag:
+            if lib.hasPrefix "-Ddbus_daemon=" flag then
+              "-Ddbus_daemon=${pkgs.dbus}/bin/dbus-daemon"
+            else if lib.hasPrefix "-Ddbus_broker=" flag then
+              "-Ddbus_broker=/nonexistent/dbus-broker-launch"
+            else
+              flag
+          ) old.mesonFlags;
+        });
     in
     {
       # The `guiassert` program, built twice from one main (spec §3.4, §9.2):
@@ -290,6 +311,104 @@
                        .data.recording.width == 320 and .data.recording.frames >= 10' rec-wlr.json
                 touch "$out"
               '';
+
+          # The packaged `guiassert` reads an accessibility tree on Linux with
+          # no dev shell and no PATH (GS7): against a private Xvfb with its own
+          # session bus and AT-SPI bus (at-spi-bus-launcher, the registry it
+          # activates), the invented GTK 3 form of the live suite
+          # (`tests/live/fixtures/atspi_form.c`, built here) must come back
+          # from `tree --app` with its golden names, its window at the
+          # position it asked for (desktop coordinates: linux-atspi places the
+          # frame through the window linux-x11 reports, with the packaged
+          # x11_probe), its password field protected with value and text null;
+          # `find`, `element-action press` and `wait --element` must drive it;
+          # and the probed `tree-read` feature must be `supported`. The tree
+          # verbs need nothing on the wrapper: the backend speaks D-Bus itself.
+          guiassert-packaged-linux-tree =
+            pkgs.runCommandCC "guiassert-packaged-linux-tree"
+              {
+                nativeBuildInputs = [
+                  pkgs.jq
+                  pkgs.xorg.xvfb
+                  pkgs.dbus
+                  pkgs.pkg-config
+                ];
+                buildInputs = [ pkgs.gtk3 ];
+                FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; };
+              }
+              ''
+                export HOME="$TMPDIR"
+                cc -O1 -Wall -Werror -o form ${./tests/live/fixtures/atspi_form.c} \
+                  $(pkg-config --cflags --libs gtk+-3.0)
+                run="$TMPDIR/run"
+                mkdir -m 700 "$run"
+                Xvfb :72 -screen 0 800x600x24 -nolisten tcp > xvfb.log 2>&1 &
+                xvfb=$!
+                dbus-daemon --config-file=${pkgs.dbus}/share/dbus-1/session.conf --nofork \
+                  --address="unix:path=$run/bus" > bus.log 2>&1 &
+                bus=$!
+                trap 'kill $xvfb $bus' EXIT
+                for _ in $(seq 100); do
+                  [ -e /tmp/.X11-unix/X72 ] && [ -S "$run/bus" ] && break
+                  sleep 0.1
+                done
+                [ -S "$run/bus" ] || { cat bus.log xvfb.log; exit 1; }
+                session=(DISPLAY=:72 XDG_RUNTIME_DIR="$run" DBUS_SESSION_BUS_ADDRESS="unix:path=$run/bus")
+                env -i HOME="$HOME" "''${session[@]}" \
+                  ${atspiLauncherFor pkgs}/libexec/at-spi-bus-launcher --launch-immediately \
+                  > launcher.log 2>&1 &
+                launcher=$!
+                trap 'kill $launcher $xvfb $bus' EXIT
+                for _ in $(seq 100); do
+                  env -i "''${session[@]}" dbus-send --session --print-reply \
+                    --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+                    org.freedesktop.DBus.NameHasOwner string:org.a11y.Bus 2>/dev/null \
+                    | grep -q 'boolean true' && break
+                  sleep 0.1
+                done
+                env -i HOME="$HOME" "''${session[@]}" GDK_BACKEND=x11 GSETTINGS_BACKEND=memory \
+                  FONTCONFIG_FILE="$FONTCONFIG_FILE" ./form --title "Order Form 7" \
+                  --position 40,30 > form.out 2> form.log &
+                form=$!
+                trap 'kill $form $launcher $xvfb $bus' EXIT
+                ga() {
+                  env -i HOME="$HOME" "''${session[@]}" ${guiassert}/bin/guiassert \
+                    --state-dir "$TMPDIR/state" "$@"
+                }
+                ga wait --element --role button --name Submit \
+                  --wait-ms 30000 > ready.json || { cat ready.json form.log launcher.log; exit 1; }
+                ga tree --app guiassert-form > tree.json 2> tree.err || { cat tree.json tree.err; exit 1; }
+                [ ! -s tree.err ] || { cat tree.err; exit 1; }
+                jq -e '.ok == true and .data.root.role == "application" and
+                       .data.root.name == "guiassert-form" and .data.truncated == false and
+                       ([.data.root | .. | objects | select(has("name")) | .name] as $n |
+                        ["Order Form 7", "Display name", "Passphrase", "Remember this device",
+                         "Delivery notes", "Submit"] | all(. as $g | $n | index($g) != null)) and
+                       (.data.root.children[0].role == "window") and
+                       (.data.root.children[0].bounds[0:2] == [40, 30]) and
+                       ([.data.root | .. | objects | select(.nativeRole? == "password text")] |
+                        length == 1 and .[0].value == null and .[0].text == null and
+                        (.[0].states | index("protected") != null))' tree.json \
+                  || { cat tree.json; exit 1; }
+                ga find --app guiassert-form --role button --name Submit > find.json
+                jq -e '.ok == true and (.data.elements | length == 1) and
+                       (.data.elements[0].actions | index("press") != null) and
+                       .data.elements[0].bounds[0] >= 40 and .data.elements[0].bounds[1] > 30' \
+                  find.json || { cat find.json; exit 1; }
+                ga element-action "$(jq -r '.data.elements[0].path' find.json)" press > press.json
+                jq -e '.ok == true and .data.action == "press"' press.json || { cat press.json; exit 1; }
+                ga wait --element --app guiassert-form --role label --name-contains Submitted \
+                  --wait-ms 10000 > status.json || { cat status.json; exit 1; }
+                ga capabilities --probe > caps.json
+                jq -e '.ok == true and .data.selected.tree == "linux-atspi" and
+                       ([.data.features[] | select(.feature == "tree-read" and
+                         .backend == "linux-atspi" and .state == "supported")] | length == 1)' \
+                  caps.json || { cat caps.json; exit 1; }
+                ga apps > apps.json
+                jq -e '.ok == true and ([.data.apps[] | select(.name == "guiassert-form" and
+                         .accessible == true)] | length == 1)' apps.json || { cat apps.json; exit 1; }
+                touch "$out"
+              '';
         }
       );
 
@@ -346,6 +465,18 @@
             pipewire
             wireplumber
             xdg-desktop-portal-wlr
+            # The Linux accessibility-tree backend's live tests (GS7,
+            # `linux-atspi`): the GTK 3, GTK 4 and Qt 6 Widgets toolkits the
+            # invented form fixtures are compiled against (Qt's platform
+            # plugins are named by GUI_ASSERT_QT_PLUGIN_PATH below), and
+            # libXtst for the X11 click helper that presses a fixture button
+            # at the centre of its reported bounds. (GTK brings
+            # at-spi2-core; a test session starts its private AT-SPI bus with
+            # the launcher named by GUI_ASSERT_ATSPI_BUS_LAUNCHER below.)
+            gtk3
+            gtk4
+            qt6.qtbase
+            xorg.libXtst
           ];
         in
         {
@@ -406,6 +537,12 @@
               export GUI_ASSERT_GSETTINGS_SCHEMAS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas"
               export GUI_ASSERT_GNOME_SHELL="${pkgs.gnome-shell}/bin/gnome-shell"
               export GUI_ASSERT_XDG_DESKTOP_PORTAL_GNOME="${pkgs.xdg-desktop-portal-gnome}/libexec/xdg-desktop-portal-gnome"
+              # The AT-SPI bus launcher (GS7), running the pinned dbus-daemon
+              # (`atspiLauncherFor`): a Linux tree live test starts the
+              # accessibility bus of its private session with it.
+              export GUI_ASSERT_ATSPI_BUS_LAUNCHER="${atspiLauncherFor pkgs}/libexec/at-spi-bus-launcher"
+              # Qt's platform plugins (xcb, wayland) for the Qt form fixture (GS7).
+              export GUI_ASSERT_QT_PLUGIN_PATH="${pkgs.qt6.qtbase}/lib/qt-6/plugins"
               # The wlroots portal backend (ScreenCast for the linux-portal-pipewire
               # capture backend's live tests, GS5).
               export GUI_ASSERT_XDG_DESKTOP_PORTAL_WLR="${pkgs.xdg-desktop-portal-wlr}/libexec/xdg-desktop-portal-wlr"

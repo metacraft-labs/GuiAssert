@@ -43,6 +43,12 @@ when linuxCaptureCompiledIn:
   import ../backends/capture/[linux_common, linux_wlr, linux_gnome, linux_x11,
                                 linux_portal_pipewire]
 
+when linuxTreeCompiledIn or linuxSessionCompiledIn:
+  import ../backends/tree/linux_atspi
+
+when linuxSessionCompiledIn:
+  import ../backends/session/linux_host
+
 when appleVisionCompiledIn:
   import ../backends/ocr/apple_vision
 
@@ -333,12 +339,26 @@ proc ocrBackend*(e: VerbEnv): OcrEngine =
       return newTesseractOcr(TesseractConfig(token: e.ctx.token))
   raise noConstructor(modOcr, name)
 
+when linuxTreeCompiledIn or linuxSessionCompiledIn:
+  proc atspiConfig(e: VerbEnv): LinuxAtspiConfig =
+    ## The `linux-atspi` configuration of an invocation: its environment
+    ## names the session's buses, and its capture backend places frames on
+    ## the desktop (a capture backend that cannot run here leaves bounds
+    ## null rather than failing the tree read).
+    let env = e
+    LinuxAtspiConfig(env: e.ctx.env, token: e.ctx.token,
+      windows: proc (): seq[Window] =
+        env.captureBackend().windows(env.session,
+          WindowFilter(allLayers: true, includeOffscreen: true)).windows)
+
 proc treeBackend*(e: VerbEnv): TreeBackend =
   ## The selected accessibility-tree backend.
   e.ensureAvailable(modTree)
-  case e.selection[modTree].name
-  of fixtureBackendName: newFixtureTree(e.fixtureCfg)
-  else: raise noConstructor(modTree, e.selection[modTree].name)
+  let name = e.selection[modTree].name
+  if name == fixtureBackendName: return newFixtureTree(e.fixtureCfg)
+  when linuxTreeCompiledIn:
+    if name == linuxAtspiName: return newLinuxAtspiTree(e.atspiConfig)
+  raise noConstructor(modTree, name)
 
 proc inputBackend*(e: VerbEnv): InputBackend =
   ## The selected input backend.
@@ -350,9 +370,18 @@ proc inputBackend*(e: VerbEnv): InputBackend =
 proc sessionBackend*(e: VerbEnv): SessionBackend =
   ## The selected session backend.
   e.ensureAvailable(modSession)
-  case e.selection[modSession].name
-  of fixtureBackendName: newFixtureSession(e.fixtureCfg)
-  else: raise noConstructor(modSession, e.selection[modSession].name)
+  let name = e.selection[modSession].name
+  if name == fixtureBackendName: return newFixtureSession(e.fixtureCfg)
+  when linuxSessionCompiledIn:
+    if name == linuxHostName:
+      let env = e
+      return newLinuxHostSession(LinuxHostConfig(env: e.ctx.env, token: e.ctx.token,
+        stateDir: e.stateDir, atspi: e.atspiConfig,
+        capture: proc (): CaptureBackend = env.captureBackend(),
+        backends: SessionBackends(capture: e.selection[modCapture].name,
+                                  tree: e.selection[modTree].name,
+                                  input: e.selection[modInput].name)))
+  raise noConstructor(modSession, name)
 
 template withSessionLock(e: VerbEnv, id: string, body: untyped) =
   ## Serialize verbs that change session `id` across processes (spec §7.6).

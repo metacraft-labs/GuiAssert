@@ -13,7 +13,9 @@
 ## **Implemented.** The platform backends of spec §4 are filled in by later
 ## milestones (GS5–GS11); GS5 implemented `macos-sck` and `macos-cgwindow`
 ## and the Linux capture backends `linux-wlr`, `linux-gnome`, `linux-x11` and
-## `linux-portal-pipewire`, GS6 the OCR engines `apple-vision` and `tesseract`.
+## `linux-portal-pipewire`, GS6 the OCR engines `apple-vision` and `tesseract`,
+## GS7 the Linux tree backend `linux-atspi` and, for the applications of the
+## caller's own session, the `linux-host` session backend.
 ## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
@@ -99,7 +101,8 @@ const
     KnownBackend(module: modOcr, name: "fixture", platforms: allPlatforms,
                  implemented: true),
     KnownBackend(module: modTree, name: "macos-ax", platforms: {hpMacos}),
-    KnownBackend(module: modTree, name: "linux-atspi", platforms: {hpLinux}),
+    KnownBackend(module: modTree, name: "linux-atspi", platforms: {hpLinux},
+                 implemented: true),
     KnownBackend(module: modTree, name: "windows-uia", platforms: {hpWindows}),
     KnownBackend(module: modTree, name: "appium", platforms: allPlatforms),
     KnownBackend(module: modTree, name: "fixture", platforms: allPlatforms,
@@ -115,7 +118,8 @@ const
     KnownBackend(module: modSession, name: "macos-host", platforms: {hpMacos}),
     KnownBackend(module: modSession, name: "macos-virtual-display", platforms: {hpMacos}),
     KnownBackend(module: modSession, name: "macos-isolated", platforms: {hpMacos}),
-    KnownBackend(module: modSession, name: "linux-host", platforms: {hpLinux}),
+    KnownBackend(module: modSession, name: "linux-host", platforms: {hpLinux},
+                 implemented: true),
     KnownBackend(module: modSession, name: "linux-sway", platforms: {hpLinux}),
     KnownBackend(module: modSession, name: "linux-gnome", platforms: {hpLinux}),
     KnownBackend(module: modSession, name: "linux-xvfb", platforms: {hpLinux}),
@@ -164,6 +168,15 @@ const
     not defined(guiassertNoCapture)
     ## Whether the Linux capture backends' code is linked into this binary
     ## (`compiledIn` decides which of them is selectable).
+
+const
+  linuxTreeCompiledIn* = not minimalBuild and defined(linux) and
+    not defined(guiassertNoTree) and not defined(guiassertNoLinuxAtspi)
+    ## Whether the `linux-atspi` tree backend's code is linked into this binary.
+  linuxSessionCompiledIn* = not minimalBuild and defined(linux) and
+    not defined(guiassertNoSession) and not defined(guiassertNoLinuxHost)
+    ## Whether the `linux-host` session backend's code is linked into this
+    ## binary.
 
 const
   appleVisionCompiledIn* = not minimalBuild and defined(macosx) and

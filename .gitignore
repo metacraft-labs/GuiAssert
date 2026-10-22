@@ -65,3 +65,5 @@ tests/contract/tocr_verbs
 tests/live/tocr_macos
 tests/live/tocr_tesseract
 tests/live/tocr_linux
+tests/tlinux_tree
+tests/live/ttree_linux

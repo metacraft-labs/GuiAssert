@@ -1,9 +1,11 @@
 ## Shared support of the Linux live suites (`tests/live/tcapture_linux.nim`,
-## capture, and `tests/live/tocr_linux.nim`, OCR over captures): the private
-## display servers they start (headless sway, headless GNOME Shell, Xvfb, and
-## the portal stack of PipeWire, WirePlumber and xdg-desktop-portal with its
-## wlroots backend on a private sway), the fixture windows, the environment a
-## `guiassert` run gets, and reading what a run left behind.
+## capture, `tests/live/tocr_linux.nim`, OCR over captures, and
+## `tests/live/ttree_linux.nim`, accessibility trees): the private display
+## servers they start (headless sway, headless GNOME Shell, Xvfb, and the
+## portal stack of PipeWire, WirePlumber and xdg-desktop-portal with its
+## wlroots backend on a private sway), a private session's AT-SPI bus, the
+## fixture windows and the invented GTK form, the environment a `guiassert`
+## run gets, and reading what a run left behind.
 ##
 ## Every server is the run's own: a private runtime directory, a private
 ## session bus, nothing connected to the operator's display. A server that
@@ -23,8 +25,11 @@ export desktop_env, sway, gnome
 const sessionVars = ["WAYLAND_DISPLAY", "DISPLAY", "SWAYSOCK", "DBUS_SESSION_BUS_ADDRESS",
                      "XDG_RUNTIME_DIR", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE",
                      "XDG_CONFIG_HOME", "XDG_DESKTOP_PORTAL_DIR", "GSETTINGS_BACKEND",
-                     "GSETTINGS_SCHEMA_DIR"]
-  ## What a `guiassert` run must not inherit from the operator's session.
+                     "GSETTINGS_SCHEMA_DIR", "AT_SPI_BUS_ADDRESS", "QT_IM_MODULE",
+                     "GTK_IM_MODULE", "XMODIFIERS"]
+  ## What a `guiassert` run must not inherit from the operator's session
+  ## (an input method of the operator's would be looked for on the private
+  ## session bus, where it is not).
 
 # ---------------------------------------------------------------------------
 # The run's own processes
@@ -341,3 +346,155 @@ proc freshRuntimeDir*(): string =
   ## A short private directory under /tmp (sockets must fit `sun_path`).
   result = createTempDir("gacl-", "", "/tmp")
   setFilePermissions(result, {fpUserRead, fpUserWrite, fpUserExec})
+
+# ---------------------------------------------------------------------------
+# Accessibility (GS7): the session's AT-SPI bus and the form fixtures
+# ---------------------------------------------------------------------------
+
+proc descendantsOf*(pid: int): seq[int] =
+  ## Every live descendant of `pid` (each process's parent from
+  ## `/proc/<pid>/stat`, proc(5)), children before their own children.
+  var parents = @[pid]
+  var i = 0
+  while i < parents.len:
+    let parent = parents[i]
+    inc i
+    for kind, path in walkDir("/proc"):
+      let p = try: parseInt(path.extractFilename) except ValueError: 0
+      if p <= 0: continue
+      try:
+        let stat = readFile(path / "stat")
+        let close = stat.rfind(')')
+        if close < 0: continue
+        let fields = stat[close + 1 .. ^1].splitWhitespace
+        if fields.len > 1 and fields[0] != "Z" and parseInt(fields[1]) == parent and
+           p notin result:
+          result.add p
+          parents.add p
+      except IOError, OSError, ValueError:
+        discard
+
+proc terminateAll*(pids: seq[int]) =
+  ## SIGTERM each of `pids`, then SIGKILL whatever still runs 2 s later.
+  for p in pids: discard posix.kill(posix.Pid(p), posix.SIGTERM)
+  let deadline = epochTime() + 2
+  var left = pids
+  while left.len > 0 and epochTime() < deadline:
+    sleep(50)
+    var still: seq[int]
+    for p in left:
+      if posix.kill(posix.Pid(p), 0) == 0 and fileExists("/proc/" & $p & "/stat") and
+         not readFile("/proc/" & $p & "/stat").split(") ")[^1].startsWith("Z"):
+        still.add p
+    left = still
+  for p in left: discard posix.kill(posix.Pid(p), posix.SIGKILL)
+
+type
+  AtspiBus* = object
+    ## The AT-SPI bus of a private session: at-spi-bus-launcher on the
+    ## session's own bus, which registers `org.a11y.Bus` there and runs the
+    ## accessibility bus (a dbus-daemon of its own, on which the registry is
+    ## activated).
+    launcher*: Process
+    address*: string
+
+proc sessionChildEnv(session: StringTableRef): StringTableRef =
+  result = newStringTable(modeCaseSensitive)
+  for k, v in envPairs(): result[k] = v
+  for k in sessionVars: result.del(k)
+  result.del("AT_SPI_BUS_ADDRESS")
+  for k, v in session: result[k] = v
+
+proc a11yAddressOf*(session: StringTableRef): string =
+  ## What the session bus answers for `org.a11y.Bus.GetAddress`, "" when
+  ## nothing owns the name (asked without activating it).
+  let env = sessionChildEnv(session)
+  let (o, code) = execCmdEx(quoteShellCommand(["gdbus", "call", "--session", "-d",
+    "org.freedesktop.DBus", "-o", "/org/freedesktop/DBus", "-m",
+    "org.freedesktop.DBus.NameHasOwner", "org.a11y.Bus"]), env = env)
+  if code != 0 or "true" notin o: return ""
+  let (a, acode) = execCmdEx(quoteShellCommand(["gdbus", "call", "--session", "-d",
+    "org.a11y.Bus", "-o", "/org/a11y/bus", "-m", "org.a11y.Bus.GetAddress"]), env = env)
+  if acode != 0: return ""
+  let q = a.find('\'')
+  let q2 = a.rfind('\'')
+  if q < 0 or q2 <= q: return ""
+  a[q + 1 ..< q2]
+
+proc startAtspiBus*(session: StringTableRef): AtspiBus =
+  ## The session's AT-SPI bus, started with the pinned launcher
+  ## (`GUI_ASSERT_ATSPI_BUS_LAUNCHER`) unless a client of the session had the
+  ## session bus activate one already. Ready when `org.a11y.Bus` answers with
+  ## an address inside the session's runtime directory.
+  let runtime = session["XDG_RUNTIME_DIR"]
+  result.address = a11yAddressOf(session)
+  if result.address.len == 0:
+    let launcher = requireEnvPath("GUI_ASSERT_ATSPI_BUS_LAUNCHER")
+    result.launcher = launchLogged(sessionChildEnv(session), launcher,
+                                   @["--launch-immediately"], runtime / "atspi-launcher.log")
+    let deadline = epochTime() + 15
+    while result.address.len == 0:
+      if epochTime() > deadline or not result.launcher.running:
+        let log = try: readFile(runtime / "atspi-launcher.log") except IOError: ""
+        raise blocked("the session's AT-SPI bus did not start: " & log.strip)
+      sleep(100)
+      result.address = a11yAddressOf(session)
+  if runtime notin result.address:
+    raise blocked("the session's AT-SPI bus is not the session's own: " & result.address)
+  # What an assistive technology does on starting: Qt's bridge registers its
+  # applications only while `org.a11y.Status.IsEnabled` is true (GTK's always
+  # do).
+  let (o, code) = execCmdEx(quoteShellCommand(["gdbus", "call", "--session", "-d",
+    "org.a11y.Bus", "-o", "/org/a11y/bus", "-m", "org.freedesktop.DBus.Properties.Set",
+    "org.a11y.Status", "IsEnabled", "<true>"]), env = sessionChildEnv(session))
+  if code != 0: raise blocked("the session's AT-SPI bus refused IsEnabled: " & o.strip)
+
+proc stop*(b: var AtspiBus) =
+  ## Stop the launcher and everything it started (its accessibility bus and
+  ## the registry that bus activated).
+  if b.launcher != nil:
+    var pids = descendantsOf(b.launcher.processID)
+    pids.insert(b.launcher.processID, 0)
+    terminateAll(pids)
+    try: b.launcher.close()
+    except OSError: discard
+    b.launcher = nil
+
+proc compileC*(dir, name, source: string, pkgs: openArray[string]): string =
+  ## `source` compiled with the dev shell's compiler against `pkgs`
+  ## (pkg-config names) into `dir`.
+  let cc = requireExe("cc")
+  discard requireExe("pkg-config")
+  let (flags, fcode) = execCmdEx(quoteShellCommand(@["pkg-config", "--cflags", "--libs"] &
+                                                   @pkgs))
+  if fcode != 0:
+    raise blocked("pkg-config knows no " & pkgs.join(", ") & " (run inside GuiAssert's " &
+      "`nix develop`): " & flags.strip)
+  result = dir / name
+  let (o, code) = execCmdEx(quoteShellCommand([cc, "-O1", "-Wall", "-Werror", "-o", result,
+    source]) & " " & flags.strip)
+  if code != 0: raise blocked(name & " did not compile: " & o.strip)
+
+proc buildFormFixture*(dir: string, gtk: int): string =
+  ## The invented form window (`fixtures/atspi_form.c`) against GTK `gtk`
+  ## (3 or 4).
+  compileC(dir, "atspi_form_gtk" & $gtk, currentSourcePath().parentDir / "fixtures" /
+           "atspi_form.c", [if gtk == 4: "gtk4" else: "gtk+-3.0"])
+
+proc buildQtFixture*(dir: string): string =
+  ## The same form in Qt 6 Widgets (`fixtures/atspi_form_qt.cpp`).
+  let cxx = requireExe("c++")
+  discard requireExe("pkg-config")
+  let (flags, fcode) = execCmdEx("pkg-config --cflags --libs Qt6Widgets")
+  if fcode != 0:
+    raise blocked("pkg-config knows no Qt6Widgets (run inside GuiAssert's `nix develop`): " &
+      flags.strip)
+  result = dir / "atspi_form_qt6"
+  let (o, code) = execCmdEx(quoteShellCommand([cxx, "-O1", "-Wall", "-Werror", "-fPIC", "-o",
+    result, currentSourcePath().parentDir / "fixtures" / "atspi_form_qt.cpp"]) & " " &
+    flags.strip)
+  if code != 0: raise blocked("the Qt form did not compile: " & o.strip)
+
+proc buildX11Input*(dir: string): string =
+  ## `x11_input.c`: places a client window and clicks with XTest on an Xvfb.
+  compileC(dir, "x11_input", currentSourcePath().parentDir / "x11_input.c", ["x11", "xtst"])

@@ -16,8 +16,11 @@
 # `just test-live-linux` - the Linux live suites: capture (GS5): linux-x11 in a
 #                    private Xvfb, linux-wlr and linux-portal-pipewire in a
 #                    private headless sway, linux-gnome in a private headless
-#                    GNOME Shell; and OCR (GS6): tesseract over captures from
-#                    each of them (inside `nix develop`).
+#                    GNOME Shell; OCR (GS6): tesseract over captures from
+#                    each of them; and accessibility trees (GS7): linux-atspi
+#                    reading invented GTK 3 and GTK 4 forms on the private
+#                    AT-SPI bus of a headless sway (scale 1 and 2) and of an
+#                    Xvfb (inside `nix develop`).
 # `just test-live-tesseract` - the tesseract OCR engine against the pinned
 #                    tesseract (GS6; Linux and macOS, inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
@@ -30,7 +33,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tswift_helper_cache; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tswift_helper_cache; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -93,11 +96,13 @@ test-live-macos: build-cli
 # server that cannot start FAILS its tests with a `GS5-LINUX BLOCKED:` line.
 # The OCR suite (GS6, tests/live/tocr_linux.nim) then reads invented labels
 # through the same backends with the pinned tesseract (`GS6-LINUX BLOCKED:`
-# likewise). Both suites run even when the first fails; the recipe fails when
-# either does. Run inside `nix develop` (it pins every server and tool the
-# suites start).
+# likewise), and the tree suite (GS7, tests/live/ttree_linux.nim) reads,
+# searches and drives invented GTK forms over each session's own AT-SPI bus
+# (`GS7-LINUX BLOCKED:` likewise). Every suite runs even when an earlier one
+# fails; the recipe fails when any does. Run inside `nix develop` (it pins
+# every server and tool the suites start).
 test-live-linux: build-cli
-    @status=0; for f in tcapture_linux tocr_linux; do \
+    @status=0; for f in tcapture_linux tocr_linux ttree_linux; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/live/$f.nim || status=1; \
     done; exit $status
