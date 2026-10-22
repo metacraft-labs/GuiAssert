@@ -196,6 +196,23 @@ proc compositorPid(t: SwayTarget): int =
     return 0
   pid
 
+proc childPids(parent: int): seq[int] =
+  ## The running children of `parent` (from each process's `/proc/<pid>/stat`
+  ## parent field; proc(5)). Empty when there are none or /proc is unreadable.
+  for kind, path in walkDir("/proc"):
+    let pid = try: parseInt(path.extractFilename) except ValueError: 0
+    if pid <= 0: continue
+    try:
+      let stat = readFile(path / "stat")
+      let close = stat.rfind(')')
+      if close < 0: continue
+      let fields = stat[close + 1 .. ^1].splitWhitespace
+      # fields[0] is the state, fields[1] the parent pid.
+      if fields.len > 1 and fields[0] != "Z" and parseInt(fields[1]) == parent:
+        result.add pid
+    except IOError, OSError, ValueError:
+      discard
+
 method stop*(t: SwayTarget) =
   t.stopSpawned()
   t.restoreSettings()
@@ -216,6 +233,15 @@ method stop*(t: SwayTarget) =
     # packaged `sway` wrapper runs it under `dbus-run-session`, which does
     # not pass SIGTERM on: terminating only the started process left the
     # compositor running, reparented to init.
+    #
+    # dbus-run-session ends its private bus only when the program it runs
+    # exits (dbus-run-session(1)); a SIGTERM to dbus-run-session itself kills
+    # it with the default action and orphans that dbus-daemon. So its
+    # children (the bus and the compositor) are noted now, the compositor is
+    # stopped, and dbus-run-session is given the time to end its bus and
+    # exit by itself. Only if it does not are the noted children still
+    # under it signalled before it is.
+    let wrapperChildren = childPids(t.sway.processID)
     let compositor = compositorPid(t)
     if compositor > 0:
       discard posix.kill(posix.Pid(compositor), posix.SIGTERM)
@@ -223,6 +249,18 @@ method stop*(t: SwayTarget) =
       while compositorPid(t) == compositor and epochTime() < deadline: sleep(20)
       if compositorPid(t) == compositor:
         discard posix.kill(posix.Pid(compositor), posix.SIGKILL)
+    if compositor > 0: discard t.sway.waitForExit(3000)
+    if t.sway.running:
+      # Still the parent of each child it has not reaped, so none of these
+      # pids can have been reused by an unrelated process.
+      let remaining = childPids(t.sway.processID)
+      for child in wrapperChildren:
+        if child in remaining:
+          discard posix.kill(posix.Pid(child), posix.SIGTERM)
+      let deadline = epochTime() + 3
+      while t.sway.running and childPids(t.sway.processID).len > 0 and
+          epochTime() < deadline:
+        sleep(20)
     if t.sway.running:
       t.sway.terminate()
       discard t.sway.waitForExit(3000)

@@ -464,7 +464,7 @@ suite "linux-wlr and linux-portal-pipewire in a private sway":
 
   portal.stop()
   stopProcess(probe)
-  if problem.len == 0: t.stop()
+  t.stop()
 
 # ---------------------------------------------------------------------------
 # linux-gnome
@@ -556,6 +556,17 @@ suite "linux-gnome in a private headless GNOME Shell":
         check w["document"].kind == JNull
 
   stopProcess(probe)
-  if problem.len == 0: t.stop()
+  t.stop()
+
+# ---------------------------------------------------------------------------
+# Nothing left behind
+# ---------------------------------------------------------------------------
+
+suite "the run's own processes":
+  test "test_live_suite_leaves_no_process_running":
+    # Every server above was stopped; nothing this run started (a server, a
+    # helper, a session bus, a bus-activated service, a `guiassert` run) may
+    # outlive it (`linux_live.ownProcesses`).
+    checkLeavesNoProcess()
 
 cleanupFreshDirs()

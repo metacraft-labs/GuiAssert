@@ -76,6 +76,7 @@ proc gsettings*(bus: SessionBus; args: varargs[string]): string =
   output.strip()
 
 proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef)
+proc stop*(bus: var SessionBus)
 
 proc startSessionBus*(runtimeDir, desktopName: string;
                       displayEnv: StringTableRef; withPortals = true;
@@ -116,11 +117,17 @@ proc startSessionBus*(runtimeDir, desktopName: string;
   let deadline = epochTime() + 5
   while not pathExists(busSocket):
     if epochTime() > deadline:
-      raise newException(OSError, "the private session bus did not start: " &
-                         readFile(runtimeDir / "dbus.log"))
+      let log = readFile(runtimeDir / "dbus.log")
+      # The caller never receives this bus, so it is stopped here.
+      result.stop()
+      raise newException(OSError, "the private session bus did not start: " & log)
     sleep(20)
   result.started = true
-  if withPortals: result.startPortals(displayEnv)
+  if withPortals:
+    try: result.startPortals(displayEnv)
+    except OSError:
+      result.stop()
+      raise
 
 proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef) =
   ## The portal stack, on a bus `startSessionBus` started: the GTK backend

@@ -11,6 +11,7 @@
 ## the reason (never a skip).
 
 import std/[json, os, osproc, streams, strtabs, strutils, tempfiles, times, unittest]
+from std/posix import nil
 
 import ../contract/harness
 import ../../src/gui_assert/desktop_env
@@ -24,6 +25,58 @@ const sessionVars = ["WAYLAND_DISPLAY", "DISPLAY", "SWAYSOCK", "DBUS_SESSION_BUS
                      "XDG_CONFIG_HOME", "XDG_DESKTOP_PORTAL_DIR", "GSETTINGS_BACKEND",
                      "GSETTINGS_SCHEMA_DIR"]
   ## What a `guiassert` run must not inherit from the operator's session.
+
+# ---------------------------------------------------------------------------
+# The run's own processes
+# ---------------------------------------------------------------------------
+
+const runTagVar = "GA_LIVE_SUITE_RUN"
+  ## Set in this process's environment when the module loads. Every server,
+  ## helper and `guiassert` run a suite starts inherits it (each environment
+  ## here is built from this process's), and so does whatever those start in
+  ## turn (dbus-run-session's bus, a bus-activated service), so a process
+  ## that carries this run's value was started by this run, however it was
+  ## reparented. Not a GUIASSERT_* name: `harness.baseEnv` drops those.
+
+let runTag = "run-" & $getCurrentProcessId() & "-" & $(epochTime() * 1000).int64
+putEnv(runTagVar, runTag)
+
+proc ownProcesses*(): seq[(int, string)] =
+  ## The live processes other than this one whose environment carries this
+  ## run's tag, with their names (proc(5): `/proc/<pid>/environ`, `comm`,
+  ## `stat`; zombies excluded).
+  let me = getCurrentProcessId()
+  let needle = runTagVar & "=" & runTag
+  for kind, path in walkDir("/proc"):
+    let pid = try: parseInt(path.extractFilename) except ValueError: 0
+    if pid <= 0 or pid == me: continue
+    try:
+      if needle notin readFile(path / "environ").split('\0'): continue
+      let stat = readFile(path / "stat")
+      let close = stat.rfind(')')
+      if close < 0 or stat[close + 1 .. ^1].strip.startsWith("Z"): continue
+      result.add (pid, readFile(path / "comm").strip)
+    except IOError, OSError:
+      discard   # gone meanwhile, or not ours to read
+
+proc killProcesses*(processes: seq[(int, string)]) =
+  ## SIGKILL each of `processes` (pids from `ownProcesses`).
+  for (pid, _) in processes: discard posix.kill(posix.Pid(pid), posix.SIGKILL)
+
+template checkLeavesNoProcess*() =
+  ## Inside a test run after every server was stopped: fails the test when
+  ## anything this run started is still running 10 s later (processes that
+  ## were signalled may take a moment to exit), naming each, and then kills
+  ## them so a failing run leaves nothing behind either.
+  block:
+    var left = ownProcesses()
+    let deadline = epochTime() + 10
+    while left.len > 0 and epochTime() < deadline:
+      sleep(100)
+      left = ownProcesses()
+    if left.len > 0: checkpoint "still running: " & $left
+    check left.len == 0
+    killProcesses(left)
 
 proc blocked*(reason: string): ref AssertionDefect =
   newException(AssertionDefect, "GS5-LINUX BLOCKED: " & reason)
