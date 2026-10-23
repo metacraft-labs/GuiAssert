@@ -660,6 +660,52 @@ template checkHostApps(env: StringTableRef, exe: string, gdk: string, st: string
     check sessions[0]["platform"].getStr == "linux"
     check sessions[0]["backends"]["tree"].getStr == "linux-atspi"
 
+proc strs(j: JsonNode): seq[string] = j.getElems.mapIt(it.getStr)
+
+proc focusedPaths(env: StringTableRef, pid: int): seq[string] =
+  mustRead(@["find", "--pid", $pid, "--state", "focused"], env)["elements"].getElems.mapIt(
+    it["path"].getStr)
+
+template checkFocus(env: StringTableRef, f: Form) =
+  ## `element-action focus` moves the keyboard focus: through Component
+  ## GrabFocus where the toolkit implements it (GTK 3, Qt 6), by a click at
+  ## the element's centre where it does not (GTK 4, linux-atspi "Focus by
+  ## pointer"). Read back three ways: the re-read element and `find --state
+  ## focused` name exactly the focused field, keys typed with the `type`
+  ## verb land in it, and after `key Tab` the focus is still reported, on
+  ## another element (the session's seat keeps its keyboard focus between
+  ## verbs). Negative controls: Passphrase is focused first so that focusing
+  ## Display name has to MOVE the focus; on GTK 4 a button offers no
+  ## `focus` (a click would press it) and is refused.
+  block:
+    let name = pathOf(env, f.pid, "text-field", "Display name")
+    let pw = pathOf(env, f.pid, "text-field", "Passphrase")
+    check "focus" in strs(mustRead(@["element", name], env)["element"]["actions"])
+    for p in [pw, name]:
+      let r = mustRead(@["element-action", p, "focus"], env)
+      check r["action"].getStr == "focus"
+      check "focused" in strs(r["element"]["states"])
+      check focusedPaths(env, f.pid) == @[p]
+    discard mustRead(@["element-action", name, "set-value", "--value", ""], env)
+    discard mustRead(@["type", "Quill Ash"], env)
+    var v = ""
+    for _ in 1 .. 30:
+      v = mustRead(@["element", name], env)["element"]["value"].getStr
+      if v == "Quill Ash": break
+      sleep(100)
+    check v == "Quill Ash"
+    discard mustRead(@["key", "Tab"], env)
+    sleep(300)
+    let after = focusedPaths(env, f.pid)
+    check after.len == 1
+    check name notin after
+    if f.kit == "gtk4":
+      let submit = pathOf(env, f.pid, "button", "Submit")
+      check "focus" notin strs(mustRead(@["element", submit], env)["element"]["actions"])
+      let e = failsWith(@["element-action", submit, "focus"], env, 5, "tree-failed")
+      check "does not offer 'focus'" in e["message"].getStr
+    discard mustRead(@["element-action", name, "set-value", "--value", ""], env)
+
 # ---------------------------------------------------------------------------
 # The backend's tables are at-spi2-core's
 # ---------------------------------------------------------------------------
@@ -825,6 +871,15 @@ suite "linux-atspi in a private headless sway":
       checkPress(env, c)
       terminateAll(@[a.pid, b.pid, c.pid])
 
+  test "test_element_action_focus_moves_the_keyboard_focus [sway, gtk3]":
+    live problem: checkFocus(env, f3)
+
+  test "test_element_action_focus_moves_the_keyboard_focus [sway, gtk4]":
+    live problem: checkFocus(env, f4)
+
+  test "test_element_action_focus_moves_the_keyboard_focus [sway, qt6]":
+    live problem: checkFocus(env, fq)
+
   test "test_tree_content_never_on_stderr_or_serve_events [sway]":
     live problem: checkNoContentLeaks(env, st, f3)
 
@@ -951,6 +1006,15 @@ suite "linux-atspi in a private Xvfb":
 
   test "test_tree_text_protected_document_accessible [x11, qt6]":
     live problem: checkProtected(env, fq, clickX, typeX)
+
+  test "test_element_action_focus_moves_the_keyboard_focus [x11, gtk3]":
+    live problem: checkFocus(env, f3)
+
+  test "test_element_action_focus_moves_the_keyboard_focus [x11, gtk4]":
+    live problem: checkFocus(env, f4)
+
+  test "test_element_action_focus_moves_the_keyboard_focus [x11, qt6]":
+    live problem: checkFocus(env, fq)
 
   test "test_tree_backends_name_features_on_exit_4_6 [x11]":
     live problem: checkFeatures(env, sessionEnv, st, work, f4)

@@ -2,9 +2,23 @@
 ##
 ## A private sway on a headless output, with a private runtime directory, a
 ## private session bus serving desktop settings (`session_bus`), a pointer DEVICE
-## (`virtual_pointer`, wlroots' virtual-pointer protocol), keys through
-## `wtype` (the virtual-keyboard protocol), frames through `grim`
-## (wlr-screencopy) and window readback through sway's IPC (`get_tree`).
+## (`virtual_pointer`, wlroots' virtual-pointer protocol), a keyboard DEVICE
+## held for the target's lifetime (`wayland_input hold-keyboard`, below),
+## keys through `wtype` (the virtual-keyboard protocol), frames through
+## `grim` (wlr-screencopy) and window readback through sway's IPC
+## (`get_tree`).
+##
+## **Why a held keyboard.** sway runs with `WLR_LIBINPUT_NO_DEVICES=1`, so
+## its seat has no keyboard of its own; one that gains a keyboard only while
+## a key tool runs and loses it after sends the focused client
+## `wl_keyboard.leave` after every key verb, and the toolkit then reports
+## its window inactive and no widget `focused` (AT-SPI) between verbs,
+## although each key reached the right widget (measured on sway 1.11 with
+## GTK 3 and GTK 4, 2026-10-23; the helper's module comment has the
+## protocol trace). With a keyboard held for the session, the focused
+## toplevel keeps the keyboard focus between verbs as on a desktop with a
+## keyboard plugged in. An attached target (a sway this process runs in)
+## starts none: that session's seat is its owner's.
 ##
 ## Facts are MEASURED from the running compositor where a client can observe
 ## them, with `wm_probe`: the decoration mode a window is granted, whether a
@@ -40,6 +54,8 @@ type
     swaySock: string
     sway: Process
     pointer: Process
+    keyboard: Process
+      ## `wayland_input hold-keyboard` (module doc); nil when attached.
     bus: SessionBus
     facts: Table[string, Fact]
     probed: bool
@@ -133,6 +149,34 @@ proc startPointer(t: SwayTarget) =
   if not t.pointer.outputStream.readLine(line) or line != "ready":
     raise t.envError("start", "the pointer helper did not start: " & line)
 
+proc startKeyboard(t: SwayTarget) =
+  ## The held keyboard (module doc), once the seat has it.
+  try:
+    t.keyboard = startProcess(helper("wayland_input"), args = @["hold-keyboard"],
+                              options = {})
+  except OSError as e:
+    raise t.envError("start", "the keyboard helper: " & e.msg)
+  var line = ""
+  var ok = false
+  try: ok = t.keyboard.outputStream.readLine(line)
+  except IOError, OSError: ok = false
+  if not ok or line != "ok":
+    raise t.envError("start", "the keyboard helper did not start: " & line)
+
+proc stopKeyboard(t: SwayTarget) =
+  ## End the held keyboard (SIGTERM, then SIGKILL after 2 s). Never raises.
+  if t.keyboard == nil: return
+  try:
+    if t.keyboard.running:
+      t.keyboard.terminate()
+      discard t.keyboard.waitForExit(2000)
+      if t.keyboard.running:
+        t.keyboard.kill()
+        discard t.keyboard.waitForExit(1000)
+    t.keyboard.close()
+  except CatchableError: discard
+  t.keyboard = nil
+
 proc startAttached(t: SwayTarget) =
   for k in ["SWAYSOCK", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"]:
     if getEnv(k).len == 0:
@@ -207,6 +251,7 @@ method start*(t: SwayTarget) =
     raise t.envError("start", "the session bus: " & e.msg)
   for k, v in t.bus.env: t.sessionEnv[k] = v
   t.startPointer()
+  t.startKeyboard()
   t.started = true
 
 proc restoreSettings(t: SwayTarget)
@@ -258,6 +303,7 @@ method stop*(t: SwayTarget) =
     except IOError, OSError: discard
     t.pointer.close()
     t.pointer = nil
+  t.stopKeyboard()
   if t.attached:
     t.started = false
     return

@@ -45,15 +45,50 @@
 ## `read-only`, `invalid` from `invalid-entry`. `actions` are those the
 ## element can perform here: `press` (an Action named click, press, toggle,
 ## jump or open, or activate on a non-text element), `focus` (Component
-## `GrabFocus`), `set-value` (EditableText on editable text, or Value),
+## `GrabFocus`, an Action named set focus, or by pointer, below),
+## `set-value` (EditableText on editable text, or Value),
 ## `increment` / `decrement` (Value, or Action increase / decrease),
 ## `expand` / `collapse` (an Action of that name, or the toggle of an
 ## expandable element), `select` (a child of a Selection container),
-## `show-menu` (an Action named show menu / menu / popup). `focus` is not
-## offered by GTK 4 applications, whose GrabFocus answers NotSupported, and
-## `scroll-to-visible` by none: GTK 3 and GTK 4 both refuse Component
-## `ScrollTo` (measured 2026-10-22, GTK 3.24.51 and 4.20.3), so offering it
-## would promise an action no measured toolkit performs.
+## `show-menu` (an Action named show menu / menu / popup).
+## `scroll-to-visible` is offered by none: GTK 3 and GTK 4 both refuse
+## Component `ScrollTo` (measured 2026-10-22, GTK 3.24.51 and 4.20.3), so
+## offering it would promise an action no measured toolkit performs.
+##
+## **Focus.** `focus` gives the element the KEYBOARD focus, the one the keys
+## typed next reach, and succeeds only once the element reports `focused`
+## (within `focusSettleMs`); otherwise it is exit 5 / `tree-failed`, never
+## a reported success. First the element's window gets the focus through
+## the session's input backend (`LinuxAtspiConfig.focusWindow`, the
+## `window-focus` route) unless it has it: GrabFocus moves the focus inside
+## its window only (measured 2026-10-23 with GTK 3.24 and Qt 6.10 on sway
+## with two windows: GrabFocus answers true and the field in the unfocused
+## window never reports `focused` nor receives the keys). Then the element,
+## by the first mechanism its toolkit has: Component `GrabFocus`, an Action
+## named set focus, or by pointer (below). An element already focused is
+## left alone.
+##
+## **Focus by pointer.** GTK 4 has no AT-SPI focus mechanism at all: its
+## Component `GrabFocus` answers `NotSupported` (gtk/a11y/gtkatspicomponent.c,
+## the same in 4.20.3 and on GTK's main branch; measured live 2026-10-22),
+## its Action tables have no focus action (gtk/a11y/gtkatspiaction.c: an
+## entry offers activate and its icons only), and its Text
+## `SetCaretOffset` / `SetSelection` move the caret without the focus
+## (gtk/a11y/gtkatspitext.c). Sources:
+## https://gitlab.gnome.org/GNOME/gtk/-/tree/main/gtk/a11y . So on a toolkit
+## whose GrabFocus is not implemented (`grabFocusOn`), and only when the
+## invocation has an input backend (`LinuxAtspiConfig.pointerClick`),
+## `focus` is offered on editable text that is focusable, enabled, showing
+## and placed on the desktop (`pointerFocusable`), and performed as what a
+## user does: one primary-button click at the centre of the element's
+## desktop bounds through the session's input backend (the pointer moves
+## there; the caret lands where the click is). A click that another window
+## intercepted, or a session whose seat holds no keyboard focus, leaves the
+## element unfocused and so is `tree-failed`. Buttons, checkboxes, sliders
+## and the like are never focused this way, because a click would also
+## activate or change them: on GTK 4 they do not offer `focus`, and
+## `element-action ... focus` on one stays exit 5 / `tree-failed` "does not
+## offer 'focus'".
 ##
 ## **Bounds are desktop coordinates** (C1). Neither GTK 4 nor GTK 3 on
 ## Wayland reports screen coordinates (measured 2026-10-22: GTK 4 answers
@@ -197,6 +232,18 @@ type
       ## The session's top-level windows as its compositor or X server
       ## reports them (desktop coordinates), for placing extents; nil, or a
       ## proc that returns nothing, leaves every node's bounds null.
+    pointerClick*: proc (at: Point) {.closure.}
+      ## One primary-button click at a desktop point through the session's
+      ## input backend: the `focus` fallback for a toolkit without an
+      ## AT-SPI focus mechanism (module doc, "Focus by pointer"). nil when
+      ## the invocation has no usable input backend; `focus` is then not
+      ## offered there.
+    focusWindow*: proc (windowId: string) {.closure.}
+      ## Give the compositor's (or X server's) window `windowId` the
+      ## keyboard focus through the session's input backend
+      ## (`window-focus`), before `focus` moves it to an element inside
+      ## (module doc, "Focus"). nil when the invocation has no usable input
+      ## backend; `focus` then acts inside the window only.
 
   Iface = enum
     ifComponent, ifText, ifEditableText, ifValue, ifAction, ifSelection
@@ -219,6 +266,7 @@ type
     sub: seq[Raw]           ## the children read
     parentSelection: bool   ## its parent implements Selection
     grabFocus: bool         ## its toolkit implements Component.GrabFocus
+    pointerFocus: bool      ## `focus` may fall back to a click (`pointerFocusable`)
 
   AtspiApp* = object
     ## An application registered on the session's AT-SPI bus.
@@ -349,6 +397,19 @@ proc contractActions(r: Raw): set[NodeAction] =
     result.incl actCollapse
   if r.parentSelection and r.states.has(sSelectable): result.incl actSelect
   if r.actionIndex(menuNames) >= 0: result.incl actShowMenu
+
+proc pointerFocusable*(roleNum: int, states: uint64, bounds: Option[Rect]): bool =
+  ## Whether `focus` may be performed by a click at the centre of `bounds`
+  ## on an element whose toolkit has no AT-SPI focus mechanism (module doc,
+  ## "Focus by pointer"): editable text only (a click there moves the caret
+  ## and the keyboard focus and changes nothing else, where on a button, a
+  ## checkbox or a slider it would activate or change the element), that
+  ## takes the keyboard focus (`focusable`), is enabled, is showing and
+  ## visible on the desktop, and has non-empty desktop bounds to click in.
+  isTextRole(roleNum) and states.has(sEditable) and not states.has(sReadOnly) and
+    states.has(sFocusable) and (states.has(sEnabled) or states.has(sSensitive)) and
+    states.has(sShowing) and states.has(sVisible) and bounds.isSome and
+    not bounds.get.isEmpty
 
 proc formatValue(v: float): string =
   ## A numeric value as text: integral values without a fraction. The range
@@ -582,7 +643,8 @@ proc propNum(r: Reader, serial: uint32): Option[float] =
 proc grabFocusOn(r: Reader, bus: string): bool =
   ## Whether the toolkit of the application at `bus` implements
   ## Component.GrabFocus: GTK 4 answers it with NotSupported (measured with
-  ## GTK 4.20, 2026-10-22), so for it `focus` is not offered.
+  ## GTK 4.20, 2026-10-22), so for it `focus` is offered only by pointer
+  ## (module doc, "Focus by pointer").
   if bus in r.grabFocus: return r.grabFocus[bus]
   result = true
   let sn = r.getProp((bus, rootPath), "org.a11y.atspi.Application", "ToolkitName")
@@ -629,7 +691,9 @@ proc readBasics(r: Reader, objs: seq[ObjRef], withChildren = true): seq[Option[R
     if role.isNone or role.get.len != 1:
       result.add none(Raw)
       continue
-    var raw = Raw(obj: o, roleNum: int(role.get[0].asInt), grabFocus: r.grabFocusOn(o.bus),
+    let grab = r.grabFocusOn(o.bus)
+    var raw = Raw(obj: o, roleNum: int(role.get[0].asInt), grabFocus: grab,
+                  pointerFocus: not grab and r.cfg.pointerClick != nil,
                   name: name.get(""), description: description.get(""),
                   childCount: countOf(count))
     if st.isSome and st.get.len == 1:
@@ -853,6 +917,11 @@ proc toNode(raw: Raw, path: string, placement: Option[Placement]): Node =
   # INT_MIN for it, Qt minus the window's origin), so it has no bounds.
   if raw.extents.isSome and raw.states.has(sShowing):
     result.bounds = placeExtents(raw.extents.get, placement)
+  # `focus` by pointer needs the desktop bounds, so it is decided here and
+  # not in `contractActions`.
+  if raw.pointerFocus and actFocus notin result.actions and
+     pointerFocusable(raw.roleNum, raw.states, result.bounds):
+    result.actions.incl actFocus
 
 proc childPaths(parentPath: string, kids: seq[Raw]): seq[string] =
   var seen = initCountTable[Role]()
@@ -1069,18 +1138,82 @@ proc indexInParent(r: Reader, raw: Raw): int =
   if a.isNone or a.get.len != 1: raise treeFailed("the element's index cannot be read")
   int(a.get[0].asInt)
 
-proc perform(r: Reader, res: Resolved, action: NodeAction, value: Option[string]) =
+const
+  focusSettleMs = 1500
+    ## How long the toolkit has, after a `focus`, to report the element
+    ## `focused`: it applies a window focus, a GrabFocus or a click on its
+    ## own main loop, after the call that asked for it returned.
+
+proc frameWindow(r: Reader, res: Resolved): Option[Window] =
+  ## The compositor's (or X server's) window of the frame that holds the
+  ## resolved node, matched as `placementOf` matches it; none when it cannot
+  ## be told.
+  if res.chain.len == 0 or res.chain[0].extents.isNone: return none(Window)
+  let candidates = r.candidatesOf(res.pid)
+  if candidates.len == 0: return none(Window)
+  var app = res.app
+  app.sub = r.readChildren(app, app.childRefs.len)
+  let frame = res.chain[0]
+  matchWindow(frame.name, frame.extents, unionOf(r.childExtents(frame)),
+              app.showingFrameCount, candidates)
+
+proc awaitFocused(r: Reader, res: Resolved, failure: string) =
+  ## Wait until the resolved element reports `focused`; `tree-failed` with
+  ## `failure` when it does not within `focusSettleMs`.
+  let startNs = monoNowNs()
+  while true:
+    let now = r.readOne(res.chain[^1].obj, withChildren = false)
+    if now.isNone:
+      raise notFoundErr("element", "the element at " & res.path &
+        " left the AT-SPI bus while it was focused")
+    if now.get.states.has(sFocused): return
+    if elapsedMsSince(startNs) >= focusSettleMs:
+      raise treeFailed(failure & " (it reports no `focused` state after " & $focusSettleMs &
+        " ms)")
+    r.cfg.token.sleepCancellable(50)
+
+proc focus(r: Reader, res: Resolved, node: Node, what: string) =
+  ## `focus` (module doc, "Focus"): the element's window gets the keyboard
+  ## focus first, then the element by the first mechanism its toolkit has,
+  ## and the action succeeds only once the element reports `focused`.
+  # Already holding the focus: nothing to do (a click would move the caret).
+  if stFocused in node.states: return
+  let raw = res.chain[^1]
+  # The window first: GrabFocus (GTK 3, Qt 6) moves the focus inside the
+  # window only, so a field in a window the compositor has not focused is
+  # never `focused` and does not receive the keys typed next.
+  if r.cfg.focusWindow != nil:
+    let w = r.frameWindow(res)
+    if w.isSome and not w.get.focused: r.cfg.focusWindow(w.get.id)
+  let i = raw.actionIndex(["setfocus", "set focus"])
+  # The same conditions that offered it (`contractActions`, `toNode`):
+  # GrabFocus where the toolkit implements it, else the element's own
+  # focus action, else a click.
+  if ifComponent in raw.ifaces and raw.states.has(sFocusable) and raw.grabFocus:
+    r.boolAnswer(raw.obj, "org.a11y.atspi.Component", "GrabFocus", [], what)
+    r.awaitFocused(res, "the application accepted " & what & " but did not move the " &
+      "keyboard focus there")
+  elif i >= 0:
+    r.doAction(raw, i, what)
+    r.awaitFocused(res, "the application performed " & what & " but did not move the " &
+      "keyboard focus there")
+  else:
+    # Focus by pointer, offered only with bounds (`pointerFocusable`).
+    if r.cfg.pointerClick == nil or node.bounds.isNone:
+      raise treeFailed("the element at " & res.path & " does not offer 'focus'")
+    let at = node.bounds.get.center
+    r.cfg.pointerClick(at)
+    r.awaitFocused(res, "the click at " & $at & " (the centre of " & res.path &
+      ") did not give it the keyboard focus: another window may cover it, or the " &
+      "session's seat holds no keyboard focus")
+
+proc perform(r: Reader, res: Resolved, node: Node, action: NodeAction,
+             value: Option[string]) =
   let raw = res.chain[^1]
   let what = "'" & $action & "' on " & res.path
   case action
   of actPress: r.doAction(raw, raw.pressIndex, what)
-  of actFocus:
-    let i = raw.actionIndex(["setfocus", "set focus"])
-    # The same condition that offered it (`contractActions`): GrabFocus only
-    # where the toolkit implements it, else the element's own focus action.
-    if ifComponent in raw.ifaces and raw.states.has(sFocusable) and raw.grabFocus:
-      r.boolAnswer(raw.obj, "org.a11y.atspi.Component", "GrabFocus", [], what)
-    else: r.doAction(raw, i, what)
+  of actFocus: r.focus(res, node, what)
   of actSetValue:
     let v = value.get("")
     if ifEditableText in raw.ifaces and raw.states.has(sEditable):
@@ -1188,9 +1321,14 @@ proc newLinuxAtspiTree*(cfg: LinuxAtspiConfig): TreeBackend =
     cfg.token.checkpoint()
     withReader(cfg, r):
       let res = r.resolve(path)
-      if res.chain.len == 0 or action notin contractActions(res.chain[^1]):
+      # The actions the element offers as `element` reports them (with its
+      # desktop bounds, which `focus` by pointer needs).
+      if res.chain.len == 0:
         raise treeFailed("the element at " & path & " does not offer '" & $action & "'")
-      r.perform(res, action, value)
+      let node = r.elementOf(res)
+      if action notin node.actions:
+        raise treeFailed("the element at " & path & " does not offer '" & $action & "'")
+      r.perform(res, node, action, value)
       result = r.elementOf(r.resolve(path))
 
   result.features = proc (probe: bool): seq[Feature] =

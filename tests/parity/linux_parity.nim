@@ -367,18 +367,19 @@ proc s4Form(g: Ga, lab: Lab): Scenario =
     result.expect("status idle before submit (negative control)",
       g.status(lab.pid) == "State: idle", g.status(lab.pid))
     let acct = g.one(lab.pid, "Account", "text-field")
+    let pass0 = g.one(lab.pid, "Passcode", "text-field")
     # Focus the field the way the consumer's `focus <path>` does
-    # (element-action focus); a toolkit whose node offers no focus action
-    # (GTK 4 implements no AT-SPI GrabFocus) is focused by a click at its
-    # centre instead, and the evidence says which route was taken.
-    if "focus" in acct["actions"].getElems.mapIt(it.getStr):
-      discard g.data(@["element-action", acct["path"].getStr, "focus"])
-      result.notes.add "Account focused by element-action focus"
-    else:
-      discard g.data(@["click", "--at", at(centre(boxOf(acct["bounds"])))])
-      result.notes.add "Account offers no focus action (actions " & $acct["actions"] &
-        "); focused by a click at its centre"
-      sleep(200)
+    # (element-action focus), on every toolkit: GTK 3 through AT-SPI
+    # GrabFocus, GTK 4 (which implements none) by linux-atspi's click at the
+    # field's centre. Passcode first, so that focusing Account has to MOVE
+    # the focus (negative control), each read back as the `focused` state.
+    result.expect("Account offers focus",
+      "focus" in acct["actions"].getElems.mapIt(it.getStr), $acct["actions"])
+    for (label, node) in [("Passcode", pass0), ("Account", acct)]:
+      discard g.data(@["element-action", node["path"].getStr, "focus"])
+      let f = g.find(lab.pid, @["--state", "focused"]).mapIt(it["name"].getStr)
+      result.expect("element-action focus gives " & label & " the keyboard focus",
+        f == @[label], $f)
     let t = g.data(@["type", "--stdin"], input = account)["input"]
     result.expect("type reports the length, not the text",
       t["length"].getInt == account.len and account notin $t)
@@ -392,8 +393,11 @@ proc s4Form(g: Ga, lab: Lab): Scenario =
     # value to read), so the effect is read back as the Account field left
     # unchanged and the length the submission reports below.
     discard g.data(@["key", "Tab"])
+    # The focus is still reported between verbs (on sway the session's seat
+    # holds a keyboard for that, desktop_env/sway "Why a held keyboard").
+    sleep(200)
     let focusedNow = g.find(lab.pid, @["--state", "focused"]).mapIt(it["name"].getStr)
-    result.notes.add "focused after Tab: " & $focusedNow
+    result.expect("after Tab Passcode is focused", focusedNow == @["Passcode"], $focusedNow)
     discard g.data(@["type", "--stdin"], input = passcode)
     sleep(300)
     let after = g.one(lab.pid, "Account", "text-field")["value"].getStr

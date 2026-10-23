@@ -430,6 +430,40 @@ when defined(linux):
       check contractStates(7, bits(4, 11, 12)) == {stChecked, stFocusable, stFocused}
       check contractStates(61, bits(33, 36)) == {stRequired, stInvalid}
 
+    test "test_atspi_focus_by_pointer_only_on_placed_editable_text":
+      # linux_atspi "Focus by pointer": the click fallback is offered on
+      # editable text that takes the focus, is enabled, showing and visible
+      # and has non-empty desktop bounds, and on nothing else (a click on a
+      # button, checkbox or slider would activate or change it).
+      proc bits(xs: varargs[int]): uint64 =
+        for x in xs: result = result or (1'u64 shl x)
+      const
+        editable = 7
+        enabledSt = 8
+        focusable = 11
+        readOnly = 43
+        sensitive = 24
+        showing = 25
+        visible = 30
+      let ready = bits(editable, focusable, sensitive, showing, visible)
+      let placed = some(rect(10, 20, 200, 30))
+      check pointerFocusable(61, ready, placed)                 # text (GTK 4 entry)
+      check pointerFocusable(40, ready, placed)                 # password text
+      check pointerFocusable(79, bits(editable, focusable, enabledSt, showing, visible), placed)
+      check not pointerFocusable(43, ready, placed)             # button
+      check not pointerFocusable(7, ready, placed)              # check box
+      check not pointerFocusable(51, ready, placed)             # slider
+      check not pointerFocusable(29, ready, placed)             # label
+      check not pointerFocusable(61, ready or bits(readOnly), placed)
+      check not pointerFocusable(61, bits(focusable, sensitive, showing, visible), placed)
+      check not pointerFocusable(61, bits(editable, sensitive, showing, visible), placed)
+      check not pointerFocusable(61, bits(editable, focusable, showing, visible), placed)
+      check not pointerFocusable(61, bits(editable, focusable, sensitive, visible), placed)
+      check not pointerFocusable(61, bits(editable, focusable, sensitive, showing), placed)
+      check not pointerFocusable(61, ready, none(Rect))         # not placed on the desktop
+      check not pointerFocusable(61, ready, some(rect(10, 20, 0, 30)))
+      check not pointerFocusable(61, ready, some(rect(10, 20, 200, 0)))
+
     test "test_atspi_frames_are_placed_through_their_windows":
       let content = Size(width: 360, height: 467)
       # GTK 4 and GTK 3 without a shadow: the frame is the content.

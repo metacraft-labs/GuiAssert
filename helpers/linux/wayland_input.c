@@ -52,6 +52,29 @@
  *                           prints whether the seat keyboard's CURRENT
  *                           keymap has a key for it in its active layout
  *                           ("1" / "0"), after an "ok" line
+ *   wayland_input hold-keyboard
+ *                           keep one virtual keyboard on the seat until
+ *                           SIGTERM / SIGINT or until the compositor goes
+ *                           away; prints "ok" once the seat has it
+ *
+ * **Why `hold-keyboard`.** A headless wlroots compositor started with no
+ * input devices (sway with `WLR_BACKENDS=headless`) has a seat WITHOUT the
+ * keyboard capability. Each `run` then brings a keyboard with it and takes
+ * it away when it exits, so the focused client receives `wl_keyboard.enter`
+ * at the start of every key verb and `leave` (and the capability's removal)
+ * at its end (measured on a headless sway 1.11 with WAYLAND_DEBUG=1 on a
+ * GTK 4 client). Toolkits derive their window's "active" state, and with it
+ * every widget's keyboard-focus state, from that keyboard focus: GTK then
+ * reports no AT-SPI `focused` state (and its window no `active` state)
+ * between two verbs, although typing reaches the right widget during each.
+ * A session backend that owns such a compositor runs this mode for the
+ * session's lifetime, so the seat has a keyboard as a desktop's always has,
+ * the focused toplevel keeps the keyboard focus between verbs, and a `run`
+ * finds the capability already there (no SETTLE_MS wait). The held keyboard
+ * sends no key; its keymap has only the four modifier keys.
+ * wl_seat capabilities and wl_keyboard enter / leave:
+ * https://wayland.app/protocols/wayland#wl_seat and
+ * https://wayland.app/protocols/wayland#wl_keyboard
  *
  * Exit status: see input_script.h.
  */
@@ -567,6 +590,75 @@ static int mode_run(void) {
   return status;
 }
 
+/* ------------------------------------------------------------------------ */
+/* hold-keyboard                                                             */
+/* ------------------------------------------------------------------------ */
+
+static int mode_hold_keyboard(void) {
+  struct wl_display *d = connect_display();
+  if (!keyboard_manager)
+    fail(EXIT_PROTOCOL, "protocol %s",
+         "the compositor offers no zwp_virtual_keyboard_manager_v1 (virtual keyboards)");
+  if (!seat) fail(EXIT_PROTOCOL, "protocol %s", "the compositor offers no seat");
+  /* A keymap of the modifier keys only: the device exists to give the seat
+     the keyboard capability, never to type (module comment). */
+  for (int m = 0; m < 4; m++) add_sym(modifier_syms[m]);
+  kbd = zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(keyboard_manager, seat);
+  char *text = keymap_text();
+  size_t size;
+  int fd = keymap_fd(text, &size);
+  zwp_virtual_keyboard_v1_keymap(kbd, WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1, fd, (uint32_t)size);
+  close(fd);
+  free(text);
+  send_mods();
+  roundtrip(d);
+  if (!wait_caps(d, WL_SEAT_CAPABILITY_KEYBOARD))
+    fail(EXIT_FAILED, "failed %s", "the seat never gained the held keyboard");
+  printf("ok\n");
+  fflush(stdout);
+  /* Serve the connection until a signal or the compositor's end. Our own
+     poll rather than wl_display_dispatch, which retries a poll that a
+     signal interrupted and so would never return for SIGTERM.
+     https://wayland.freedesktop.org/docs/html/apb.html#Client-classwl__display */
+  int broken = 0;
+  struct pollfd pfd = {.fd = wl_display_get_fd(d), .events = POLLIN};
+  while (!script_cancelled && !broken) {
+    while (wl_display_prepare_read(d) != 0) {
+      if (wl_display_dispatch_pending(d) < 0) {
+        broken = 1;
+        break;
+      }
+    }
+    if (broken) break;
+    if (wl_display_flush(d) < 0 && errno != EAGAIN) {
+      wl_display_cancel_read(d);
+      broken = 1;
+      break;
+    }
+    int n = poll(&pfd, 1, 500);
+    if (n == 0 || (n < 0 && errno == EINTR)) {
+      /* A timeout or a signal: look at script_cancelled again. */
+      wl_display_cancel_read(d);
+      continue;
+    }
+    if (n < 0 || (pfd.revents & (POLLERR | POLLHUP))) {
+      wl_display_cancel_read(d);
+      broken = 1;
+      break;
+    }
+    if (wl_display_read_events(d) < 0 || wl_display_dispatch_pending(d) < 0) broken = 1;
+  }
+  if (broken) {
+    /* The compositor went away: there is nothing left to release. */
+    printf("error failed the compositor connection ended\n");
+    return EXIT_FAILED;
+  }
+  zwp_virtual_keyboard_v1_destroy(kbd);
+  wl_display_roundtrip(d);
+  wl_display_disconnect(d);
+  return EXIT_OK;
+}
+
 static int mode_probe(void) {
   struct wl_display *d = connect_display();
   roundtrip(d);
@@ -584,6 +676,7 @@ int main(int argc, char **argv) {
   if (argc == 2 && strcmp(argv[1], "run") == 0) return mode_run();
   if (argc == 2 && strcmp(argv[1], "probe") == 0) return mode_probe();
   if (argc == 2 && strcmp(argv[1], "keysyms") == 0) return mode_keysyms();
-  fprintf(stderr, "usage: wayland_input run|probe|keysyms (input on stdin)\n");
+  if (argc == 2 && strcmp(argv[1], "hold-keyboard") == 0) return mode_hold_keyboard();
+  fprintf(stderr, "usage: wayland_input run|probe|keysyms|hold-keyboard (input on stdin)\n");
   return EXIT_SCRIPT;
 }

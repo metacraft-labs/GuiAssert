@@ -361,17 +361,38 @@ proc ocrBackend*(e: VerbEnv): OcrEngine =
       return newTesseractOcr(TesseractConfig(token: e.ctx.token))
   raise noConstructor(modOcr, name)
 
+proc inputBackend*(e: VerbEnv): InputBackend
+  ## (Below; `atspiConfig` clicks through it.)
+
 when linuxTreeCompiledIn or linuxSessionCompiledIn:
   proc atspiConfig(e: VerbEnv): LinuxAtspiConfig =
     ## The `linux-atspi` configuration of an invocation: its environment
     ## names the session's buses, and its capture backend places frames on
     ## the desktop (a capture backend that cannot run here leaves bounds
     ## null rather than failing the tree read).
+    ##
+    ## Its input backend focuses the element's window before `focus` and
+    ## clicks for `focus` by pointer (linux_atspi module doc, "Focus" and
+    ## "Focus by pointer") when that backend can run in this binary;
+    ## otherwise both are nil, and `focus` acts inside the window only and
+    ## is not offered by pointer. Both go through the backend directly, not
+    ## the `window-focus` and `click` verbs: the caller (`element-action`)
+    ## already holds the session's lock.
     let env = e
-    LinuxAtspiConfig(env: e.ctx.env, token: e.ctx.token,
+    result = LinuxAtspiConfig(env: e.ctx.env, token: e.ctx.token,
       windows: proc (): seq[Window] =
         env.captureBackend().windows(env.session,
           WindowFilter(allLayers: true, includeOffscreen: true)).windows)
+    let input = e.selection[modInput].name
+    if input != fixtureBackendName and unavailability(modInput, input).ok:
+      result.pointerClick = proc (at: Point) =
+        discard env.inputBackend().click(env.session, at, mbLeft, 1, @[])
+      result.focusWindow = proc (windowId: string) =
+        # A backend that cannot focus windows (linux-uinput, an input
+        # device) leaves the window as it is; `focus` then still has to see
+        # the element `focused` to succeed.
+        try: discard env.inputBackend().focusWindow(env.session, windowId)
+        except BackendUnavailableError: discard
 
 proc treeBackend*(e: VerbEnv): TreeBackend =
   ## The selected accessibility-tree backend.
