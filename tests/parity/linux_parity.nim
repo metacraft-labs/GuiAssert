@@ -94,9 +94,18 @@ proc gs13(msg: string): string =
   ## A BLOCKED line of the shared live helpers, named for this milestone.
   msg.replace("GS5-LINUX BLOCKED", "GS13-LINUX BLOCKED")
 
+var scratchDirs: seq[(string, string)]
+  ## Each run's own directories (`freshDir`) and the placeholder that stands
+  ## for each in the evidence, so an error naming a file under one carries no
+  ## absolute path.
+
 proc sanitize(s: string): string =
-  ## No path that names this checkout or the user's home in the evidence.
-  s.replace(repoRootDir, "<repo>").replace(getHomeDir().strip(leading = false, chars = {'/'}), "~")
+  ## No absolute path in the evidence: this run's scratch directories, the
+  ## checkout and the user's home are each replaced by a placeholder.
+  result = s
+  for (dir, placeholder) in scratchDirs: result = result.replace(dir, placeholder)
+  result = result.replace(repoRootDir, "<repo>").replace(
+    getHomeDir().strip(leading = false, chars = {'/'}), "~")
 
 proc short(s: string, n = 160): string =
   result = s.replace('\n', ' ')
@@ -609,6 +618,8 @@ proc runOne(backend, toolkit: string, only: seq[string]): Run =
                selected: newJNull())
   let st = freshDir("parity-st")
   let work = freshDir("parity-work")
+  scratchDirs.add (st, "<state>")
+  scratchDirs.add (work, "<work>")
   let name = "parity-" & backend[6 .. ^1] & "-" & toolkit
   var g = Ga(env: runEnv(st, newStringTable(modeCaseSensitive)), stateDir: st)
   let gdkBackend = if backend == "linux-xvfb": "x11" else: "wayland"
