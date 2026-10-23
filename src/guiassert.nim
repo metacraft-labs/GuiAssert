@@ -18,6 +18,11 @@ when defined(posix):
 import gui_assert/[cancel, state_store]
 import gui_assert/cli/[args, context, run, serve]
 import gui_assert/backends/session/fixture as session_fixture
+import gui_assert/cli/registry
+
+when linuxSessionCompiledIn:
+  import gui_assert/backends/session/linux_private
+  import gui_assert/cli/verbs
 
 var processToken: CancelToken
   ## The one global of the program: the token the signal handler cancels.
@@ -68,6 +73,14 @@ proc main(): int =
       stderr.writeLine("usage: guiassert __session-host --state-dir <dir> <id> [<mode>]")
       return 2
     return runFixtureSessionHost(argv[2], argv[3], (if argv.len == 5: argv[4] else: ""))
+  when linuxSessionCompiledIn:
+    if argv.len >= 1 and argv[0] == hostVerb:
+      # Internal, non-contract: the detached owner of a private Linux
+      # session (`linux-sway`, `linux-gnome`, `linux-xvfb`; GS10).
+      if argv.len != 4 or argv[1] != "--state-dir":
+        stderr.writeLine("usage: guiassert " & hostVerb & " --state-dir <dir> <id>")
+        return 2
+      return runLinuxSessionHost(argv[2], argv[3], linuxPrivateServers())
   if argv.len == 1 and argv[0] == "--help":
     stdout.write(help())
     return 0

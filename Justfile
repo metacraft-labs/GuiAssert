@@ -33,7 +33,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tlinux_input tswift_helper_cache; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tlinux_input tlinux_session tswift_helper_cache; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -98,11 +98,16 @@ test-live-macos: build-cli
 # through the same backends with the pinned tesseract (`GS6-LINUX BLOCKED:`
 # likewise), and the tree suite (GS7, tests/live/ttree_linux.nim) reads,
 # searches and drives invented GTK forms over each session's own AT-SPI bus
-# (`GS7-LINUX BLOCKED:` likewise). Every suite runs even when an earlier one
-# fails; the recipe fails when any does. Run inside `nix develop` (it pins
+# (`GS7-LINUX BLOCKED:` likewise), the input suite (GS8,
+# tests/live/tinput_linux.nim) drives them, and the session suite (GS10,
+# tests/live/tsession_linux.nim) starts, uses and stops private linux-sway,
+# linux-gnome and linux-xvfb sessions through the real binary (with their
+# loopback VNC endpoints) and attaches linux-host to a private sway
+# (`GS10-LINUX BLOCKED:` likewise). Every suite runs even when an earlier
+# one fails; the recipe fails when any does. Run inside `nix develop` (it pins
 # every server and tool the suites start).
 test-live-linux: build-cli
-    @status=0; for f in tcapture_linux tocr_linux ttree_linux tinput_linux; do \
+    @status=0; for f in tcapture_linux tocr_linux ttree_linux tinput_linux tsession_linux; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/live/$f.nim || status=1; \
     done; exit $status

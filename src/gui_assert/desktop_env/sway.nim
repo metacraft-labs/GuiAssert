@@ -31,6 +31,9 @@ type
       ## App ids sway floats on map (a `for_window … floating enable` rule),
       ## so a scenario can move and resize them. Tiled otherwise.
     runtimeDir: string
+    presetRuntimeDir: string
+      ## The runtime directory `start` uses instead of making one (see
+      ## `newSwayTarget`), "" for a fresh one.
     swaySock: string
     sway: Process
     pointer: Process
@@ -39,9 +42,15 @@ type
     probed: bool
 
 proc newSwayTarget*(width = 1920; height = 1080;
-                    floatingAppIds: seq[string] = @[]; scale = 1.0): SwayTarget =
+                    floatingAppIds: seq[string] = @[]; scale = 1.0;
+                    runtimeDir = ""): SwayTarget =
+  ## A private headless sway. `runtimeDir`, when given, is the directory
+  ## (an existing one or one to create, mode 0700) the session runs in,
+  ## instead of a fresh `/tmp/guienv-*`: a caller that must be able to
+  ## remove it after a crash names it before anything is started in it.
+  ## `stop` removes it either way.
   SwayTarget(name: "sway", width: width, height: height, scale: scale,
-             floatingAppIds: floatingAppIds,
+             floatingAppIds: floatingAppIds, presetRuntimeDir: runtimeDir,
              sessionEnv: newStringTable(modeCaseSensitive))
 
 proc outputScale(t: SwayTarget): float =
@@ -140,7 +149,11 @@ method start*(t: SwayTarget) =
   # (`<runtime>/sway-ipc.<uid>.<pid>.sock`) must fit `sun_path` (108 bytes),
   # and a nix-shell TMPDIR plus a temp-dir name can exceed it — sway then
   # refuses to start ("Socket path won't fit into ipc_sockaddr->sun_path").
-  t.runtimeDir = createTempDir("guienv-", "", "/tmp")
+  if t.presetRuntimeDir.len > 0:
+    t.runtimeDir = t.presetRuntimeDir
+    createDir(t.runtimeDir)
+  else:
+    t.runtimeDir = createTempDir("guienv-", "", "/tmp")
   setFilePermissions(t.runtimeDir, {fpUserRead, fpUserWrite, fpUserExec})
   writeFile(t.runtimeDir / "sway.conf", t.swayConfig)
   var env = newStringTable(modeCaseSensitive)

@@ -87,11 +87,36 @@
             glib
             pipewire
           ];
+          # `sway-unwrapped`, not nixpkgs' `sway`: that wrapper runs the
+          # compositor under `dbus-run-session` when no session bus is set,
+          # which reads /etc/dbus-1/session.conf and fails where there is none
+          # (a Nix build sandbox, a container without system D-Bus); a
+          # linux-sway session (GS10) starts its own session bus beside the
+          # compositor anyway, and the capture and input backends need only
+          # `swaymsg`, which both packages ship.
           linuxCaptureTools = with pkgs; [
             grim
-            sway
+            sway-unwrapped
             glib.bin
             ffmpeg
+          ];
+          # The private Linux sessions (GS10) start these in the session host:
+          # linux-sway the headless sway with its own session bus and settings
+          # portal (the portal frontend, its GTK backend and the GSettings
+          # schemas are named by the GUI_ASSERT_* variables below), linux-xvfb
+          # Xvfb, its own dbus-daemon and Openbox; `--vnc` runs wayvnc (sway)
+          # or x11vnc (Xvfb); every session starts its AT-SPI bus with the
+          # launcher `atspiLauncherFor` builds. linux-gnome needs GNOME Shell,
+          # which the package does not carry (it is large and only that
+          # backend uses it): it is found through GUI_ASSERT_GNOME_SHELL or the
+          # caller's PATH, and without it linux-gnome answers exit 4 /
+          # missing-tool.
+          linuxSessionTools = with pkgs; [
+            dbus
+            xorg.xvfb
+            openbox
+            wayvnc
+            x11vnc
           ];
           linuxHelpers = [
             "x11_probe"
@@ -133,7 +158,19 @@
                 "--prefix"
                 "PATH"
                 ":"
-                (lib.makeBinPath linuxCaptureTools)
+                (lib.makeBinPath (linuxCaptureTools ++ linuxSessionTools))
+                "--set-default"
+                "GUI_ASSERT_ATSPI_BUS_LAUNCHER"
+                "${atspiLauncherFor pkgs}/libexec/at-spi-bus-launcher"
+                "--set-default"
+                "GUI_ASSERT_XDG_DESKTOP_PORTAL"
+                "${pkgs.xdg-desktop-portal}/libexec/xdg-desktop-portal"
+                "--set-default"
+                "GUI_ASSERT_XDG_DESKTOP_PORTAL_GTK"
+                "${pkgs.xdg-desktop-portal-gtk}/libexec/xdg-desktop-portal-gtk"
+                "--set-default"
+                "GUI_ASSERT_GSETTINGS_SCHEMAS"
+                "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}/glib-2.0/schemas"
               ];
             in
             pkgs.stdenv.mkDerivation {
@@ -522,6 +559,95 @@
                   || { cat status.json; exit 1; }
                 touch "$out"
               '';
+
+          # The packaged `guiassert` starts, uses and stops private Linux
+          # sessions with no dev shell and no PATH (GS10): from an empty
+          # environment, `capabilities --probe` must find every tool of
+          # linux-xvfb and linux-sway (`session-headless` and `session-vnc`
+          # supported); a linux-xvfb session with `--vnc` must come up
+          # running with its display, cookie, session bus and AT-SPI bus in
+          # `env`, its VNC endpoint on 127.0.0.1 greeting with an RFB banner,
+          # an `x11_probe` window launched into it listed by `windows` and
+          # captured by `screenshot`, and the session's accessibility granted;
+          # a linux-sway session (pixman renderer, no GPU) must report its
+          # output's size and list a `wm_probe` window launched into it; and
+          # `session-stop` must leave no record and no process of either
+          # session behind. A package that lost a session tool or one of the
+          # GUI_ASSERT_* paths fails here instead of answering missing-tool
+          # or session-failed to a consumer.
+          guiassert-packaged-linux-session =
+            pkgs.runCommand "guiassert-packaged-linux-session"
+              {
+                nativeBuildInputs = [
+                  pkgs.jq
+                  pkgs.procps
+                ];
+              }
+              ''
+                export HOME="$TMPDIR"
+                ga() {
+                  env -i HOME="$HOME" ${guiassert}/bin/guiassert --state-dir "$TMPDIR/state" "$@"
+                }
+                helpers=${guiassert}/libexec/guiassert
+                for b in linux-xvfb linux-sway; do
+                  ga --session-backend "$b" capabilities --probe > "caps-$b.json"
+                  jq -e --arg b "$b" '.ok == true and ([.data.features[] | select(.backend == $b
+                         and (.feature == "session-headless" or .feature == "session-vnc")
+                         and .state == "supported")] | length == 2)' "caps-$b.json" \
+                    || { cat "caps-$b.json"; exit 1; }
+                done
+                # linux-xvfb with a loopback VNC endpoint.
+                ga --session-backend linux-xvfb session-start --kind headless --name x1 \
+                  --width 320 --height 240 --vnc > x1.json || { cat x1.json; exit 1; }
+                jq -e '.data.session | .state == "running" and .backend == "linux-xvfb" and
+                       .displays[0].bounds == [0, 0, 320, 240] and
+                       (.env | has("DISPLAY") and has("XAUTHORITY") and
+                         has("DBUS_SESSION_BUS_ADDRESS") and has("AT_SPI_BUS_ADDRESS")) and
+                       .vnc.host == "127.0.0.1" and .vnc.port > 0' x1.json || { cat x1.json; exit 1; }
+                port=$(jq -r .data.session.vnc.port x1.json)
+                exec 3<>"/dev/tcp/127.0.0.1/$port"
+                banner=$(head -c 11 <&3)
+                exec 3<&-
+                [ "$banner" = "RFB 003.008" ] || { echo "no RFB banner: $banner"; exit 1; }
+                ga --session x1 app-launch --wait-window-ms 20000 -- "$helpers/x11_probe" window \
+                  --geometry 100x80+20+30 --rgb d23c78 --title "Session Probe" --hold 120000 \
+                  > x1-launch.json || { cat x1-launch.json; exit 1; }
+                ga --session x1 windows --title "Session Probe" > x1-windows.json
+                jq -e --argjson pid "$(jq .data.app.pid x1-launch.json)" \
+                  '.ok == true and (.data.windows | length == 1) and .data.windows[0].pid == $pid' \
+                  x1-windows.json || { cat x1-windows.json; exit 1; }
+                ga --session x1 screenshot --window "$(jq -r '.data.windows[0].id' x1-windows.json)" \
+                  --out "$TMPDIR/x1.png" > x1-shot.json
+                jq -e '.ok == true and .data.image.width == 100 and .data.image.height == 80' \
+                  x1-shot.json || { cat x1-shot.json; exit 1; }
+                ga --session x1 permissions > x1-perms.json
+                jq -e '.data.permissions.accessibility == "granted"' x1-perms.json \
+                  || { cat x1-perms.json; exit 1; }
+                # linux-sway.
+                ga --session-backend linux-sway session-start --kind headless --name w1 \
+                  --width 320 --height 240 > w1.json || { cat w1.json; exit 1; }
+                jq -e '.data.session | .state == "running" and .backend == "linux-sway" and
+                       .displays[0].bounds == [0, 0, 320, 240] and
+                       (.env | has("WAYLAND_DISPLAY") and has("AT_SPI_BUS_ADDRESS"))' w1.json \
+                  || { cat w1.json; exit 1; }
+                ga --session w1 app-launch --wait-window-ms 20000 -- "$helpers/wm_probe" \
+                  "title=Sway Probe" map rgb=28a05a hold=120000 > w1-launch.json \
+                  || { cat w1-launch.json; exit 1; }
+                ga --session w1 windows --title "Sway Probe" > w1-windows.json
+                jq -e '.ok == true and (.data.windows | length == 1)' w1-windows.json \
+                  || { cat w1-windows.json; exit 1; }
+                # Stopped: no record, and no process of either session.
+                for s in x1 w1; do
+                  tag=$(jq -r .private.tag "$TMPDIR/state/sessions/$s.json")
+                  ga session-stop "$s" > "$s-stop.json"
+                  jq -e '.data.session.state == "stopped"' "$s-stop.json" || { cat "$s-stop.json"; exit 1; }
+                  [ ! -e "$TMPDIR/state/sessions/$s.json" ] || { echo "$s left a record"; exit 1; }
+                  if grep -lsz "GUIASSERT_LINUX_SESSION_TAG=$tag" /proc/[0-9]*/environ; then
+                    echo "$s left processes"; exit 1
+                  fi
+                done
+                touch "$out"
+              '';
         }
       );
 
@@ -592,6 +718,13 @@
             qt6.qtbase
             xorg.libXtst
             libxkbcommon
+            # The Linux off-screen sessions (GS10): `linux-xvfb` runs Openbox
+            # as its minimal window manager, and the optional loopback VNC
+            # endpoint of a session is `wayvnc` (linux-sway) or `x11vnc`
+            # (linux-xvfb).
+            openbox
+            wayvnc
+            x11vnc
           ];
         in
         {

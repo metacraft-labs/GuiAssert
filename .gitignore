@@ -69,3 +69,5 @@ tests/tlinux_tree
 tests/live/ttree_linux
 tests/tlinux_input
 tests/live/tinput_linux
+tests/tlinux_session
+tests/live/tsession_linux

@@ -17,7 +17,8 @@
 ## GS7 the Linux tree backend `linux-atspi` and, for the applications of the
 ## caller's own session, the `linux-host` session backend, GS8 the Linux input
 ## backends `linux-wlr-virtual`, `linux-mutter`, `linux-xtest` and
-## `linux-uinput`.
+## `linux-uinput`, GS10 the private Linux session backends `linux-sway`,
+## `linux-gnome` and `linux-xvfb` (and `linux-host`'s attach checks).
 ## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
@@ -126,9 +127,12 @@ const
     KnownBackend(module: modSession, name: "macos-isolated", platforms: {hpMacos}),
     KnownBackend(module: modSession, name: "linux-host", platforms: {hpLinux},
                  implemented: true),
-    KnownBackend(module: modSession, name: "linux-sway", platforms: {hpLinux}),
-    KnownBackend(module: modSession, name: "linux-gnome", platforms: {hpLinux}),
-    KnownBackend(module: modSession, name: "linux-xvfb", platforms: {hpLinux}),
+    KnownBackend(module: modSession, name: "linux-sway", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modSession, name: "linux-gnome", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modSession, name: "linux-xvfb", platforms: {hpLinux},
+                 implemented: true),
     KnownBackend(module: modSession, name: "windows-host", platforms: {hpWindows}),
     KnownBackend(module: modSession, name: "windows-desktop", platforms: {hpWindows}),
     KnownBackend(module: modSession, name: "fixture", platforms: allPlatforms,
@@ -180,9 +184,11 @@ const
     not defined(guiassertNoTree) and not defined(guiassertNoLinuxAtspi)
     ## Whether the `linux-atspi` tree backend's code is linked into this binary.
   linuxSessionCompiledIn* = not minimalBuild and defined(linux) and
-    not defined(guiassertNoSession) and not defined(guiassertNoLinuxHost)
-    ## Whether the `linux-host` session backend's code is linked into this
-    ## binary.
+    not defined(guiassertNoSession)
+    ## Whether the Linux session backends' code (`linux-host`, and the private
+    ## sessions `linux-sway`, `linux-gnome` and `linux-xvfb`, which run
+    ## linux-host's application verbs in their session) is linked into this
+    ## binary (`compiledIn` decides which of them is selectable).
   linuxInputCompiledIn* = not minimalBuild and defined(linux) and
     not defined(guiassertNoInput)
     ## Whether the Linux input backends' code is linked into this binary

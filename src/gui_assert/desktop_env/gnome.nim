@@ -46,14 +46,20 @@ type
   GnomeTarget* = ref object of TargetEnvironment
     width*, height*: int
     runtimeDir: string
+    presetRuntimeDir: string
+      ## The runtime directory `start` uses instead of making one (see
+      ## `newGnomeTarget`), "" for a fresh one.
     shell: Process
     bus: SessionBus
     facts: Table[string, Fact]
     probed: bool
     evalSeq: int
 
-proc newGnomeTarget*(width = 1920; height = 1080): GnomeTarget =
-  GnomeTarget(name: "gnome", width: width, height: height,
+proc newGnomeTarget*(width = 1920; height = 1080; runtimeDir = ""): GnomeTarget =
+  ## A private headless GNOME Shell. `runtimeDir`, when given, is the
+  ## directory (an existing one or one to create, mode 0700) the session
+  ## runs in, instead of a fresh `/tmp/guienv-*` (see `newSwayTarget`).
+  GnomeTarget(name: "gnome", width: width, height: height, presetRuntimeDir: runtimeDir,
               sessionEnv: newStringTable(modeCaseSensitive))
 
 proc attachGnomeTarget*(allowConfigure = false): GnomeTarget =
@@ -142,7 +148,11 @@ method start*(t: GnomeTarget) =
   let shellExe = t.requirePath("GUI_ASSERT_GNOME_SHELL")
   let schemaDirs = getEnv("GUI_ASSERT_GNOME_SCHEMA_DATA_DIRS")
   # Short, under /tmp: sockets live here (see the sway target).
-  t.runtimeDir = createTempDir("guienv-", "", "/tmp")
+  if t.presetRuntimeDir.len > 0:
+    t.runtimeDir = t.presetRuntimeDir
+    createDir(t.runtimeDir)
+  else:
+    t.runtimeDir = createTempDir("guienv-", "", "/tmp")
   setFilePermissions(t.runtimeDir, {fpUserRead, fpUserWrite, fpUserExec})
   t.sessionEnv["XDG_RUNTIME_DIR"] = t.runtimeDir
   t.sessionEnv["XDG_SESSION_TYPE"] = "wayland"

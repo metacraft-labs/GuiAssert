@@ -75,6 +75,17 @@ proc gsettings*(bus: SessionBus; args: varargs[string]): string =
     raise newException(OSError, "gsettings " & args.join(" ") & ": " & output.strip())
   output.strip()
 
+proc sessionBusArgs*(dbusDaemon: string): seq[string] =
+  ## How to make `dbusDaemon` a session bus: its own package's
+  ## `share/dbus-1/session.conf` when it has one (dbus-daemon(1)
+  ## `--config-file`), else `--session`, which reads the configuration under
+  ## the sysconfdir it was built with: `/etc/dbus-1/session.conf`, which a
+  ## host without a system D-Bus installation (a Nix build sandbox, a
+  ## minimal container) does not have.
+  let conf = dbusDaemon.parentDir.parentDir / "share" / "dbus-1" / "session.conf"
+  if dbusDaemon.len > 0 and fileExists(conf): @["--config-file=" & conf]
+  else: @["--session"]
+
 proc startPortals*(bus: var SessionBus; displayEnv: StringTableRef)
 proc stop*(bus: var SessionBus)
 
@@ -112,7 +123,8 @@ proc startSessionBus*(runtimeDir, desktopName: string;
   result.env["GTK_USE_PORTAL"] = "0"
   for (k, v) in extraEnv: result.env[k] = v
 
-  result.launch(findExe("dbus-daemon"), @["--session", "--nofork",
+  let dbusDaemon = findExe("dbus-daemon")
+  result.launch(dbusDaemon, sessionBusArgs(dbusDaemon) & @["--nofork",
                 "--address=unix:path=" & busSocket], runtimeDir / "dbus.log")
   let deadline = epochTime() + 5
   while not pathExists(busSocket):

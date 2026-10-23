@@ -47,7 +47,8 @@ when linuxTreeCompiledIn or linuxSessionCompiledIn:
   import ../backends/tree/linux_atspi
 
 when linuxSessionCompiledIn:
-  import ../backends/session/linux_host
+  import ../backends/session/[linux_host, linux_private, linux_sway, linux_xvfb]
+  import ../backends/session/linux_gnome as session_gnome
 
 when linuxInputCompiledIn:
   import ../backends/input/[linux_common as input_common, linux_wlr_virtual, linux_mutter,
@@ -211,6 +212,14 @@ proc prepare*(inv: Invocation, ctx: RunContext): VerbEnv =
       raise newContractError(ekNotFound, "session", "no session '" &
         result.session & "'")
     result.sessionRecord = some(reconcileRecord(rec.get.session))
+    when linuxSessionCompiledIn:
+      # A private Linux session (GS10): reconciled against its host (pid and
+      # start time) and its display server, and every backend of the verb
+      # runs with the session's environment, as a process spawned into it
+      # does (spec §6.1: the caller's minus envUnset, plus env).
+      if rec.get.session.backend in linuxPrivateBackendNames:
+        result.sessionRecord = some(reconcilePrivate(rec.get.session, rec.get.private))
+        result.ctx.env = composeSessionEnv(ctx.env, rec.get.session)
     if inv.verb notin sessionStateExempt and
        result.sessionRecord.get.state != ssRunning:
       raise newContractError(ekBackendUnavailable, "session-not-running",
@@ -307,6 +316,21 @@ proc noConstructor(m: Module, name: string): ref ContractError =
   newContractError(ekInternal, "exception", "no constructor for the " & $m &
     " backend '" & name & "'")
 
+when linuxCaptureCompiledIn:
+  proc linuxCaptureNamed(e: VerbEnv, name: string,
+                         env: Table[string, string]): Option[CaptureBackend] =
+    ## The Linux capture backend `name` running with environment `env`, none
+    ## for a name that is not one.
+    let ctxEmit = e.ctx.emit
+    let cfg = LinuxCaptureConfig(stateDir: e.stateDir, token: e.ctx.token, env: env,
+      emit: proc (event: string, data: JsonNode) =
+        if ctxEmit != nil: ctxEmit(event, data))
+    if name == linuxWlrName: return some(newLinuxWlrCapture(cfg))
+    if name == linuxGnomeName: return some(newLinuxGnomeCapture(cfg))
+    if name == linuxX11Name: return some(newLinuxX11Capture(cfg))
+    if name == linuxPortalPipewireName: return some(newLinuxPortalPipewireCapture(cfg))
+    none(CaptureBackend)
+
 proc captureBackend*(e: VerbEnv): CaptureBackend =
   ## The selected capture backend.
   e.ensureAvailable(modCapture)
@@ -320,14 +344,8 @@ proc captureBackend*(e: VerbEnv): CaptureBackend =
           if ctxEmit != nil: ctxEmit(event, data)))
     if name == macosCgwindowName: return newMacosCgwindowCapture()
   when linuxCaptureCompiledIn:
-    let ctxEmit = e.ctx.emit
-    let cfg = LinuxCaptureConfig(stateDir: e.stateDir, token: e.ctx.token, env: e.ctx.env,
-      emit: proc (event: string, data: JsonNode) =
-        if ctxEmit != nil: ctxEmit(event, data))
-    if name == linuxWlrName: return newLinuxWlrCapture(cfg)
-    if name == linuxGnomeName: return newLinuxGnomeCapture(cfg)
-    if name == linuxX11Name: return newLinuxX11Capture(cfg)
-    if name == linuxPortalPipewireName: return newLinuxPortalPipewireCapture(cfg)
+    let linux = e.linuxCaptureNamed(name, e.ctx.env)
+    if linux.isSome: return linux.get
   raise noConstructor(modCapture, name)
 
 proc ocrBackend*(e: VerbEnv): OcrEngine =
@@ -384,20 +402,49 @@ proc inputBackend*(e: VerbEnv): InputBackend =
     if name == linuxUinputName: return newLinuxUinputInput(cfg)
   raise noConstructor(modInput, name)
 
+when linuxSessionCompiledIn:
+  proc linuxPrivateServer*(name: string): Option[PrivateServer] =
+    ## The private Linux session server of backend `name`, none for another.
+    case name
+    of linuxSwaySessionName: some(linuxSwayServer())
+    of linuxGnomeSessionName: some(linuxGnomeServer())
+    of linuxXvfbSessionName: some(linuxXvfbServer())
+    else: none(PrivateServer)
+
+  proc linuxPrivateServers*(): seq[PrivateServer] =
+    ## Every private Linux session server (for the session host).
+    @[linuxSwayServer(), linuxGnomeServer(), linuxXvfbServer()]
+
 proc sessionBackend*(e: VerbEnv): SessionBackend =
   ## The selected session backend.
   e.ensureAvailable(modSession)
   let name = e.selection[modSession].name
   if name == fixtureBackendName: return newFixtureSession(e.fixtureCfg)
   when linuxSessionCompiledIn:
-    if name == linuxHostName:
-      let env = e
-      return newLinuxHostSession(LinuxHostConfig(env: e.ctx.env, token: e.ctx.token,
-        stateDir: e.stateDir, atspi: e.atspiConfig,
-        capture: proc (): CaptureBackend = env.captureBackend(),
-        backends: SessionBackends(capture: e.selection[modCapture].name,
-                                  tree: e.selection[modTree].name,
-                                  input: e.selection[modInput].name)))
+    let env = e
+    let stateDir = e.stateDir
+    let hostCfg = LinuxHostConfig(env: e.ctx.env, token: e.ctx.token,
+      stateDir: e.stateDir, atspi: e.atspiConfig,
+      capture: proc (): CaptureBackend = env.captureBackend(),
+      backends: SessionBackends(capture: e.selection[modCapture].name,
+                                tree: e.selection[modTree].name,
+                                input: e.selection[modInput].name),
+      privateSessions: proc (): seq[Session] = listPrivateSessions(stateDir),
+      session: e.session)
+    if name == linuxHostName: return newLinuxHostSession(hostCfg)
+    let server = linuxPrivateServer(name)
+    if server.isSome:
+      return newLinuxPrivateSession(LinuxPrivateConfig(env: e.ctx.env, token: e.ctx.token,
+        stateDir: e.stateDir, selfExe: e.ctx.selfExe, host: hostCfg,
+        displays: proc (sessionEnv: Table[string, string], capture: string): seq[Display] =
+          # The session's displays through its own capture backend, with its
+          # environment (the starter's check that its display server answers).
+          when linuxCaptureCompiledIn:
+            let cap = env.linuxCaptureNamed(capture, sessionEnv)
+            if cap.isSome: return cap.get.displays(env.session)
+          raise newContractError(ekBackendUnavailable, "not-compiled-in",
+            "the capture backend '" & capture & "' is not compiled into this binary")),
+        server.get)
   raise noConstructor(modSession, name)
 
 template withSessionLock(e: VerbEnv, id: string, body: untyped) =
