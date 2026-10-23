@@ -706,6 +706,43 @@ template checkFocus(env: StringTableRef, f: Form) =
       check "does not offer 'focus'" in e["message"].getStr
     discard mustRead(@["element-action", name, "set-value", "--value", ""], env)
 
+template checkClippedFocus(env: StringTableRef, exe: string, display: string) =
+  ## `focus` by pointer never clicks what the element does not show
+  ## (linux_atspi "Focus by pointer", `pointerFocusPoint`): the GTK 4 form
+  ## with `--clipped-field` has a text field scrolled out of its viewport
+  ## whose own centre lies on Submit. GTK 4 still reports the field
+  ## `showing`, so it offers `focus`; performing it is exit 5 /
+  ## `tree-failed` without a click, read back as Submit never pressed (no
+  ## status label) and the field not focused. Likewise its "Covered note"
+  ## field, unclipped but with a button over its centre that presses like
+  ## Submit (the toolkit's hit test refuses it). Positive control: the same
+  ## window's Display name is still focused by pointer.
+  block:
+    let c = launchForm(env, exe, "gtk4", display, extra = @["--clipped-field"])
+    try:
+      let hidden = pathOf(env, c.pid, "text-field", "Archived note")
+      check "focus" in strs(mustRead(@["element", hidden], env)["element"]["actions"])
+      let e = failsWith(@["element-action", hidden, "focus"], env, 5, "tree-failed")
+      check "scrolled out of view" in e["message"].getStr
+      sleep(500)
+      check statusLabels(env, c.pid).len == 0
+      check hidden notin focusedPaths(env, c.pid)
+      # Unclipped, but a button lies over its centre: GTK 4 reports the
+      # button at that point (GetAccessibleAtPoint), so no click either.
+      let covered = pathOf(env, c.pid, "text-field", "Covered note")
+      check "focus" in strs(mustRead(@["element", covered], env)["element"]["actions"])
+      let e2 = failsWith(@["element-action", covered, "focus"], env, 5, "tree-failed")
+      check "reports another element" in e2["message"].getStr
+      sleep(500)
+      check statusLabels(env, c.pid).len == 0
+      check covered notin focusedPaths(env, c.pid)
+      let name = pathOf(env, c.pid, "text-field", "Display name")
+      let r = mustRead(@["element-action", name, "focus"], env)
+      check "focused" in strs(r["element"]["states"])
+      check statusLabels(env, c.pid).len == 0
+    finally:
+      terminateAll(@[c.pid])
+
 # ---------------------------------------------------------------------------
 # The backend's tables are at-spi2-core's
 # ---------------------------------------------------------------------------
@@ -877,6 +914,9 @@ suite "linux-atspi in a private headless sway":
   test "test_element_action_focus_moves_the_keyboard_focus [sway, gtk4]":
     live problem: checkFocus(env, f4)
 
+  test "test_element_action_focus_never_clicks_a_clipped_field [sway, gtk4]":
+    live problem: checkClippedFocus(env, gtk4, "wayland")
+
   test "test_element_action_focus_moves_the_keyboard_focus [sway, qt6]":
     live problem: checkFocus(env, fq)
 
@@ -940,7 +980,7 @@ suite "linux-atspi in a private Xvfb":
   var bus: AtspiBus
   var problem = ""
   var f3, f4, fq: Form
-  var gtk3: string
+  var gtk3, gtk4: string
   var input: string
   var opaque: tuple[process: Process, id: string]
   var env: StringTableRef
@@ -953,7 +993,7 @@ suite "linux-atspi in a private Xvfb":
     doAssert code == 0, "x11_input " & args.join(" ") & ": " & o
   try:
     gtk3 = buildFormFixture(work, 3)
-    let gtk4 = buildFormFixture(work, 4)
+    gtk4 = buildFormFixture(work, 4)
     let qt6 = buildQtFixture(work)
     input = buildX11Input(work)
     xvfb = startXvfb(1500, 1000)
@@ -1012,6 +1052,9 @@ suite "linux-atspi in a private Xvfb":
 
   test "test_element_action_focus_moves_the_keyboard_focus [x11, gtk4]":
     live problem: checkFocus(env, f4)
+
+  test "test_element_action_focus_never_clicks_a_clipped_field [x11, gtk4]":
+    live problem: checkClippedFocus(env, gtk4, "x11")
 
   test "test_element_action_focus_moves_the_keyboard_focus [x11, qt6]":
     live problem: checkFocus(env, fq)

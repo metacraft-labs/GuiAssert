@@ -66,7 +66,12 @@
 ## window never reports `focused` nor receives the keys). Then the element,
 ## by the first mechanism its toolkit has: Component `GrabFocus`, an Action
 ## named set focus, or by pointer (below). An element already focused is
-## left alone.
+## left alone. On an attached session (`linux-host`) the window step
+## activates the element's window on the user's own desktop exactly as
+## `window-focus` does, and only when the element's window does not
+## already hold the focus: that is the effect `focus` is asked for (the
+## keys typed next go to the element), and it changes no compositor
+## setting.
 ##
 ## **Focus by pointer.** GTK 4 has no AT-SPI focus mechanism at all: its
 ## Component `GrabFocus` answers `NotSupported` (gtk/a11y/gtkatspicomponent.c,
@@ -80,11 +85,21 @@
 ## invocation has an input backend (`LinuxAtspiConfig.pointerClick`),
 ## `focus` is offered on editable text that is focusable, enabled, showing
 ## and placed on the desktop (`pointerFocusable`), and performed as what a
-## user does: one primary-button click at the centre of the element's
-## desktop bounds through the session's input backend (the pointer moves
-## there; the caret lands where the click is). A click that another window
-## intercepted, or a session whose seat holds no keyboard focus, leaves the
-## element unfocused and so is `tree-failed`. Buttons, checkboxes, sliders
+## user does: one primary-button click through the session's input backend
+## (the pointer moves there; the caret lands where the click is). The
+## toolkit is told by its `ToolkitName` and `Version` (`grabFocusOn`)
+## rather than by trying GrabFocus, since a GrabFocus that works moves the
+## focus: a probe would itself be the side effect. Before it clicks,
+## `focus` makes sure the click reaches the element and nothing else, and
+## is `tree-failed` without clicking when it cannot (`pointerFocusPoint`):
+## the element's window holds the keyboard focus (after the window step
+## above; so no other window lies over it), the click point is the centre
+## of the part of the element its ancestors leave visible (a field
+## scrolled out of a viewport, which GTK 4 still reports `showing`, has
+## none), and the toolkit reports the element, or an object inside it, at
+## that point (`GetAccessibleAtPoint`). A session whose seat holds no
+## keyboard focus leaves the element unfocused after the click, and that
+## is `tree-failed` too. Buttons, checkboxes, sliders
 ## and the like are never focused this way, because a click would also
 ## activate or change them: on GTK 4 they do not offer `focus`, and
 ## `element-action ... focus` on one stays exit 5 / `tree-failed` "does not
@@ -138,6 +153,8 @@ const
     ## How long one application may take to answer one call.
   registryName = "org.a11y.atspi.Registry"
   rootPath = "/org/a11y/atspi/accessible/root"
+  nullPath = "/org/a11y/atspi/null"
+    ## The object path AT-SPI answers for "no object".
   ifAccessible = "org.a11y.atspi.Accessible"
   ifPropsName = "org.freedesktop.DBus.Properties"
   maxReadDepth = 512
@@ -410,6 +427,22 @@ proc pointerFocusable*(roleNum: int, states: uint64, bounds: Option[Rect]): bool
     states.has(sFocusable) and (states.has(sEnabled) or states.has(sSensitive)) and
     states.has(sShowing) and states.has(sVisible) and bounds.isSome and
     not bounds.get.isEmpty
+
+proc visibleCentre*(extents: Rect, clips: openArray[Rect]): Option[Point] =
+  ## The point a `focus` by pointer clicks (module doc, "Focus by pointer"):
+  ## the centre of the part of `extents` that each of `clips` (the extents
+  ## of the element's ancestors, in the same WINDOW coordinates) leaves
+  ## visible; none when nothing is left. A scrolled container reports its
+  ## viewport while its content reports the whole scrolled extent, and GTK 4
+  ## reports a list row scrolled out of its viewport `showing` and `visible`
+  ## (measured 2026-10-24, GTK 4.20), so the centre of the element's own
+  ## extents can lie on another widget drawn where the element is clipped.
+  var v = extents
+  if v.isEmpty: return none(Point)
+  for c in clips:
+    v = v.intersection(c)
+    if v.isEmpty: return none(Point)
+  some(v.center)
 
 proc formatValue(v: float): string =
   ## A numeric value as text: integral values without a fraction. The range
@@ -1172,6 +1205,69 @@ proc awaitFocused(r: Reader, res: Resolved, failure: string) =
         " ms)")
     r.cfg.token.sleepCancellable(50)
 
+proc windowHoldsFocus(r: Reader, res: Resolved): bool =
+  ## Whether the window of the resolved node's frame holds the keyboard
+  ## focus, read afresh until it does or `focusSettleMs` passes (the
+  ## compositor applies a `window-focus` after the request returned).
+  let startNs = monoNowNs()
+  while true:
+    r.windowsRead = false
+    let w = r.frameWindow(res)
+    if w.isSome and w.get.focused: return true
+    if elapsedMsSince(startNs) >= focusSettleMs: return false
+    r.cfg.token.sleepCancellable(50)
+
+proc hitBelongsTo(r: Reader, frame: Raw, target: ObjRef, at: Point): bool =
+  ## Whether the element the toolkit reports at `at` (the frame's WINDOW
+  ## coordinates; Component `GetAccessibleAtPoint`) is `target` or lies
+  ## inside it (GTK 4 answers an entry's inner text object, whose `Parent`
+  ## is the entry). False for any other element, for none, and when the
+  ## toolkit cannot tell. GTK 4 answers it in WINDOW coordinates (measured
+  ## 2026-10-24, GTK 4.20; in SCREEN coordinates it answers the frame's
+  ## first label wherever the point is).
+  ## https://docs.gtk.org/atspi2/method.Component.get_accessible_at_point.html
+  let s = r.sendOn(frame.obj, "org.a11y.atspi.Component", "GetAccessibleAtPoint",
+                   [dint32(at.x), dint32(at.y), duint32(1)])
+  let a = r.answer(s)
+  if a.isNone or a.get.len != 1: return false
+  var cur = refOf(a.get[0])
+  # Up the parent chain, bounded: a toolkit's chain ends at the application.
+  for _ in 0 ..< 64:
+    if cur == target: return true
+    if cur.bus.len == 0 or cur.path == nullPath or cur == frame.obj: return false
+    let p = r.propValue(r.getProp(cur, ifAccessible, "Parent"))
+    if p.isNone: return false
+    cur = refOf(p.get)
+  false
+
+proc pointerFocusPoint(r: Reader, res: Resolved): Point =
+  ## Where a `focus` by pointer clicks, on the desktop (module doc, "Focus
+  ## by pointer"), once it is known that the click reaches the element and
+  ## nothing else; `tree-failed`, with no click, otherwise: the element's
+  ## window must hold the focus (so no other window lies over it), the
+  ## element must be visible inside its ancestors (`visibleCentre`), and
+  ## the toolkit must report the element, or an object inside it, at that
+  ## point (`hitBelongsTo`).
+  let raw = res.chain[^1]
+  if not r.windowHoldsFocus(res):
+    raise treeFailed("the window of " & res.path & " does not hold the keyboard focus, so a " &
+      "click at the element could reach another window; it is not clicked")
+  var clips: seq[Rect]
+  for a in res.chain[0 ..< ^1]:
+    if a.extents.isSome and a.states.has(sShowing): clips.add a.extents.get
+  let c = visibleCentre(raw.extents.get, clips)
+  if c.isNone:
+    raise treeFailed("the element at " & res.path & " is scrolled out of view or clipped by " &
+      "its container, so no point of it can be clicked")
+  if not r.hitBelongsTo(res.chain[0], raw.obj, c.get):
+    raise treeFailed("the application reports another element at the point " & $c.get &
+      " of " & res.path & " (window coordinates), so a click there would reach that one; " &
+      "it is not clicked")
+  let at = placeExtents(rect(c.get.x, c.get.y, 1, 1), r.placementFor(res))
+  if at.isNone:
+    raise treeFailed("the element at " & res.path & " has no place on the desktop")
+  point(at.get.x, at.get.y)
+
 proc focus(r: Reader, res: Resolved, node: Node, what: string) =
   ## `focus` (module doc, "Focus"): the element's window gets the keyboard
   ## focus first, then the element by the first mechanism its toolkit has,
@@ -1199,13 +1295,12 @@ proc focus(r: Reader, res: Resolved, node: Node, what: string) =
       "keyboard focus there")
   else:
     # Focus by pointer, offered only with bounds (`pointerFocusable`).
-    if r.cfg.pointerClick == nil or node.bounds.isNone:
+    if r.cfg.pointerClick == nil or node.bounds.isNone or raw.extents.isNone:
       raise treeFailed("the element at " & res.path & " does not offer 'focus'")
-    let at = node.bounds.get.center
+    let at = r.pointerFocusPoint(res)
     r.cfg.pointerClick(at)
-    r.awaitFocused(res, "the click at " & $at & " (the centre of " & res.path &
-      ") did not give it the keyboard focus: another window may cover it, or the " &
-      "session's seat holds no keyboard focus")
+    r.awaitFocused(res, "the click at " & $at & " (in " & res.path &
+      ") did not give it the keyboard focus: the session's seat may hold no keyboard focus")
 
 proc perform(r: Reader, res: Resolved, node: Node, action: NodeAction,
              value: Option[string]) =

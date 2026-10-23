@@ -464,6 +464,28 @@ when defined(linux):
       check not pointerFocusable(61, ready, some(rect(10, 20, 0, 30)))
       check not pointerFocusable(61, ready, some(rect(10, 20, 200, 0)))
 
+    test "test_atspi_focus_by_pointer_clicks_only_the_visible_part":
+      # linux_atspi `visibleCentre`: the click lands in the part of the
+      # element its ancestors leave visible. The shapes are GTK 4's (measured
+      # 2026-10-24): a window, a scrolled viewport at y 192..312 and a list
+      # inside it 440 high, with rows below the viewport still `showing`.
+      let window = rect(0, 0, 1280, 800)
+      let viewport = rect(0, 192, 1280, 120)
+      let list = rect(0, 192, 1280, 440)
+      # Unclipped: the element's own centre.
+      check visibleCentre(rect(0, 24, 1280, 34), [window]) == some(point(640, 41))
+      check visibleCentre(rect(0, 24, 1280, 34), []) == some(point(640, 41))
+      # Half scrolled out: the centre of the visible half, inside the viewport.
+      let half = visibleCentre(rect(0, 302, 1280, 22), [window, viewport, list])
+      check half == some(point(640, 307))
+      check viewport.contains(half.get)
+      # Scrolled out entirely (its own centre, y 357, is where another widget
+      # is drawn): nothing to click.
+      check visibleCentre(rect(0, 346, 1280, 22), [window, viewport, list]).isNone
+      # Outside its window, and empty extents.
+      check visibleCentre(rect(1300, 10, 40, 20), [window]).isNone
+      check visibleCentre(rect(10, 10, 0, 20), [window]).isNone
+
     test "test_atspi_frames_are_placed_through_their_windows":
       let content = Size(width: 360, height: 467)
       # GTK 4 and GTK 3 without a shadow: the frame is the content.

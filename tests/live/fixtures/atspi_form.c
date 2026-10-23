@@ -19,13 +19,20 @@
  * <n> characters" (the passphrase itself never appears), so a test
  * sees the press's effect as a node that was not in the tree before.
  *
- * Usage: atspi_form [--title T] [--name N] [--csd] [--position X,Y] [--input-log PATH]
+ * Usage: atspi_form [--title T] [--name N] [--csd] [--clipped-field] [--position X,Y]
+ *                   [--input-log PATH]
  *   --title T   the window title (default "Order Form"); a suite gives each
  *               window a unique one so it can tell instances apart.
  *   --name N    the program name (g_set_prgname), which is the application
  *               name AT-SPI reports (default "guiassert-form").
  *   --csd       a header bar as the titlebar, so the toolkit draws the
  *               decorations (and a floating window's shadow) itself.
+ *   --clipped-field
+ *               add a text field "Archived note" scrolled out of a small
+ *               viewport above Submit, its centre on Submit, and below Submit
+ *               a text field "Covered note" with a button "Cover" over its
+ *               centre that presses like Submit (the focus test
+ *               of tests/live/ttree_linux.nim).
  *   --position X,Y
  *               GTK 3 on X11 only: ask for the window's top-left there (an
  *               X server without a window manager grants it as asked).
@@ -330,6 +337,57 @@ static void add_input_lab(GtkWidget *window) {
 #endif
 }
 
+/* --clipped-field: a text field scrolled out of a 48-pixel viewport, placed so
+   that its own centre lies on the Submit button drawn just below the
+   viewport. Its toolkit still reports it showing (GTK 4), so this is the
+   field a `focus` by pointer must refuse to click: a click at its centre
+   would press Submit. */
+static void add_clipped_field(void) {
+#if GTK_MAJOR_VERSION >= 4
+  GtkWidget *sw = gtk_scrolled_window_new();
+#else
+  GtkWidget *sw = gtk_scrolled_window_new(NULL, NULL);
+#endif
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sw), GTK_POLICY_NEVER, GTK_POLICY_EXTERNAL);
+  gtk_widget_set_size_request(sw, -1, 48);
+  GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  /* The viewport (48) plus form_box's spacing (6): the field starts where
+     Submit does. */
+  GtkWidget *spacer = gtk_label_new("");
+  gtk_widget_set_size_request(spacer, -1, 54);
+  append(inner, spacer);
+  GtkWidget *entry = gtk_entry_new();
+  set_name(entry, "Archived note");
+  append(inner, entry);
+#if GTK_MAJOR_VERSION >= 4
+  gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(sw), inner);
+#else
+  gtk_container_add(GTK_CONTAINER(sw), inner);
+#endif
+  append(form_box, sw);
+}
+
+/* Also with --clipped-field, below Submit: a text field "Covered note" whose
+   centre a button "Cover" overlays (GtkOverlay). The field is unclipped and
+   showing, but the point at its centre is the button's, which presses like
+   Submit when clicked; a `focus` by pointer must refuse it too. */
+static void add_covered_field(void) {
+  GtkWidget *ov = gtk_overlay_new();
+  GtkWidget *entry = gtk_entry_new();
+  set_name(entry, "Covered note");
+  GtkWidget *cover = gtk_button_new_with_label("Cover");
+  gtk_widget_set_halign(cover, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(cover, GTK_ALIGN_CENTER);
+  g_signal_connect(cover, "clicked", G_CALLBACK(on_submit), NULL);
+#if GTK_MAJOR_VERSION >= 4
+  gtk_overlay_set_child(GTK_OVERLAY(ov), entry);
+#else
+  gtk_container_add(GTK_CONTAINER(ov), entry);
+#endif
+  gtk_overlay_add_overlay(GTK_OVERLAY(ov), cover);
+  append(form_box, ov);
+}
+
 static gboolean stop_requested;
 static gboolean on_term(gpointer data) {
   (void)data;
@@ -341,10 +399,14 @@ int main(int argc, char **argv) {
   const char *title = "Order Form";
   const char *name = "guiassert-form";
   gboolean csd = FALSE;
+  gboolean clipped = FALSE;
   int pos_x = -1, pos_y = -1;
   const char *input_log_path = NULL;
   for (int i = 1; i < argc; i += 2) {
-    if (strcmp(argv[i], "--csd") == 0) {
+    if (strcmp(argv[i], "--clipped-field") == 0) {
+      clipped = TRUE;
+      i -= 1;
+    } else if (strcmp(argv[i], "--csd") == 0) {
       csd = TRUE;
       i -= 1;
     } else if (i + 1 >= argc) {
@@ -403,9 +465,11 @@ int main(int argc, char **argv) {
   set_name(notes, "Delivery notes");
   gtk_widget_set_size_request(notes, -1, 60);
   append(form_box, notes);
+  if (clipped) add_clipped_field();
   GtkWidget *submit = gtk_button_new_with_label("Submit");
   g_signal_connect(submit, "clicked", G_CALLBACK(on_submit), NULL);
   append(form_box, submit);
+  if (clipped) add_covered_field();
   if (input_log_path) add_input_lab(window);
 
 #if GTK_MAJOR_VERSION >= 4
