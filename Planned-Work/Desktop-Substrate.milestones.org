@@ -2,8 +2,8 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
-  :last_updated: 2026-10-22
+  :next_steps: GS8 Linux implemented 2026-10-23 by companion/linux (linux-wlr-virtual, linux-mutter, linux-xtest, linux-uinput; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input; contract 1.0 unchanged); independently verified 2026-10-23 by review (the click --modifiers wait scoped to linux-mutter and linux-uinput, the wlr settle wait justified by measurement, the helper runner made deadlock-free, X11 borrowed key codes emptied on every exit path, the argv test strengthened; just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 15/15; counts in GS8 Outstanding Tasks); its only open Linux item is GS8-LINUX BLOCKED: uinput device access needs operator (run tinput_linux with GUIASSERT_LIVE_UINPUT=1 where /dev/uinput is writable). GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :last_updated: 2026-10-23
   :current_milestone: GS7
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session); GS7 the Linux accessibility-tree backend (linux-atspi).
   :END:
@@ -62,7 +62,7 @@
   | GS5       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
   | GS6       | split           | in_progress (macOS blocked)    | in_progress | completed | planned |
   | GS7       | split           | partially_completed            | planned | completed | planned |
-  | GS8       | split           | planned                        | planned | planned | planned |
+  | GS8       | split           | in_progress (Linux: uinput BLOCKED) | planned | in_progress | planned |
   | GS9       | substrate/macos | planned                        | planned | —       | —       |
   | GS10      | companion/linux | in_progress (linux-host part)  | —       | in_progress | —       |
   | GS11      | later/windows   | planned                        | —       | —       | planned |
@@ -2408,11 +2408,12 @@
 
 ** GS8: Input backends
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
    :depends_on: GS2
    :owner: split
-   :platform_status: macos=planned linux=planned windows=planned
+   :platform_status: macos=planned linux=in_progress windows=planned
    :platform_prereqs: GS7=macos (effects are checked through the tree)
+   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at 744622d: linux-wlr-virtual, linux-mutter, linux-xtest and linux-uinput implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop), effects read back through linux-atspi (GS7=linux) and the fixture's own input log, in a private headless sway (scale 1 and 2), Xvfb and headless GNOME Shell; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three consecutive runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input in nix flake check; nine falsifying mutations red. Linux stays in_progress: GS8-LINUX BLOCKED: uinput device access needs operator (the uinput positive control). Contract 1.0 unchanged; two spec requests in Deviations. Independently verified 2026-10-23 by review (see GS8 Outstanding Tasks).
    :requires: desktop.automation
    :complexity: large
    :END:
@@ -2423,8 +2424,41 @@
         =scroll=, =type= (Unicode strings, =length= reported, text not
         echoed), =key= over the fixed key table; =input.nim= becomes a shim.
     - Linux (claimable by =companion/linux=)
-      - [ ] =linux_wlr_virtual.nim=, =linux_mutter.nim=, =linux_xtest.nim=,
+      - [X] =linux_wlr_virtual.nim=, =linux_mutter.nim=, =linux_xtest.nim=,
         =linux_uinput.nim= (device access refused as exit 6 / =uinput-access=).
+        (As built, companion/linux 2026-10-22/23: every verb is planned once
+        as primitive events (=backends/input/linux_plan.nim=, pure: motion,
+        buttons, wheel notches or pixel scrolls, keys by X keysym, waits)
+        and sent by four transports. =linux-wlr-virtual=: GuiAssert's
+        =helpers/linux/wayland_input.c= creates a virtual pointer
+        (wlr-virtual-pointer) and a virtual keyboard (virtual-keyboard-v1,
+        protocol XML vendored under =helpers/linux/protocols/=, MIT) per
+        verb, with a keymap written for the verb, so every key of the table
+        and any Unicode text types whatever the session layout; coordinates
+        are xdg-output's logical layout, so scaled outputs need no
+        conversion; window-focus / window-set-bounds through sway's IPC.
+        =linux-mutter=: Mutter's RemoteDesktop + ScreenCast D-Bus API over
+        GS7's =dbus_wire= (Clutter virtual devices inside the compositor),
+        absolute motion against the stream of the monitor holding the point
+        (=streamPosition=, from DisplayConfig.GetCurrentState and Mutter's
+        =transform_position=); keysyms the session layout lacks are refused
+        before sending (exit 4 / =unsupported-option=) after reading the
+        seat keymap with =wayland_input keysyms=, because Mutter silently
+        drops them; PipeWire missing is exit 4 / =missing-tool= before
+        Mutter is asked; window management through Shell Eval (unsafe mode).
+        =linux-xtest=: =helpers/linux/xtest_input.c= (XTest), keysyms the
+        keymap lacks typed through a borrowed empty key code; =--unit pixel=
+        is exit 4 / =unsupported-option=; window-focus / window-set-bounds
+        with core X requests. =linux-uinput=: =helpers/linux/uinput_input.c=
+        (absolute pointer over the desktop extent + keyboard, US layout key
+        codes); without write access to /dev/uinput every input verb is exit
+        6 / =uinput-access= with a remedy naming the device and
+        =details.feature= pointer-input / keyboard-input. The script goes to
+        each helper's stdin, never argv; a cancelled helper releases every
+        held button and key. The input default follows the session (sway ->
+        linux-wlr-virtual, GNOME -> linux-mutter, X11 -> linux-xtest;
+        =registry.linuxHostInputDefault=). Packaged: the three helpers in
+        libexec, checked by =guiassert-packaged-linux-input=.)
     - Windows (=later/windows=)
       - [ ] =windows_sendinput.nim=; posted delivery on a non-input desktop
         reported as =delivery: "posted"=.
@@ -2454,20 +2488,26 @@
     - test_name: test_wlr_virtual_click_scroll_drag_roundtrip_in_sway
       file: tests/live/tinput_linux.nim
       description: In a private sway, click, scroll and drag reach the GTK fixture and are read back through AT-SPI.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): [gtk3], [gtk4], [qt6 click and type] 3/3, plus test_wlr_virtual_type_sets_field_value [gtk3, gtk4], test_xtest_click_scroll_drag_roundtrip_in_xvfb [gtk3, gtk4] and test_input_scale_2_maps_desktop_coordinates [sway scale 2, gtk3], in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
+      negative_control: no status label before Submit is pressed nor after a click just above it; the slider's value unchanged by a scroll over the canvas beside it.
+      falsifying_mutation_linux: an absolute-motion extent of twice the logical layout (a physical-pixel mapping) turned 11 of the 28 red, incl. the scale-2 test (2026-10-22); reverted.
     - test_name: test_xtest_type_into_xvfb_fixture
       file: tests/live/tinput_linux.nim
       description: XTest typing into an X11 fixture in Xvfb sets the field value.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): [gtk3], [gtk4], [qt6] 3/3 (Unicode outside the server keymap through a borrowed key code, from the argument and --stdin), in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
+      falsifying_mutation_linux: the typed text written to stderr by the type verb turned all three red (and every other typing test, 9 in all); the script passed on the helper's argv turned 13 red (2026-10-22); reverted.
     - test_name: test_mutter_virtual_input_click_in_private_gnome
       file: tests/live/tinput_linux.nim
       description: In a private headless GNOME Shell, click through Clutter virtual devices presses the GTK fixture's button, read back through AT-SPI.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): [gtk4] 1/1 (click, scroll, drag, type; a character outside the session layout is exit 4 with nothing typed), in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
+      falsifying_mutation_linux: dropping the keymap check before sending keysyms (Mutter silently drops a keysym the layout lacks) turned it and the mutter key-table test red (2026-10-22); reverted.
     - test_name: test_uinput_without_device_access_is_exit_6
       file: tests/live/tinput_linux.nim
       description: linux-uinput without write access to /dev/uinput exits 6 / uinput-access with a remedy naming the device.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 1/1 (move, click, drag, scroll, type, key each exit 6 / uinput-access naming /dev/uinput and their feature; capabilities unavailable with the same reason, probed and not), in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
       negative_control: With access granted the same click is delivered and reported as injected.
+      negative_control_status: GS8-LINUX BLOCKED: uinput device access needs operator. /dev/uinput is crw------- root on this host; the positive test (test_uinput_with_device_access_delivers_and_reports_injected) is registered only with GUIASSERT_LIVE_UINPUT=1 and then fails unless the device is writable; the suite prints the BLOCKED line otherwise and counts nothing for it.
+      falsifying_mutation_linux: the access pre-check removed and the helper answering ok on EACCES (a success that delivered nothing) turned it red (2026-10-22); reverted.
     - test_name: test_sendinput_click_win32_fixture
       file: tests/live/tinput_windows.nim
       description: SendInput click on the Win32 fixture's button changes its status label.
@@ -2475,15 +2515,212 @@
     - test_name: test_every_key_of_the_table_is_delivered
       file: tests/live/tinput_<os>.nim
       description: (GS2.1 obligation) C8: every named key, function key, modifier and alias of the spec §7.5 key table is delivered by each input backend to the fixture's key logger as that key (aliases indistinguishable from their canonical spelling, letters case-insensitive).
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) on Linux for linux-wlr-virtual [gtk3], [gtk4], linux-xtest [gtk3] and linux-mutter [gtk4] 4/4: every named key and alias under several spellings and cases, F1–F24, printable characters, each modifier under every spelling with a letter and F13, two modifiers at once; characters outside the layout typed on wlr and X11, exit 4 on Mutter; linux-uinput's delivery is BLOCKED with its positive control above; in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each). The private GNOME test session maps F13–F24 to their keysyms (fkeys:basic_13-24) and switches off the Super overlay and Super+A, see Deviations.
+      falsifying_mutation_linux: modifiers of key combinations not pressed (planKey) turned all four red (2026-10-22); reverted.
     - test_name: test_drag_path_waypoints_reach_the_fixture_in_order
       file: tests/live/tinput_<os>.nim
       description: (GS2.1 obligation) C17: drag --path over the fixture's drawing canvas delivers every waypoint in order with the button held (the canvas records the pointer trail), and the report's path equals the requested vertices.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) on Linux for linux-wlr-virtual [gtk3], [gtk4], linux-xtest [gtk3], linux-mutter [gtk4] 4/4 (with click counts, buttons, modifiers on clicks and scroll directions on the same canvas), and at scale 2, in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
+      falsifying_mutation_linux: drag --path waypoints ignored (only --from and --to moved through) turned all four and the scale-2 test red (2026-10-22); reverted.
     - test_name: test_input_backends_name_features_on_exit_4_6
       file: tests/live/tinput_<os>.nim
       description: (GS2.1 obligation) C7: pointer-input, keyboard-input and window-management are reported with probed states, and a missing grant or device access names its feature in details.feature.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux) on Linux for linux-wlr-virtual, linux-xtest and linux-mutter 3/3 (the session-following default, available unprobed and supported probed; exit 3 display for a point on no output; exit 4 display-server-unsupported naming DISPLAY / WAYLAND_DISPLAY / the session bus with the feature; exit 4 unsupported-option for a control character and for pixel scroll on X11; Mutter without PipeWire exit 4 missing-tool for pointer input while keys still work) and linux-uinput exit 6 above, in just test-live-linux 85/85 on three consecutive runs (tests/live/tinput_linux.nim 28/28 each)
+      falsifying_mutation_linux: the uinput refusal turned into a silent success (see above) turned the uinput test red (2026-10-22); reverted.
+
+    - test_name: test_typed_text_never_in_argv_stderr_events_or_state [sway]
+      file: tests/live/tinput_linux.nim
+      description: (Linux, C15 / spec §7.5 "Secrets off argv") While a slow type --stdin runs, no process's /proc/<pid>/cmdline holds the text; stdout, stderr, serve events and stderr of a serve type with a stdin key, and the state directory never hold it; the field holds it (read through AT-SPI).
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux 85/85 on three consecutive runs
+      falsifying_mutation_linux: the type verb writing its text to stderr turned it red (2026-10-22; re-applied by review 2026-10-23, red); reverted. Review 2026-10-23: the recorded "input script appended to the helper's argv turned it red" held only because the helper then refused its extra argument (a usage error, every wlr test red): with the helper accepting it, the test stayed GREEN, since the script carries keysyms, not the text. The test now also requires the wayland_input helper to be seen running and its argv to be exactly its path and mode, with no keysym of the text; the same mutation (script on argv, accepted by the helper) then turned it red; reverted.
+    - test_name: test_per_session_input_is_ordered_over_serve [sway]
+      file: tests/live/tinput_linux.nim
+      description: (Linux, spec §8.5) Three type requests of one session sent at once over serve --stdio answer in arrival order and the field reads their texts concatenated in order, never interleaved.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux 85/85 on three consecutive runs
+      falsifying_mutation_linux: type treated as session-less in serve's ordering key (so the three run concurrently) turned it red (2026-10-22); reverted.
+    - test_name: test_input_scale_2_maps_desktop_coordinates [sway scale 2, gtk3]
+      file: tests/live/tinput_linux.nim
+      description: (Linux, spec §5) On a scale-2 headless output (logical 960x900), click / scroll / drag at the tree's bounds reach the form placed beyond the output's half-width, and the canvas receives exactly the requested logical points.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux 85/85 on three consecutive runs
+      falsifying_mutation_linux: a physical-pixel extent (twice the logical layout) turned it red with ten others (2026-10-22); reverted.
+    - test_name: test_input_window_management_moves_and_focuses [sway], [x11], [gnome]
+      file: tests/live/tinput_linux.nim
+      description: (Linux, window-management) window-set-bounds places a window where the window server then reports it; window-focus moves the focus from one form to the other and back; an unknown window id is exit 3 / window.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 3/3, in just test-live-linux 85/85 on three consecutive runs
+    - test_name: test_live_suite_leaves_no_process_running
+      file: tests/live/tinput_linux.nim
+      description: The input suite's last test: once every server, PipeWire, AT-SPI bus and fixture was stopped, nothing the run started (no input helper either) is still running.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in just test-live-linux on three consecutive runs
+    - test_name: tests/tlinux_input.nim (15 tests)
+      file: tests/tlinux_input.nim
+      description: In the default suite (just test): every verb's plan (modifiers around clicks and keys, drag interpolation through every vertex, scroll axes and signs, typed text as keysyms with control characters refused by position, never by content), the keysym of every key of the table, the US key codes of linux-uinput, Mutter's stream coordinates at scale 1 / 2 in both layout modes and the GetCurrentState parser, sway's window commands taking numeric ids only, each helper refusing a malformed script before connecting (exit 2) and answering connect without a display (exit 4), the session-following input default, every backend naming what is missing without a session, and (review 2026-10-23) the helper runner streaming a 3 MiB input through a helper that echoes it as it reads.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 14/14; 15/15 after review 2026-10-23
+      falsifying_mutation_linux: Mutter's stream scale ignored (always 1) turned test_stream_position_maps_back_exactly red (2026-10-22); reverted. Review 2026-10-23: the runner reading the helper's output only after its input was written (the first implementation) turned test_helper_runner_streams_input_and_output_together red (deadlock until the timeout); reverted.
+    - test_name: guiassert-packaged-linux-input
+      file: flake.nix (checks)
+      description: The packaged guiassert, from an empty environment, on a private Xvfb with its own session and AT-SPI buses: linux-xtest selected and probed supported; window-focus; a click at the GTK 3 form's Display name field and a type --stdin with a character outside the keymap set its value (read through the tree), the text on neither stdout nor stderr; a click just above Submit presses nothing, one at its centre adds the status label.
+      status: passing 2026-10-23 in nix flake check on Linux x86_64
+
+*** Deviations
+    - Linux (companion/linux, 2026-10-22). Scroll sign: the spec does not
+      state it; the Linux backends scroll DOWN for =--dy= > 0 and RIGHT for
+      =--dx= > 0 (wl_pointer's and libinput's convention; X buttons 5 / 7),
+      =--unit line= as wheel notches, =--unit pixel= as smooth logical
+      pixels. Request to the spec owner (=substrate/macos=): state the sign
+      in §7.5 so macOS and Windows agree.
+    - Linux: =linux-mutter= types only what the session's keyboard layout
+      has (Mutter's RemoteDesktop picks a key for a keysym in the current
+      layout and silently drops one it lacks); a key outside it is exit 4 /
+      =unsupported-option= naming its position, never the character. A
+      stock GNOME =us= layout maps the F13–F24 keys to XF86 launchers, so
+      =key F13= there is exit 4 too; the private GNOME test session sets
+      =org.gnome.desktop.input-sources xkb-options ['fkeys:basic_13-24']=,
+      and switches off =org.gnome.mutter overlay-key= and Super+A, which
+      otherwise open the overview on =key cmd+…=. Request to the spec owner:
+      §7.5 could say that a backend refuses a key the session cannot produce
+      with exit 4 / =unsupported-option= (which is what reject-don't-drop
+      already implies).
+    - Linux: =linux-mutter= needs PipeWire in the session for pointer
+      motion (absolute motion is defined only against a screen-cast stream;
+      every GNOME session runs PipeWire). Without its socket the pointer
+      verbs are exit 4 / =missing-tool= before Mutter is asked: with the
+      daemon gone Mutter's Start never answered and the shell stopped
+      answering Eval (measured, GNOME Shell 49). Keys need no stream.
+    - Linux: =linux-xtest= refuses =scroll --unit pixel= (exit 4 /
+      =unsupported-option=): the X core protocol scrolls in notches only.
+      =linux-uinput= reports =window-management= unavailable
+      (=unsupported-option=), types with US-layout key codes, and refuses a
+      character the US layout lacks; its positive path is untested here
+      (BLOCKED, see Verification).
+    - Linux: =linux-wlr-virtual= creates its devices per verb. A seat that
+      gains the keyboard (or pointer) capability with the helper's device is
+      given 400 ms before the first event, because clients bind their
+      =wl_keyboard= only after the capability appears and keys sent before
+      that are lost; a seat that already had the capability pays nothing.
+      The helper first waits for what it can observe (a roundtrip, then its
+      own connection seeing the capability); no protocol reports that
+      ANOTHER client has bound its keyboard, so the rest is a bounded wait
+      (review, 2026-10-23: with the wait removed, about one key verb in five
+      on a headless sway lost its key and the key-table and typing tests
+      went red; with it, none in every run). =click --modifiers= waits 30 ms
+      between the modifiers and the pointer on =linux-mutter= only (Mutter
+      applies a virtual keyboard's modifiers to pointer events a moment
+      late and offers nothing to wait on; review: with no wait the first
+      press of a modified double click lacked its modifiers in one of three
+      runs) and on =linux-uinput= (two evdev devices, read with no order
+      between them); =linux-wlr-virtual= and =linux-xtest= need none (one
+      connection's requests are handled in order; review: 20 modified clicks
+      with no wait on sway and Xvfb all carried their modifiers), so they
+      no longer wait (as first implemented, every backend waited).
+    - Linux: window management, which spec §7.5 puts in the input module, is
+      sway's IPC on =linux-wlr-virtual= (sway only), core X requests on
+      =linux-xtest=, and GNOME Shell's Eval on =linux-mutter= (unsafe mode
+      only, like =linux-gnome='s window list).
+    - Linux: =backends/tree/dbus_wire.nim= gained =ddictEntry= / =dvardict=
+      constructors (Mutter's option dictionaries); =linux_gnome.eval= is
+      exported for =linux-mutter='s window management. The tree fixture
+      =tests/live/fixtures/atspi_form.c= gained =--input-log= (the input
+      lab: a slider, a sketch pad and a key log that log the events they
+      receive), off by default, so GS7's golden trees are unchanged.
+
+*** Key Source Files
+    - src/gui_assert/backends/input/linux_plan.nim - pure plans, keysyms, US key codes, script, reports, Mutter stream coordinates
+    - src/gui_assert/backends/input/linux_common.nim - config, the helper runner (script on stdin, cancellation), error mapping
+    - src/gui_assert/backends/input/linux_wlr_virtual.nim, linux_mutter.nim, linux_xtest.nim, linux_uinput.nim - the four backends
+    - helpers/linux/input_script.h, wayland_input.c, xtest_input.c, uinput_input.c - the helpers and their shared script parser
+    - helpers/linux/protocols/virtual-keyboard-unstable-v1.xml - the vendored protocol (MIT)
+    - tests/live/tinput_linux.nim - the Linux live input suite
+    - tests/tlinux_input.nim - unit tests
+    - tests/live/fixtures/atspi_form.c - the form, with its input lab
+
+*** Outstanding Tasks
+    - [ ] GS8 macOS (=macos_cgevent.nim=) and Windows (=windows_sendinput.nim=) shares.
+    - [ ] GS8-LINUX BLOCKED: uinput device access needs operator. The
+      negative control of test_uinput_without_device_access_is_exit_6
+      (with access the click is delivered and reported injected) needs write
+      access to /dev/uinput (root-only here) and a session whose compositor
+      reads the host's input devices; run tests/live/tinput_linux.nim with
+      GUIASSERT_LIVE_UINPUT=1 where both hold. Linux stays in_progress until
+      it passes. Operator step: grant this user write access to /dev/uinput
+      (for example the udev rule =KERNEL=="uinput", GROUP="input",
+      MODE="0660"= and membership of =input=), then, in a desktop session
+      on the machine's own seat, run =GUIASSERT_LIVE_UINPUT=1 nim c -r
+      tests/live/tinput_linux.nim= inside =nix develop=. With the variable
+      set and the device writable the refusal test is not registered (it
+      cannot be refused there) and the positive control runs; with the
+      variable set and the device not writable the positive control FAILS
+      with the BLOCKED line. Review note: the positive control as written
+      checks the report (=delivery: "injected"=) of a click, not its effect;
+      when access exists, make it read the effect back like the other
+      backends' tests before recording it as passing.
+    - [ ] Linux follow-up (review 2026-10-23, not blocking GS8's contract):
+      =linux-wlr-virtual='s per-verb keymap puts the n-th distinct keysym of
+      a verb on key code 8 + n (the four modifiers included), so a single =type= of more than about 243
+      distinct characters uses key codes above 255, which XWayland clients
+      cannot receive (X11 key codes are 8-bit); native Wayland clients are
+      unaffected. Splitting such a verb into keymaps of at most 247 keys
+      would lift it.
+    - [ ] Consumer follow-up for GS3 / Agent Harbor (review 2026-10-23):
+      Agent Harbor's consumer spec maps =desktop_scroll= to =scroll ...
+      --unit pixel= (specs/Computer-Use/GuiAssert-Substrate.md), which
+      =linux-xtest= refuses (exit 4 / =unsupported-option=, X core
+      protocol scrolls by notches only). On an X11 / Xvfb session AH's
+      scroll would therefore always fail: the consumer should send
+      =--unit line= there (or on exit 4 retry with notches). The sign
+      convention agrees: AH negates the amount for up / left, GuiAssert
+      scrolls down / right for positive values.
+    - [X] Independent verification of the Linux share (review agent,
+      2026-10-23, Linux x86_64, inside =nix develop=, origin/agents still at
+      744622d): =just lint= clean (no linters configured); =just test= 408
+      ok (294 default incl. tlinux_input 15, contract 114), =just
+      test-core= 39, =just test-contract= 114, =just test-desktop-env= 31,
+      =just test-live-tesseract= 2, =just test-live-linux= 85/85 on three
+      consecutive recipe runs plus one file-by-file run (capture 16, OCR 8,
+      tree 33, input 28), all 0 failed and 0 skipped; =nix flake check=
+      (x86_64-linux) passes incl. =guiassert-packaged-linux-input=; =nim
+      check --os:macosx= of tlinux_input and the input modules clean. No
+      process with its working directory in the worktree remained.
+      Mutations re-applied and red: an absolute-motion extent of twice the
+      logical layout (the drag-path test and the scale-2 test), modifiers
+      never pressed (the key-table tests on wlr, X11 and Mutter and the X11
+      click details), the type verb writing its text to stderr (the C15
+      test and an X11 typing test), the script on the helper's argv (the
+      C15 test, after it was strengthened, see its entry), and the helper
+      runner reading output only after writing input (tlinux_input); all
+      reverted. Sleeps: removing linux-wlr-virtual's 400 ms settle made the
+      sway key-table and typing tests red (about one key verb in five lost
+      its key), so it stays, justified in wayland_input.c (no protocol
+      tells a client that another client bound its keyboard); the 30 ms
+      =click --modifiers= wait is now Mutter's and uinput's only (removed on
+      wlr and X11: 20 modified clicks with no wait carried their
+      modifiers; on Mutter, one run in three lost them), see Deviations.
+      Review fixes: the helper runner writes the script and reads the
+      helper's answer concurrently (=wayland_input keysyms= on a long text
+      could deadlock on two full pipes); =xtest_input= no longer exits from
+      inside Xlib's error handler, and every exit of a script (an X error,
+      no empty key code left, a cancellation) releases what it holds and
+      empties the codes it borrowed (checked on Xvfb: a cancelled
+      borrowed-key script left the mapping as it found it); the wayland
+      keymap writer can no longer write past its buffer; each helper holds
+      a button once at most (a script pressing one repeatedly overflowed a
+      fixed list); =linux-mutter= checks the layout before it creates a
+      remote-desktop session, stops a session that was created but not
+      started, and names the refused key by its position among the key
+      presses (it named the index among distinct keys; checked live with a
+      repeated character); the uinput refusal test is not registered where
+      the operator has granted access and asked for the positive control.
+    - [X] Implementation run, companion/linux, 2026-10-22/23 (Linux x86_64,
+      NixOS, kernel 6.18, inside =nix develop=, from origin/agents
+      744622d): =just lint= clean; =just test= 407 ok (293 default incl.
+      tlinux_input 14, contract 114 across both binaries), =just test-core=
+      39, =just test-contract= 114, =just test-desktop-env= 31,
+      =just test-live-tesseract= 2, =just test-live-linux= 85/85 on three
+      consecutive runs (capture 16, OCR 8, tree 33, input 28), all 0 failed
+      and 0 skipped; =nix flake check= (x86_64-linux) passes with the new
+      =guiassert-packaged-linux-input=. Nine falsifying mutations applied
+      one at a time against the live suite (or tlinux_input), each red and
+      reverted (recorded per entry above). No process started by these
+      runs remained afterwards.
 
 ** GS9: macOS off-screen sessions
    :PROPERTIES:
