@@ -2,8 +2,8 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS13 Linux implemented 2026-10-23 by companion/linux and independently verified 2026-10-23 by review (scratch paths kept out of the evidence, an empty --only selection now fails; in Agent Harbor the consumer leg gained exact form readback, real drag and capture controls and a teardown row A9; counts in GS13 Outstanding Tasks); GS13 stays in_progress until the consumer leg is green (A3, the GS15 inputs): tests/parity/linux_parity.sh (just test-parity-linux) restates the nine in-scope scenarios of Agent Harbor's Linux computer-use suite and runs them through the real guiassert against the invented GTK 3 / GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs on three consecutive runs, one falsifying mutation per scenario family (M1–M9, each red), evidence in tests/parity/evidence/ (schema guiassert-parity/1); Agent Harbor's consumer leg (ah desktop with AH_DESKTOP_SUBSTRATE=guiassert) passes 8 of 9 rows per session (7 of 8 before the review added A9), fails the form row at desktop focus on GTK 4, and records the GS15 inputs (GS13 Outstanding Tasks: unrouted session/record-start/record-stop/capture-pass/run-script/cadence/motion, GTK 4 focus, ocr with no target, role and doctor-feature vocabulary); two spec requests for substrate/macos in GS13 Outstanding Tasks; contract 1.0 unchanged. The GS8 consumer follow-up (scroll units on linux-xtest) is done in Agent Harbor 565099f99a. GS10 Linux implemented 2026-10-23 by companion/linux (linux-sway, linux-gnome and linux-xvfb private sessions owned by a detached session host, with readiness, names, Session.env / envUnset, their own AT-SPI bus with IsEnabled, reconciliation of a dead host or compositor, loopback-only VNC through wayvnc and x11vnc, and linux-host attach checks; tests/live/tsession_linux.nim 11/11 in the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check; contract 1.0 unchanged; spec requests in GS10 Deviations); independently verified 2026-10-23 by review (a host killed part way through its start left its runtime directory behind: the directory is now named by the session's tag and made by the host first; a cut start's clean-up walk of /proc is bounded by the host's start time so exit 5 comes before the deadline; the runtime-directory guard refuses paths with . or .. components; the GS5-GS8 suites' runtime directories and gacl-* directories are no longer left behind, and every Linux live suite now checks it; the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 22/22; counts in GS10 Outstanding Tasks). GS10-LINUX rustdesk BLOCKED (no loopback-only, contract-reportable endpoint; see GS10 Outstanding Tasks). GS8 Linux implemented 2026-10-23 by companion/linux (linux-wlr-virtual, linux-mutter, linux-xtest, linux-uinput; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input; contract 1.0 unchanged); independently verified 2026-10-23 by review (the click --modifiers wait scoped to linux-mutter and linux-uinput, the wlr settle wait justified by measurement, the helper runner made deadlock-free, X11 borrowed key codes emptied on every exit path, the argv test strengthened; just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 15/15; counts in GS8 Outstanding Tasks); its only open Linux item is GS8-LINUX BLOCKED: uinput device access needs operator (run tinput_linux with GUIASSERT_LIVE_UINPUT=1 where /dev/uinput is writable). GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
-  :last_updated: 2026-10-23
+  :next_steps: GS13 Linux completed 2026-10-24. The GS13-Linux completion (the first GS15 step) was implemented 2026-10-23 by companion/linux and independently verified 2026-10-24 by review (GS13 Outstanding Tasks, "GS13-Linux completion"): element-action focus focuses the element's window first and works on GTK 4 by a click into an editable text field, succeeding only when the element reports focused; the review made the click safe (no click on a field scrolled out of view or covered by another widget, nor while its window lacks the focus); the linux-sway session holds a seat keyboard so the toolkit keeps the keyboard focus between verbs; with the pinned package (agents 09ce0ce) Agent Harbor's consumer leg passes every GuiAssert row on linux-sway and linux-xvfb (Agent Harbor df7083c12b). Next for Linux: GS15's remaining steps, planned in Agent Harbor GA5a; the linux-wlr recording load sensitivity in GS5 Outstanding Tasks. Earlier: GS13 Linux implemented 2026-10-23 by companion/linux and independently verified 2026-10-23 by review (scratch paths kept out of the evidence, an empty --only selection now fails; in Agent Harbor the consumer leg gained exact form readback, real drag and capture controls and a teardown row A9; counts in GS13 Outstanding Tasks); GS13 stays in_progress until the consumer leg is green (A3, the GS15 inputs): tests/parity/linux_parity.sh (just test-parity-linux) restates the nine in-scope scenarios of Agent Harbor's Linux computer-use suite and runs them through the real guiassert against the invented GTK 3 / GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs on three consecutive runs, one falsifying mutation per scenario family (M1–M9, each red), evidence in tests/parity/evidence/ (schema guiassert-parity/1); Agent Harbor's consumer leg (ah desktop with AH_DESKTOP_SUBSTRATE=guiassert) passes 8 of 9 rows per session (7 of 8 before the review added A9), fails the form row at desktop focus on GTK 4, and records the GS15 inputs (GS13 Outstanding Tasks: unrouted session/record-start/record-stop/capture-pass/run-script/cadence/motion, GTK 4 focus, ocr with no target, role and doctor-feature vocabulary); two spec requests for substrate/macos in GS13 Outstanding Tasks; contract 1.0 unchanged. The GS8 consumer follow-up (scroll units on linux-xtest) is done in Agent Harbor 565099f99a. GS10 Linux implemented 2026-10-23 by companion/linux (linux-sway, linux-gnome and linux-xvfb private sessions owned by a detached session host, with readiness, names, Session.env / envUnset, their own AT-SPI bus with IsEnabled, reconciliation of a dead host or compositor, loopback-only VNC through wayvnc and x11vnc, and linux-host attach checks; tests/live/tsession_linux.nim 11/11 in the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check; contract 1.0 unchanged; spec requests in GS10 Deviations); independently verified 2026-10-23 by review (a host killed part way through its start left its runtime directory behind: the directory is now named by the session's tag and made by the host first; a cut start's clean-up walk of /proc is bounded by the host's start time so exit 5 comes before the deadline; the runtime-directory guard refuses paths with . or .. components; the GS5-GS8 suites' runtime directories and gacl-* directories are no longer left behind, and every Linux live suite now checks it; the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 22/22; counts in GS10 Outstanding Tasks). GS10-LINUX rustdesk BLOCKED (no loopback-only, contract-reportable endpoint; see GS10 Outstanding Tasks). GS8 Linux implemented 2026-10-23 by companion/linux (linux-wlr-virtual, linux-mutter, linux-xtest, linux-uinput; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input; contract 1.0 unchanged); independently verified 2026-10-23 by review (the click --modifiers wait scoped to linux-mutter and linux-uinput, the wlr settle wait justified by measurement, the helper runner made deadlock-free, X11 borrowed key codes emptied on every exit path, the argv test strengthened; just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 15/15; counts in GS8 Outstanding Tasks); its only open Linux item is GS8-LINUX BLOCKED: uinput device access needs operator (run tinput_linux with GUIASSERT_LIVE_UINPUT=1 where /dev/uinput is writable). GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :last_updated: 2026-10-24
   :current_milestone: GS13
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session); GS7 the Linux accessibility-tree backend (linux-atspi).
   :END:
@@ -67,9 +67,9 @@
   | GS10      | companion/linux | completed                      | —       | completed | —       |
   | GS11      | later/windows   | planned                        | —       | —       | planned |
   | GS12      | substrate/macos | planned                        | planned | —       | —       |
-  | GS13      | companion/linux | in_progress                    | —       | in_progress | —       |
+  | GS13      | companion/linux | completed                      | —       | completed | —       |
   | GS14      | later/windows   | planned                        | —       | —       | planned |
-  | GS15      | companion/linux | planned                        | planned | planned | planned |
+  | GS15      | companion/linux | in_progress (Linux step 1)     | planned | in_progress | planned |
   | GS16      | companion/linux | planned                        | —       | —       | —       |
 
 * Milestones
@@ -1882,6 +1882,16 @@
       2026-10-23): not added. Every session already has a native capture
       backend with window enumeration, which RFB lacks; the endpoint is for
       viewers. See GS10 Implementation Details.
+    - [ ] linux-wlr recording under host load (found at the GS13 review,
+      2026-10-24): =record --duration-ms 3000= in a private sway produced a
+      2000 ms file (20 frames at 10 fps, =durationMs= 2000, so the report is
+      honest) on two full parity runs at load average 20 to 28, and 3100 ms
+      whenever the load was lower. =wlr_screencopy= copies late frames back
+      to back to catch up, but frames still due when the stop arrives are
+      never made, so a recording on a loaded host is shorter than asked.
+      Decide whether the helper fills the schedule at stop (repeating the
+      last frame, which shows stale content) or the contract states that a
+      recording may be shorter than =--duration-ms= on a loaded host.
 
 ** GS6: OCR backends
    :PROPERTIES:
@@ -3197,9 +3207,9 @@
 
 ** GS13: Linux parity evidence (companion)
    :PROPERTIES:
-   :status: in_progress
-   :platform_status: linux=in_progress
-   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at dfff95f (Linux x86_64, NixOS, kernel 6.18, inside nix develop): implemented; independently verified 2026-10-23 by review (GS13 Outstanding Tasks); in_progress until the consumer leg is green. tests/parity/linux_parity.sh (just test-parity-linux) runs S1–S9 through the real guiassert against the invented GTK 3 and GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs passed on three consecutive runs (about 75 s each), and with --sessions gnome 14/18 (recording only, see Deviations). Every scenario family has a falsifying mutation (M1–M9, each red, then reverted). Agent Harbor's own leg (its tests/computer-use/parity_linux_guiassert_substrate.sh: ah desktop with AH_DESKTOP_SUBSTRATE=guiassert, its own GTK 4 fixture, in GuiAssert sessions) passes 7 of 8 scenario rows per session, fails A3 (desktop focus on a GTK 4 field) and records 25 gaps per session as GS15 inputs (Outstanding Tasks); at review, with the teardown row A9 added, 8 of 9 (Agent Harbor ad6fe9586f). Evidence: tests/parity/evidence/. Contract 1.0 unchanged.
+   :status: completed
+   :platform_status: linux=completed
+   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at dfff95f (Linux x86_64, NixOS, kernel 6.18, inside nix develop): completed 2026-10-24. GS13-Linux completion implemented 2026-10-23 from origin/agents at cf8ebcb and independently verified 2026-10-24 by review (Outstanding Tasks, "GS13-Linux completion", its review entry): with the pinned package (GuiAssert agents 09ce0ce, no dev-build wrapper) Agent Harbor's leg passes every GuiAssert row on linux-sway and linux-xvfb (A0–A7, A9; A8 n/a; the unrouted verbs are gap rows; Agent Harbor df7083c12b), the parity harness 36/36 with the strengthened S4 (evidence regenerated at 09ce0ce). Before it: implemented; independently verified 2026-10-23 by review (GS13 Outstanding Tasks); in_progress until the consumer leg is green. tests/parity/linux_parity.sh (just test-parity-linux) runs S1–S9 through the real guiassert against the invented GTK 3 and GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs passed on three consecutive runs (about 75 s each), and with --sessions gnome 14/18 (recording only, see Deviations). Every scenario family has a falsifying mutation (M1–M9, each red, then reverted). Agent Harbor's own leg (its tests/computer-use/parity_linux_guiassert_substrate.sh: ah desktop with AH_DESKTOP_SUBSTRATE=guiassert, its own GTK 4 fixture, in GuiAssert sessions) passes 7 of 8 scenario rows per session, fails A3 (desktop focus on a GTK 4 field) and records 25 gaps per session as GS15 inputs (Outstanding Tasks); at review, with the teardown row A9 added, 8 of 9 (Agent Harbor ad6fe9586f). Evidence: tests/parity/evidence/. Contract 1.0 unchanged.
    :depends_on: GS10
    :owner: companion/linux
    :platform_prereqs: GS5=linux GS6=linux GS7=linux GS8=linux
@@ -3254,7 +3264,7 @@
     | S1 | click / scroll / drag roundtrip (click_scroll_drag_roundtrip, zero_touch pointer path)              | find, click --at, scroll --at, drag, element-action set-value                       | pass 8/8  | pass 8/8  | pass 8/8  | pass 8/8  | dfff95f 2026-10-23 |
     | S2 | capability report of a live session (doctor_reports_capabilities)                                   | capabilities --probe --session                                                      | pass 6/6  | pass 6/6  | pass 6/6  | pass 6/6  | dfff95f 2026-10-23 |
     | S3 | element find by role, name and state (find_elements_filters_role_name_and_state)                    | find --role / --state / --name / --name-contains --ignore-case, element             | pass 8/8  | pass 8/8  | pass 8/8  | pass 8/8  | dfff95f 2026-10-23 |
-    | S4 | form fill, submit, status readback (form_fill_submit_and_status_readback)                            | element-action focus (or click), type --stdin, key Tab, element-action press, wait  | pass 7/7  | pass 7/7  | pass 7/7  | pass 7/7  | dfff95f 2026-10-23 |
+    | S4 | form fill, submit, status readback (form_fill_submit_and_status_readback)                            | element-action focus, type --stdin, key Tab, element-action press, wait --element   | pass 11/11 | pass 11/11 | pass 11/11 | pass 11/11 | 09ce0ce 2026-10-24 |
     | S5 | OCR of a canvas-drawn fixture (ocr_extracts_text_from_canvas_fixture)                               | windows, ocr --window, tree, find                                                   | pass 5/5  | pass 5/5  | pass 5/5  | pass 5/5  | dfff95f 2026-10-23 |
     | S6 | screenshot and recording pipeline (screenshot_recording_pipeline)                                    | screenshot (display, window), record, record-start, record-stop, ocr --image        | pass 9/9  | pass 9/9  | pass 9/9  | pass 9/9  | dfff95f 2026-10-23 |
     | S7 | waiting for a timer-driven dialog (wait_observes_timer_driven_dialog)                                | app-launch, wait --element --role dialog, wait --window, app-quit                   | pass 4/4  | pass 4/4  | pass 4/4  | pass 4/4  | dfff95f 2026-10-23 |
@@ -3286,11 +3296,14 @@
       Account whose path is the same on a second read and that =element=
       resolves; =--name-contains sign --ignore-case= finds Sign in and the
       same needle without =--ignore-case= finds nothing.
-    - S4: the status reads =State: idle= before the submit; Account is
-      focused (=element-action focus= where its node offers =focus=, else a
-      click at its centre, recorded in =notes=), =type --stdin= reports only
-      the length and the field then holds the text; after =key Tab= the
-      passcode typed no longer reaches Account; Passcode is =protected= with
+    - S4: the status reads =State: idle= before the submit; Account offers
+      =focus= on both toolkits; =element-action focus= on Passcode, then on
+      Account, leaves exactly that field =focused= each time (the second has
+      to MOVE the focus; GTK 3 through GrabFocus, GTK 4 by linux-atspi's
+      click, GS7); =type --stdin= reports only the length and the field then
+      holds the text; after =key Tab= Passcode is the one =focused= node
+      (since the GS13-Linux completion; before it the sway rows only noted
+      none) and the passcode typed no longer reaches Account; Passcode is =protected= with
       =value= and =text= null; =element-action press= on Sign in and =wait
       --element= sees "State: signed in 1 as harbor-pilot; passcode of 13
       characters"; the passcode is in no output of any run.
@@ -3327,16 +3340,16 @@
 *** Verification
     - test_name: bash tests/parity/linux_parity.sh
       description: Every in-scope Linux scenario passes in private sway and Xvfb sessions.
-      status: passing 2026-10-23 (Linux x86_64, inside nix develop, from origin/agents at dfff95f; 36/36 scenario runs on three consecutive runs, once more through just test-parity-linux; nothing left running or on disk after each run)
+      status: passing 2026-10-23 (Linux x86_64, inside nix develop, from origin/agents at dfff95f; 36/36 scenario runs on three consecutive runs, once more through just test-parity-linux; nothing left running or on disk after each run); again 2026-10-23 with the GS13-Linux completion (cf8ebcb plus the uncommitted change, so the evidence's commit reads cf8ebcb6d8-dirty until it is committed): 36/36 on three consecutive runs, the last writing tests/parity/evidence/linux-parity.json; --sessions gnome 14/18 as before (S4 passes there with the new checks; linux-parity-gnome.json regenerated). Review 2026-10-24 at 09ce0ce (load average 3 to 11): 36/36 on four full runs, the last writing tests/parity/evidence/linux-parity.json with commit 09ce0ce31d, and --sessions gnome 14/18 (S2 and S6 only; linux-parity-gnome.json); two earlier full runs that day at load average 20 to 28 failed only sway/gtk4 S6 ("record: duration about 3 s": 2000 ms of 3000), which passed alone and in every subset at lower load: the linux-wlr recording load sensitivity, now a GS5 Outstanding Task
       allowed_mocks: none. The application is GuiAssert's own invented fixture (tests/parity/fixtures/parity_lab.c), the sessions, toolkits, AT-SPI buses, compositors and tesseract are the real pinned ones.
       negative_control: per scenario, listed under Deliverables ("What each scenario checks").
-      falsifying_mutation: one per scenario family, each applied to GuiAssert's own code, the CLI rebuilt and the harness run on sway and Xvfb, then reverted (2026-10-23): M1 S1, planClick moves 40 px below the requested point (linux_plan.nim): red, "the click on Sign in activates it" [State: idle], sway and Xvfb. M2 S2, capabilities leaves out the recording feature (cli/verbs.nim): red, "every feature of the vocabulary exactly once" [18 of 19] and "recording=absent" (the harness first missed an absent feature; it now fails on one). M3 S3, linux-atspi never reports enabled: red, "state enabled keeps only Sign in" [@[]]. M4 S4, typedKeysyms drops the last character: red, "the Account field holds the typed text" [harbor-pilo]. M5 S5, tesseract word boxes 300 px to the right: red on both (on sway first only after the harness gained the 16 px start check: the tiled window's canvas is 1280 px wide, so the inside-the-canvas check alone passed; recorded as a strengthening). M6 S6, ImageRef width one pixel too large: red, "the PNG decodes to the reported size". M7 S7, wait --element ignores its filter: red, "before the timer the wait expires (negative control)" [exit 0]. M8 S8, removeRuntimeDir never removes: red on Xvfb, "its runtime directory is gone"; on sway the desktop_env target removes it itself, so M8b (removeRuntimeTree never removes) was added: red on sway. M9 S9, region captures 300 px above the requested rectangle (linux_wlr, linux_x11) with the origin reported as asked: red, "OCR of the element's bounds reads its text".
+      falsifying_mutation: one per scenario family, each applied to GuiAssert's own code, the CLI rebuilt and the harness run on sway and Xvfb, then reverted (2026-10-23): M10 (GS13-Linux completion) S4, the sway session's held keyboard not started (desktop_env/sway startKeyboard): red on sway with both toolkits, "element-action focus" exit 5 (GTK 3: GrabFocus accepted but no focused state; GTK 4: the click gave no keyboard focus), since a seat with no keyboard holds no keyboard focus at all.; M1 S1, planClick moves 40 px below the requested point (linux_plan.nim): red, "the click on Sign in activates it" [State: idle], sway and Xvfb. M2 S2, capabilities leaves out the recording feature (cli/verbs.nim): red, "every feature of the vocabulary exactly once" [18 of 19] and "recording=absent" (the harness first missed an absent feature; it now fails on one). M3 S3, linux-atspi never reports enabled: red, "state enabled keeps only Sign in" [@[]]. M4 S4, typedKeysyms drops the last character: red, "the Account field holds the typed text" [harbor-pilo]. M5 S5, tesseract word boxes 300 px to the right: red on both (on sway first only after the harness gained the 16 px start check: the tiled window's canvas is 1280 px wide, so the inside-the-canvas check alone passed; recorded as a strengthening). M6 S6, ImageRef width one pixel too large: red, "the PNG decodes to the reported size". M7 S7, wait --element ignores its filter: red, "before the timer the wait expires (negative control)" [exit 0]. M8 S8, removeRuntimeDir never removes: red on Xvfb, "its runtime directory is gone"; on sway the desktop_env target removes it itself, so M8b (removeRuntimeTree never removes) was added: red on sway. M9 S9, region captures 300 px above the requested rectangle (linux_wlr, linux_x11) with the origin reported as asked: red, "OCR of the element's bounds reads its text".
     - test_name: just test-parity-linux --sessions gnome
       description: The same scenarios in a private headless GNOME Shell (optional; not part of GS13's verification).
       status: 14/18 2026-10-23. S2 and S6 fail on both toolkits only because the linux-gnome capture backend does not record (exit 4 / not-implemented, remedy linux-portal-pipewire; GS5 Deviations); every other scenario passes, S3 with GNOME's client-side Close button left out.
     - test_name: Agent Harbor just computer-use-guiassert-parity-linux (tests/computer-use/parity_linux_guiassert_substrate.sh)
       description: (consumer leg, Agent Harbor's repository) the Linux e2e scenarios through ah desktop with AH_DESKTOP_SUBSTRATE=guiassert against Agent Harbor's own GTK 4 fixture, in linux-sway and linux-xvfb sessions started with the pinned guiassert; with --with-native also the native e2e scripts, unchanged.
-      status: 2026-10-23 at Agent Harbor agents 2b417dd984 with its pinned guiassert (GuiAssert dfff95f): per session A0 (launch and tree contract), A1 (click/scroll/drag), A2 (find), A4 (doctor), A5 (OCR of the canvas), A6 (screenshot and recording) and A7 (timer dialog) pass, A3 (form) fails at "desktop focus" (GTK 4, below), A8 (fallback trace) is n/a; ten refused verbs are gap rows, each checked to be refused with the not-routed error. Re-measured at review (Agent Harbor ad6fe9586f, after the review's script fixes and a merge of origin/agents; same pinned guiassert; --with-native): per session A0, A1, A2, A4, A5, A6, A7 and the new A9 (session teardown: stopped, not found, every launched process and the runtime directory gone) pass, A3 fails only at "desktop focus" (9/11, the next sign-in now read back exactly), A8 n/a, 25 gaps; the script exits 1. Evidence: tests/parity/evidence/linux-consumer-substrate.json (that run).
+      status: passing for every GuiAssert row 2026-10-24 at review with the PINNED package (Agent Harbor df7083c12b, its guiassert input at GuiAssert agents 09ce0ce, no dev-build wrapper; --with-native): linux-sway and linux-xvfb each A0 4/4, A1 10/10, A2 8/8, A3 15/15, A4 13/13, A5 6/6, A6 7/7, A7 3/3, A9 4/4, A8 n/a, G1–G10 refused; 28 gaps (6 native-specific, 22 open); the script exits 1 only for the native rows; tests/parity/evidence/linux-consumer-substrate.json is this run. Before the review: passing for every GuiAssert row 2026-10-23 with the GS13-Linux completion (Agent Harbor 07e0ece025 plus its GA5a step one, uncommitted; guiassert = this dev build run as AH_GUIASSERT_BIN through a wrapper carrying the pinned package's environment; --with-native): linux-sway and linux-xvfb each A0 4/4, A1 10/10, A2 8/8 (role "push button"), A3 15/15 (focus moved from the password entry and read back as focused; focus still reported after Tab), A4 13/13 (Agent Harbor's feature keys, the reasonCode rule), A5 6/6 (ocr with no target), A6 7/7, A7 3/3, A9 4/4 pass, A8 n/a, G1–G10 refused; 28 gaps, 6 native-specific and 22 open; the script exits 1 only for the native rows (as before). The same leg against the pinned guiassert (dfff95f): A3 red on both sessions at desktop focus and, on sway only, at focus after Tab. Evidence: tests/parity/evidence/linux-consumer-substrate.json (the dev-build run). Before: 2026-10-23 at Agent Harbor agents 2b417dd984 with its pinned guiassert (GuiAssert dfff95f): per session A0 (launch and tree contract), A1 (click/scroll/drag), A2 (find), A4 (doctor), A5 (OCR of the canvas), A6 (screenshot and recording) and A7 (timer dialog) pass, A3 (form) fails at "desktop focus" (GTK 4, below), A8 (fallback trace) is n/a; ten refused verbs are gap rows, each checked to be refused with the not-routed error. Re-measured at review (Agent Harbor ad6fe9586f, after the review's script fixes and a merge of origin/agents; same pinned guiassert; --with-native): per session A0, A1, A2, A4, A5, A6, A7 and the new A9 (session teardown: stopped, not found, every launched process and the runtime directory gone) pass, A3 fails only at "desktop focus" (9/11, the next sign-in now read back exactly), A8 n/a, 25 gaps; the script exits 1. Evidence: tests/parity/evidence/linux-consumer-substrate.json (that run).
       falsifying_mutation: the same leg against a guiassert built with M1, M3, M4, M5 (boxes 2000 px off), M6 and M7: A1, A2, A5 and A6 red, and A3 failed one more check ("the entry holds the typed text", M4); A7 stayed green because ah desktop wait polls tree itself rather than calling wait, so a second build with dialog roles mapped to window (linux_atspi contractRole) and tree-read left out of capabilities turned A7 and A4 red (2026-10-23, then reverted).
 
 *** Key Source Files
@@ -3375,77 +3388,217 @@
       the dialog mutation: A2 and A7 red on Xvfb (on sway that dev build
       could not start a session outside GuiAssert's dev shell, an
       environment limit of the substitution, not of the mutation).
+    - [X] GS13-Linux completion (companion/linux, 2026-10-23, from
+      origin/agents at cf8ebcb, Linux x86_64, inside nix develop;
+      independently verified 2026-10-24 by review, review entry at the end
+      of this item; GS13 =completed=). Closes the GS15
+      inputs that blocked consumer rows (2, 3 below, and the GS7 follow-up):
+      - *GTK 4 focus.* Measured and read from GTK's source
+        (gtk/a11y/gtkatspicomponent.c, gtkatspiaction.c, gtkatspitext.c, 4.20.3
+        and main): GTK 4 has no AT-SPI focus mechanism at all (GrabFocus
+        answers NotSupported, no focus action, SetCaretOffset /
+        SetSelection move the caret only). Decision: =linux_atspi= offers
+        =focus= on such a toolkit only for editable, focusable, enabled,
+        showing text with desktop bounds (=pointerFocusable=), and performs it
+        as one primary click at the centre through the session's input backend
+        (=LinuxAtspiConfig.pointerClick=, wired in =cli/verbs.atspiConfig=);
+        buttons, checkboxes and sliders keep not offering it (a click would
+        press or change them), so =element-action ... focus= on one stays exit
+        5 / =tree-failed= "does not offer 'focus'". Measured on the way: with
+        two windows, GrabFocus on GTK 3.24 and Qt 6.10 answers true but moves
+        the focus only inside the window, so the field neither reports
+        =focused= nor gets the keys. So every =focus= now first gives the
+        element's window the keyboard focus through the input backend's
+        =window-focus= (=LinuxAtspiConfig.focusWindow=; a backend that cannot,
+        linux-uinput, is skipped), then GrabFocus / a set-focus action / the
+        click, and succeeds only once the element reports =focused= within
+        1.5 s; otherwise exit 5 / =tree-failed= naming the route. An element
+        already focused is left alone. Contract 1.0 unchanged (exit codes,
+        reasons and shapes as before; =actions= gains =focus= on GTK 4 text
+        fields where an input backend can run).
+      - *Focus after Tab on sway* (the GS7 follow-up below): GuiAssert's bug,
+        not the toolkit's. sway runs with =WLR_LIBINPUT_NO_DEVICES=1=, so its
+        seat had no keyboard; each =wayland_input run= brought one and took it
+        away, and the focused client got =wl_keyboard.enter= / =leave= around
+        every key verb (WAYLAND_DEBUG=1 trace: seat capabilities 1 → 3 → 1),
+        so GTK reported its window inactive and no widget =focused= between
+        verbs. Fix: =wayland_input hold-keyboard= keeps one virtual keyboard
+        (modifier keys only) on the seat, started and stopped by the
+        =desktop_env/sway= target for its lifetime (so for every linux-sway
+        session and the live suites' private sways; an attached target starts
+        none). The window then reports =active= and the field =focused= after
+        Tab, as on Xvfb; =wait --element --state focused= can be relied on.
+      - *Also found and fixed:* =cancel.sleepCancellable= rounded the time
+        left DOWN to whole milliseconds and so ended each call up to 1 ms
+        early; a fixture =drag --duration-ms 300= of twelve steps took 298 ms
+        and failed the contract test =test_drag_path_delivers_waypoints_in_order=
+        once. It now rounds up (tests/tcancel.nim, added to =just test=).
+      - *Agent Harbor* (its GA5a step one, uncommitted in its worktree): the
+        binding sends =ocr --display <primary id>= for no target (input 3);
+        roles, doctor feature keys and the reasonCode rule are mapped to
+        Agent Harbor's documented contract (inputs 4–6); the desktop-frame
+        root and the provider / launch_method fields are recorded there as
+        native-specific (inputs 5, 7). See Agent Harbor GA5a.
+      - Tests: tests/tlinux_tree.nim
+        =test_atspi_focus_by_pointer_only_on_placed_editable_text=;
+        tests/live/ttree_linux.nim
+        =test_element_action_focus_moves_the_keyboard_focus= on sway and Xvfb
+        for GTK 3, GTK 4 and Qt 6 (focus moved from Passphrase to Display
+        name, read back as =focused= and =find --state focused=, keys typed
+        with =type= land there, after =key Tab= another element is focused;
+        on GTK 4 Submit offers no =focus= and is refused); tests/tcancel.nim;
+        the harness's S4 now uses =element-action focus= on both toolkits and
+        asserts the focus each time and after Tab.
+      - Mutations (each applied, red, reverted): click 200 px below the
+        centre: the GTK 4 focus tests red on sway and Xvfb ("did not give it
+        the keyboard focus"); the window focus skipped: GTK 3 and Qt 6 red on
+        sway and Qt 6 on Xvfb ("accepted 'focus' ... but did not move the
+        keyboard focus"), and GTK 4 on Xvfb; the held keyboard not started:
+        every sway focus test red (after Tab no focused element; GTK 3 and
+        GTK 4 focus refused) and harness S4 red on sway with both toolkits
+        (M10); =pointerFocusable= without its text-role condition: the unit
+        test red (buttons, checkboxes, sliders, labels offered); the
+        truncating sleep: tcancel red on three of three runs.
+      - Results: =just test= 433 OK (430 + 3), =just test-contract= 114 OK,
+        the Linux live suites file by file 102/102 (tcapture 16, tocr 8,
+        ttree 39, tinput 28, tsession 11; tsession's GNOME start timed out
+        once at host load 64 and passed on the re-run), =just
+        test-desktop-env= 31 (tdesktop_env_targets 22, attach 9), =just
+        test-parity-linux= 36/36 on three consecutive runs (one earlier run
+        at load 57 had sway/gtk4 S6 record 2000 ms of 3000, the
+        load-sensitivity of linux-wlr recording; not reproduced), the last
+        writing tests/parity/evidence/linux-parity.json, =--sessions gnome=
+        14/18 (S2 and S6 only, as before; linux-parity-gnome.json), =nix flake
+        check= green, =nim check --os:macosx= of guiassert.nim, cli/verbs,
+        linux_atspi and desktop_env/sway clean. Agent Harbor's leg against
+        this build: every GuiAssert row green on both sessions
+        (linux-consumer-substrate.json); against the pinned guiassert
+        (dfff95f): A3 red on both at desktop focus and on sway at focus
+        after Tab. Each evidence file's GuiAssert commit reads cf8ebcb6d8-dirty
+        (and Agent Harbor's 07e0ece025-dirty) until committed. No process,
+        =gac-= / =guienv-= directory or runtime directory of these runs is
+        left.
+      - Commit order: GuiAssert first (=agents=), then Agent Harbor's
+        =guiassert= flake input bumped to that commit, then Agent Harbor.
+        Done: GuiAssert a295b96 and 96af081 (this work), 8151917, 6c5358a and
+        09ce0ce (the review's); Agent Harbor cfc1b92125, 58e3624576 (the
+        bump), df7083c12b.
+      - Review (2026-10-24, Linux x86_64, inside nix develop, at 09ce0ce):
+        - Defect found and fixed: the GTK 4 focus click went to the centre
+          of the field's own extents. GTK 4 reports a field scrolled out of
+          its viewport =showing= and =visible= (measured: list rows below a
+          120 px viewport), so that point can lie on another widget, and a
+          widget overlaid on the field is hit instead of it: a =focus= could
+          press a button or move a slider. =pointerFocusPoint= now refuses
+          (exit 5 / =tree-failed=, no click) unless the field's window holds
+          the focus after the window step, and clicks the centre of the part
+          of the field its ancestors leave visible (=visibleCentre=) only when
+          the toolkit reports the field, or an object inside it, there
+          (Component =GetAccessibleAtPoint= in WINDOW coordinates; GTK 4
+          answers an entry's inner text object, whose =Parent= is the entry,
+          and in SCREEN coordinates answers the frame's first label wherever
+          the point is, so WINDOW it is). The toolkit stays told by
+          =ToolkitName= / =Version= rather than by trying GrabFocus, since a
+          GrabFocus that works would itself move the focus (module doc).
+          The form fixture's =--clipped-field= adds a field scrolled out of a
+          48 px viewport with its centre on Submit, and a field with a button
+          over its centre; =test_element_action_focus_never_clicks_a_clipped_field=
+          on sway and Xvfb (GTK 4) checks both are refused with nothing
+          pressed and the window's other field still focused by a click; a
+          unit test covers =visibleCentre= (8151917).
+        - Checked, no change: the held keyboard is started only by a target
+          that owns its sway (an attached target returns before it), is a
+          child carrying the session's tag, is stopped with the target
+          (SIGTERM, then SIGKILL) and is caught by every live suite's
+          =test_live_suite_leaves_no_process_running=; the attach suite now
+          counts the seat's keyboards before, during and after an attached
+          target (one each time, 6c5358a). With the keyboard held, a key verb
+          no longer brings the capability, so the 400 ms SETTLE_MS wait does
+          not apply; measured on a private sway with the GTK 4 lab: 40
+          rounds of =set-value= / =type= / =key Tab= / =key shift+Tab= /
+          =element=, 160 key verbs each with its own keymap, 0 lost, about
+          24 ms per verb. Under =linux-host= the window step activates the
+          element's window on the user's desktop as =window-focus= does, and
+          only when it is not already focused (module doc, "Focus").
+          =sleepCancellable= rounding: correct; a deadline that passes
+          during a sleep still ends it within a slice (new test, 09ce0ce).
+        - Results: =just test= 435 (unit 321, contract 114), Linux live
+          suites file by file 104/104 (tcapture 16, tocr 8, ttree 41, tinput
+          28, tsession 11), =just test-desktop-env= 32, parity as in
+          Verification, =nix flake check= and =nim check --os:macosx
+          src/guiassert.nim= clean; Agent Harbor as in Verification and its
+          GA5a.
+        - Mutations (each applied, red, reverted, rebuilt clean): the held
+          keyboard not started (sway focus tests red on GTK 3, GTK 4 and Qt
+          6); the click 40 px below the checked point (GTK 4 focus tests red
+          on sway and Xvfb); the ancestor clipping dropped (the clipped-field
+          test red, the hit test then refusing it instead); the hit test
+          dropped (the clipped-field test red with the Cover button pressed);
+          the attached target holding a keyboard too (the attach test red,
+          two keyboards). In Agent Harbor: no primary-display lookup and the
+          doctor passing GuiAssert's features through (see its GA5a).
     - [ ] Inputs to GS15 (the Linux default flip, Agent Harbor GA5a), from the
       consumer leg; each is a row or a gap in
-      =tests/parity/evidence/linux-consumer-substrate.json=. Agent Harbor
-      changes go through its own milestones; nothing here was changed in
-      Agent Harbor's routing.
-      1. Not routed, refused with the not-routed error (gap rows G1–G10):
-         =ah desktop session new / list / kill= (sessions were started with
-         =guiassert session-start= and targeted through
-         =AH_DESKTOP_SESSION=), =record-start=, =record-stop=,
-         =capture-pass=, =run-script=, =type --cadence=, =click --motion=,
-         =drag --motion=.
-      2. =ah desktop focus <path>= fails on every GTK 4 application (Agent
-         Harbor's own fixture is GTK 4): GTK 4 nodes offer no AT-SPI focus
-         (no =Component.GrabFocus=; =actions= is =["set-value"]=), and
-         =element-action ... focus= is exit 5 / =tree-failed= "does not offer
-         'focus'". GuiAssert's S4 focuses such a field by a click at its
-         centre. Needs a decision before the flip: Agent Harbor falls back to a
-         click, or GuiAssert offers a fallback (spec request below).
-      3. =ah desktop ocr= with neither =--region= nor =--app= fails: the
-         binding sends no capture target for the primary display and
-         =guiassert ocr= requires one of =--display= / =--window= /
-         =--region= (exit 2 / =missing-argument=). A small binding fix
-         (=displays=, then =--display <primary id>=), or the spec request
-         below.
-      4. Role vocabulary: the native e2e scripts filter on AT-SPI role names
-         (=push button=, =text=, =frame=, a =desktop frame= root); under the
-         substrate the roles are GuiAssert's normalized ones (=button=,
-         =text-field=, =window=, =application=), so =find --role "push
-         button"= and =--role text= find nothing. Either Agent Harbor maps the
-         names or the scripts are restated (GA5a).
-      5. =ah desktop tree= without =--app= reads the focused application
-         (root role =application=), not a desktop root.
-      6. =ah desktop doctor=: the features are GuiAssert's closed vocabulary
-         (=tree-read=, =display-capture=, …), not the native =tree.read=,
-         =tree.write=, =screenshot=, =recording=, =ocr=, =screen_reader=,
-         =remote_view=, and =supported= entries carry no =reasonCode=, which
-         the native doctor test rejects for anything not =available=.
-      7. Native-only report fields the native scripts assert: =click= /
-         =scroll= / =drag= =.data.provider == "wlrctl"= and =launch=
+      =tests/parity/evidence/linux-consumer-substrate.json=, whose gaps now
+      carry a disposition (=open= or =native-specific=). Status after the
+      GS13-Linux completion:
+      1. OPEN (the next GS15 step, planned in Agent Harbor GA5a): not routed,
+         refused with the not-routed error (gap rows G1–G10): =ah desktop
+         session new / list / kill= (sessions are started with =guiassert
+         session-start= and targeted through =AH_DESKTOP_SESSION=),
+         =record-start=, =record-stop=, =capture-pass=, =run-script=, =type
+         --cadence=, =click --motion=, =drag --motion=.
+      2. DONE (GuiAssert): =ah desktop focus <path>= on GTK 4 (A3 passes).
+      3. DONE (Agent Harbor binding): =ah desktop ocr= with no target reads
+         the primary display.
+      4. DONE (Agent Harbor mapping): roles in Agent Harbor's AT-SPI
+         spellings (=push button=, =text=, =frame=, =password text=).
+      5. NATIVE-SPECIFIC: =ah desktop tree= without =--app= reads the focused
+         application (Agent Harbor's substrate spec maps it to =--focused=),
+         not a =desktop frame= root.
+      6. DONE (Agent Harbor mapping): =doctor= reports Agent Harbor's stable
+         feature keys derived from GuiAssert's features, a =reasonCode= on
+         every entry that is not =available=.
+      7. NATIVE-SPECIFIC: =.data.provider == "wlrctl"= and
          =.data.launch_method == "swaymsg"=.
-      8. =ah desktop get-text --fallback --trace= exists on neither substrate;
-         the native fallback-trace test skips on that, so its restatement is
-         GuiAssert's S9 and the policy test has still to be written in Agent
-         Harbor.
+      8. OPEN (Agent Harbor policy): =ah desktop get-text --fallback --trace=
+         exists on neither substrate; GuiAssert's S9 restates its stages.
       9. The native baseline on this host (the same script, =--with-native=,
          each native e2e script in a private runtime directory): doctor PASS;
          zero-touch and click/scroll/drag FAIL only at their cleanup check,
-         intermittently (at review each failed in one of two runs and passed
-         in the other: xdg-desktop-portal, gvfsd and gvfsd-fuse activated on the private
-         bus outlive the lifecycle host; every functional assertion of the
-         pointer run held); find, form, wait and fallback SKIP (no Appium at
-         127.0.0.1:4723); OCR FAIL (no words) and screenshot/recording FAIL
-         (sway's stderr mixed into the JSON the script parses), both starting
-         an unconfigured sway of their own. So the native suite is not green
+         intermittently (in the GS13-Linux completion's final run zero-touch
+         passed and click/scroll/drag failed; xdg-desktop-portal, gvfsd and
+         gvfsd-fuse activated on the private bus outlive the lifecycle host);
+         find, form, wait and fallback SKIP (no Appium at 127.0.0.1:4723);
+         OCR FAIL (no words) and screenshot/recording FAIL (sway's stderr
+         mixed into the JSON the script parses), both starting an
+         unconfigured sway of their own. So the native suite is not green
          here either; GS15 compares against the substrate rows, not against
          it.
     - [ ] Spec requests for substrate/macos (Desktop-Substrate.md is theirs):
       (a) =ocr= with =--out= and no target: §7.5 says a capture verb with no
       =--display= / =--window= / =--region= uses the session's primary
       display, but the =ocr= row lists the target as required and the CLI
-      refuses it (=missing-argument=); state which holds (input 3 above).
-      (b) =element-action <path> focus= on a node that offers no =focus= is
-      exit 5 / =tree-failed=; consider exit 4 / =unsupported-option= (the
-      node, not the backend, lacks it), or a documented fallback (input 2).
-    - [ ] Linux follow-up (GS7, not blocking GS13): in linux-sway sessions no
-      node reports =focused= after the keyboard focus moved (GTK 3 and GTK 4;
-      =notes= of S4 in the evidence: "focused after Tab: @[]"), while in
-      linux-xvfb Passcode does. Typing reaches the right field on both, so it
-      is the AT-SPI state, not the focus: find whether the headless sway
-      leaves the toplevel inactive for the toolkit, and whether
-      =wait --element --state focused= can be relied on there.
+      refuses it (=missing-argument=); state which holds (input 3; Agent
+      Harbor's binding now resolves the primary display itself, so either
+      answer works for it).
+      (b) =element-action <path> focus=: (1) state what =focus= promises:
+      Linux now means the KEYBOARD focus (the element's window focused first,
+      success only once the element reports =focused=, exit 5 /
+      =tree-failed= otherwise), because GrabFocus alone moved it only inside
+      an unfocused window; macOS =macos_ax= should match. (2) The
+      "Accessibility" paragraph could name the GTK 4 route (a click into an
+      editable text field, so =actions= depends on the session having an
+      input backend). (3) A node that offers no =focus= (a GTK 4 button) is
+      still exit 5 / =tree-failed= "does not offer 'focus'", like every
+      action a node does not offer; exit 4 / =unsupported-option= would
+      single =focus= out, so no change is proposed unless macOS needs one.
+    - [X] Linux follow-up (GS7, not blocking GS13): in linux-sway sessions no
+      node reported =focused= after the keyboard focus moved, while in
+      linux-xvfb Passcode did. Done 2026-10-23 by companion/linux in the
+      GS13-Linux completion above: the seat had no keyboard between key
+      verbs; the sway target now holds one, and S4 and ttree_linux assert the
+      focus after Tab on sway.
     - [ ] GS13-LINUX BLOCKED: snapshot daemon needs operator sudo. Nothing in
       GS13 needs it (no AgentHarborFS, snapshot, branch or database test was
       run); Agent Harbor's =just test-guiassert-binding= (GA3/GA4) still waits
@@ -3488,7 +3641,8 @@
 
 ** GS15: Agent Harbor switch-over, per platform (companion)
    :PROPERTIES:
-   :status: planned
+   :status: in_progress
+   :platform_status: macos=planned linux=in_progress windows=planned
    :depends_on: GS3
    :owner: companion/linux
    :platform_prereqs: per platform: macOS needs GS12, Linux needs GS13, Windows needs GS14
@@ -3503,6 +3657,13 @@
     - [ ] macOS default flipped (after GS12).
     - [ ] Linux default flipped (after GS13). Its inputs, measured by GS13's
       consumer leg, are listed in GS13 Outstanding Tasks ("Inputs to GS15").
+      Step one done 2026-10-23 (companion/linux, verified 2026-10-24 by
+      review with the pinned package; GS13
+      Outstanding Tasks, "GS13-Linux completion"): every consumer row green
+      on linux-sway and linux-xvfb; the remaining steps (session lifecycle,
+      recordings, capture-pass, run-script, cadence, the restated
+      native-specific assertions, the flip itself) are planned in Agent
+      Harbor GA5a.
     - [ ] Windows default flipped (after GS14).
 
 *** Verification
