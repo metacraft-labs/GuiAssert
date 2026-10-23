@@ -4,9 +4,9 @@
   "platform": "linux",
   "arch": "x86_64",
   "kernel": "6.18.55",
-  "measuredAt": "2026-10-23T18:05:12Z",
+  "measuredAt": "2026-10-23T23:10:56Z",
   "agentHarbor": {
-    "commit": "v0.6.16-291-gad6fe9586f"
+    "commit": "v0.6.16-362-gdf7083c12b"
   },
   "guiassert": {
     "guiassert": "0.1.0",
@@ -77,7 +77,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "3223 ms"
+          "observed": "2649 ms"
         }
       ],
       "gaps": []
@@ -98,20 +98,28 @@
           "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
           "ok": true,
           "observed": ""
+        },
+        {
+          "check": "tree without --app is the focused application",
+          "ok": true,
+          "observed": "application"
+        },
+        {
+          "check": "the fixture window has role \"frame\"",
+          "ok": true,
+          "observed": "frame"
         }
       ],
       "gaps": [
         {
           "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
-          "observed": "application"
-        },
-        {
-          "assertion": "the fixture window has role \"frame\"",
-          "observed": "window"
+          "observed": "application",
+          "disposition": "native-specific"
         },
         {
           "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
-          "observed": "[\"app\",\"window\"]"
+          "observed": "[\"app\",\"window\"]",
+          "disposition": "native-specific"
         }
       ]
     },
@@ -176,7 +184,8 @@
       "gaps": [
         {
           "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
-          "observed": "\"injected\""
+          "observed": "\"injected\"",
+          "disposition": "native-specific"
         }
       ]
     },
@@ -188,14 +197,19 @@
       "result": "pass",
       "checks": [
         {
-          "check": "find --role button finds Login and the disabled button",
+          "check": "find --role \"push button\" finds Login and the disabled button",
           "ok": true,
           "observed": ""
         },
         {
-          "check": "both buttons, each with path and role",
+          "check": "both buttons, each with path and role \"push button\"",
           "ok": true,
           "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --role button (GuiAssert's spelling) finds none of them (negative control)",
+          "ok": true,
+          "observed": ""
         },
         {
           "check": "find --state enabled",
@@ -223,34 +237,44 @@
           "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "find --role \"push button\" finds buttons (AT-SPI role names)",
-          "observed": "0"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "A3",
       "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
       "scenario": "form fill, submit and status readback",
-      "result": "fail",
+      "result": "pass",
       "checks": [
         {
-          "check": "the first editable entry is found by role text-field and state",
+          "check": "find --role text --state editable",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the first editable entry is found by role text and state, and is not protected",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "the password entry is a \"password text\"",
           "ok": true,
           "observed": ""
         },
         {
           "check": "desktop focus on it",
-          "ok": false,
+          "ok": true,
           "observed": ""
         },
         {
           "check": "focus reports success",
-          "ok": false,
-          "observed": "Error: GuiAssert `element-action` failed (tree-failed): linux-atspi: tree-failed: the element at /app[951885]/window[0]/group[0]/group[0]/group[0]/text-field[0]"
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry reports focused, and nothing else does",
+          "ok": true,
+          "observed": "[\"\"]"
         },
         {
           "check": "desktop type",
@@ -291,14 +315,14 @@
           "check": "key reports success",
           "ok": true,
           "observed": ""
+        },
+        {
+          "check": "after Tab one element reports focused, and it is not the entry",
+          "ok": true,
+          "observed": "[\"\"]"
         }
       ],
-      "gaps": [
-        {
-          "assertion": "find --role text --state editable finds the entries (AT-SPI role names)",
-          "observed": "0"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
@@ -323,41 +347,57 @@
           "observed": ""
         },
         {
-          "check": "the session's tree reading is usable (the zero-touch doctor probe)",
+          "check": "every entry that is not available carries a reasonCode, and no available one does",
+          "ok": true,
+          "observed": "[]"
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe: tree.read available)",
           "ok": true,
           "observed": ""
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "every non-available entry carries a reasonCode (\"supported\" entries carry none)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
         },
         {
-          "assertion": "doctor reports tree.read available (the zero-touch probe's native name and state)",
+          "check": "tree.read is derived from GuiAssert's tree-read",
+          "ok": true,
           "observed": ""
         },
         {
-          "assertion": "doctor reports feature \"tree.read\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"tree.read\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"tree.write\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"tree.write\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"screenshot\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"screenshot\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"degraded\"]"
         },
         {
-          "assertion": "doctor reports feature \"screen_reader\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"recording\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"remote_view\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"ocr\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screen_reader\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"remote_view\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         }
-      ]
+      ],
+      "gaps": []
     },
     {
       "session": "linux-sway",
@@ -372,7 +412,7 @@
           "observed": ""
         },
         {
-          "check": "desktop ocr --region (the display) succeeds",
+          "check": "desktop ocr with no target (the native test's call) succeeds",
           "ok": true,
           "observed": ""
         },
@@ -382,17 +422,22 @@
           "observed": "5/5"
         },
         {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the region OCR of the whole display reads the same words",
+          "ok": true,
+          "observed": ""
+        },
+        {
           "check": "boxes are in desktop coordinates inside the session display",
           "ok": true,
           "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "ah desktop ocr with no --region or --app (the binding sends no --display; guiassert needs a target)",
-          "observed": "Error: invalid GuiAssert request `ocr` (missing-argument): ocr needs --image, or --display, --window or --region with --out"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
@@ -449,7 +494,8 @@
       "gaps": [
         {
           "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
-          "observed": "For more information, try '--help'."
+          "observed": "For more information, try '--help'.",
+          "disposition": "open"
         }
       ]
     },
@@ -469,7 +515,8 @@
       "gaps": [
         {
           "assertion": "session new is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -489,7 +536,8 @@
       "gaps": [
         {
           "assertion": "session list is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -509,7 +557,8 @@
       "gaps": [
         {
           "assertion": "session kill is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -529,7 +578,8 @@
       "gaps": [
         {
           "assertion": "record-start is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -549,7 +599,8 @@
       "gaps": [
         {
           "assertion": "record-stop is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -569,7 +620,8 @@
       "gaps": [
         {
           "assertion": "capture-pass is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -589,7 +641,8 @@
       "gaps": [
         {
           "assertion": "run-script is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -609,7 +662,8 @@
       "gaps": [
         {
           "assertion": "type --cadence is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -629,7 +683,8 @@
       "gaps": [
         {
           "assertion": "click --motion is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -649,7 +704,8 @@
       "gaps": [
         {
           "assertion": "drag --motion is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -678,7 +734,7 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "guienv-d8737d9b4908d33c"
+          "observed": "guienv-09a2b9519a6615a1"
         }
       ],
       "gaps": []
@@ -703,7 +759,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "3266 ms"
+          "observed": "3282 ms"
         }
       ],
       "gaps": []
@@ -724,20 +780,28 @@
           "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
           "ok": true,
           "observed": ""
+        },
+        {
+          "check": "tree without --app is the focused application",
+          "ok": true,
+          "observed": "application"
+        },
+        {
+          "check": "the fixture window has role \"frame\"",
+          "ok": true,
+          "observed": "frame"
         }
       ],
       "gaps": [
         {
           "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
-          "observed": "application"
-        },
-        {
-          "assertion": "the fixture window has role \"frame\"",
-          "observed": "window"
+          "observed": "application",
+          "disposition": "native-specific"
         },
         {
           "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
-          "observed": "[\"app\",\"window\"]"
+          "observed": "[\"app\",\"window\"]",
+          "disposition": "native-specific"
         }
       ]
     },
@@ -802,7 +866,8 @@
       "gaps": [
         {
           "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
-          "observed": "\"injected\""
+          "observed": "\"injected\"",
+          "disposition": "native-specific"
         }
       ]
     },
@@ -814,14 +879,19 @@
       "result": "pass",
       "checks": [
         {
-          "check": "find --role button finds Login and the disabled button",
+          "check": "find --role \"push button\" finds Login and the disabled button",
           "ok": true,
           "observed": ""
         },
         {
-          "check": "both buttons, each with path and role",
+          "check": "both buttons, each with path and role \"push button\"",
           "ok": true,
           "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --role button (GuiAssert's spelling) finds none of them (negative control)",
+          "ok": true,
+          "observed": ""
         },
         {
           "check": "find --state enabled",
@@ -849,34 +919,44 @@
           "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "find --role \"push button\" finds buttons (AT-SPI role names)",
-          "observed": "0"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "A3",
       "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
       "scenario": "form fill, submit and status readback",
-      "result": "fail",
+      "result": "pass",
       "checks": [
         {
-          "check": "the first editable entry is found by role text-field and state",
+          "check": "find --role text --state editable",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the first editable entry is found by role text and state, and is not protected",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "the password entry is a \"password text\"",
           "ok": true,
           "observed": ""
         },
         {
           "check": "desktop focus on it",
-          "ok": false,
+          "ok": true,
           "observed": ""
         },
         {
           "check": "focus reports success",
-          "ok": false,
-          "observed": "Error: GuiAssert `element-action` failed (tree-failed): linux-atspi: tree-failed: the element at /app[956014]/window[0]/group[0]/group[0]/group[0]/text-field[0]"
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry reports focused, and nothing else does",
+          "ok": true,
+          "observed": "[\"\"]"
         },
         {
           "check": "desktop type",
@@ -917,14 +997,14 @@
           "check": "key reports success",
           "ok": true,
           "observed": ""
+        },
+        {
+          "check": "after Tab one element reports focused, and it is not the entry",
+          "ok": true,
+          "observed": "[\"\"]"
         }
       ],
-      "gaps": [
-        {
-          "assertion": "find --role text --state editable finds the entries (AT-SPI role names)",
-          "observed": "0"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
@@ -949,41 +1029,57 @@
           "observed": ""
         },
         {
-          "check": "the session's tree reading is usable (the zero-touch doctor probe)",
+          "check": "every entry that is not available carries a reasonCode, and no available one does",
+          "ok": true,
+          "observed": "[]"
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe: tree.read available)",
           "ok": true,
           "observed": ""
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "every non-available entry carries a reasonCode (\"supported\" entries carry none)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
         },
         {
-          "assertion": "doctor reports tree.read available (the zero-touch probe's native name and state)",
+          "check": "tree.read is derived from GuiAssert's tree-read",
+          "ok": true,
           "observed": ""
         },
         {
-          "assertion": "doctor reports feature \"tree.read\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"tree.read\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"tree.write\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"tree.write\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"screenshot\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"screenshot\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"degraded\"]"
         },
         {
-          "assertion": "doctor reports feature \"screen_reader\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"recording\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         },
         {
-          "assertion": "doctor reports feature \"remote_view\" exactly once (native feature names)",
-          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+          "check": "doctor reports feature \"ocr\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screen_reader\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"remote_view\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
         }
-      ]
+      ],
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
@@ -998,7 +1094,7 @@
           "observed": ""
         },
         {
-          "check": "desktop ocr --region (the display) succeeds",
+          "check": "desktop ocr with no target (the native test's call) succeeds",
           "ok": true,
           "observed": ""
         },
@@ -1008,17 +1104,22 @@
           "observed": "5/5"
         },
         {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the region OCR of the whole display reads the same words",
+          "ok": true,
+          "observed": ""
+        },
+        {
           "check": "boxes are in desktop coordinates inside the session display",
           "ok": true,
           "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "ah desktop ocr with no --region or --app (the binding sends no --display; guiassert needs a target)",
-          "observed": "Error: invalid GuiAssert request `ocr` (missing-argument): ocr needs --image, or --display, --window or --region with --out"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
@@ -1075,7 +1176,8 @@
       "gaps": [
         {
           "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
-          "observed": "For more information, try '--help'."
+          "observed": "For more information, try '--help'.",
+          "disposition": "open"
         }
       ]
     },
@@ -1095,7 +1197,8 @@
       "gaps": [
         {
           "assertion": "session new is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1115,7 +1218,8 @@
       "gaps": [
         {
           "assertion": "session list is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1135,7 +1239,8 @@
       "gaps": [
         {
           "assertion": "session kill is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1155,7 +1260,8 @@
       "gaps": [
         {
           "assertion": "record-start is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1175,7 +1281,8 @@
       "gaps": [
         {
           "assertion": "record-stop is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1195,7 +1302,8 @@
       "gaps": [
         {
           "assertion": "capture-pass is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1215,7 +1323,8 @@
       "gaps": [
         {
           "assertion": "run-script is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1235,7 +1344,8 @@
       "gaps": [
         {
           "assertion": "type --cadence is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1255,7 +1365,8 @@
       "gaps": [
         {
           "assertion": "click --motion is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1275,7 +1386,8 @@
       "gaps": [
         {
           "assertion": "drag --motion is not routed through the GuiAssert substrate",
-          "observed": ""
+          "observed": "",
+          "disposition": "open"
         }
       ]
     },
@@ -1304,7 +1416,7 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "gaxv-cb893aeff1e57dec"
+          "observed": "gaxv-f89b4a0bd8615bf6"
         }
       ],
       "gaps": []
@@ -1324,10 +1436,10 @@
       "id": "N",
       "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
       "scenario": "native e2e script, unchanged",
-      "result": "pass",
+      "result": "fail",
       "checks": [],
       "gaps": [],
-      "observed": "PASS: Zero-touch production desktop session bootstrap and cleanup succeeded"
+      "observed": "error: production desktop session cleanup leaked owned resources"
     },
     {
       "session": "native",

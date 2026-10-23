@@ -4,9 +4,9 @@
   "platform": "linux",
   "arch": "amd64",
   "kernel": "6.18.55",
-  "measuredAt": "2026-10-23T17:46:26Z",
+  "measuredAt": "2026-10-23T23:28:36Z",
   "guiassert": {
-    "commit": "dfff95faa3-dirty",
+    "commit": "09ce0ce31d",
     "version": {
       "guiassert": "0.1.0",
       "contract": {
@@ -80,7 +80,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 161,
+          "elapsedMs": 211,
           "notes": [],
           "checks": [
             {
@@ -130,7 +130,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 649,
+          "elapsedMs": 397,
           "notes": [],
           "checks": [
             {
@@ -156,7 +156,7 @@
             {
               "check": "its path is stable across reads",
               "ok": true,
-              "observed": "/app[351833]/window[0]/group[0]/text-field[0]"
+              "observed": "/app[3526801]/window[0]/group[0]/text-field[0]"
             },
             {
               "check": "element <path> resolves to it",
@@ -190,16 +190,28 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2642,
-          "notes": [
-            "Account focused by element-action focus",
-            "focused after Tab: @[]"
-          ],
+          "elapsedMs": 1467,
+          "notes": [],
           "checks": [
             {
               "check": "status idle before submit (negative control)",
               "ok": true,
               "observed": "State: idle"
+            },
+            {
+              "check": "Account offers focus",
+              "ok": true,
+              "observed": "[\"focus\",\"set-value\"]"
+            },
+            {
+              "check": "element-action focus gives Passcode the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
+            },
+            {
+              "check": "element-action focus gives Account the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Account\"]"
             },
             {
               "check": "type reports the length, not the text",
@@ -210,6 +222,11 @@
               "check": "the Account field holds the typed text",
               "ok": true,
               "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab Passcode is focused",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
             },
             {
               "check": "after Tab the typing no longer reaches Account",
@@ -248,7 +265,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2882,
+          "elapsedMs": 2172,
           "notes": [],
           "checks": [
             {
@@ -306,7 +323,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 1647,
+          "elapsedMs": 511,
           "notes": [],
           "checks": [
             {
@@ -349,7 +366,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 1027,
+          "elapsedMs": 715,
           "notes": [],
           "checks": [
             {
@@ -394,7 +411,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 7116,
+          "elapsedMs": 6346,
           "notes": [],
           "checks": [
             {
@@ -458,7 +475,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2848,
+          "elapsedMs": 2794,
           "notes": [],
           "checks": [
             {
@@ -469,12 +486,12 @@
             {
               "check": "the wait resolves on the dialog",
               "ok": true,
-              "observed": "17 attempts"
+              "observed": "16 attempts"
             },
             {
               "check": "it resolves after the timer, not before",
               "ok": true,
-              "observed": "2512 ms"
+              "observed": "2459 ms"
             },
             {
               "check": "the dialog's window is enumerated",
@@ -499,7 +516,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 20583,
+          "elapsedMs": 16535,
           "notes": [],
           "checks": [
             {
@@ -555,7 +572,7 @@
             {
               "check": "the fixture is gone with it",
               "ok": true,
-              "observed": "351833"
+              "observed": "3526801"
             },
             {
               "check": "its runtime directory is gone",
@@ -589,7 +606,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 155,
+          "elapsedMs": 104,
           "notes": [],
           "checks": [
             {
@@ -639,7 +656,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 368,
+          "elapsedMs": 367,
           "notes": [],
           "checks": [
             {
@@ -665,7 +682,7 @@
             {
               "check": "its path is stable across reads",
               "ok": true,
-              "observed": "/app[353791]/window[0]/group[0]/text-field[0]"
+              "observed": "/app[3539375]/window[0]/group[0]/text-field[0]"
             },
             {
               "check": "element <path> resolves to it",
@@ -699,16 +716,28 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2794,
-          "notes": [
-            "Account offers no focus action (actions [\"set-value\"]); focused by a click at its centre",
-            "focused after Tab: @[]"
-          ],
+          "elapsedMs": 2025,
+          "notes": [],
           "checks": [
             {
               "check": "status idle before submit (negative control)",
               "ok": true,
               "observed": "State: idle"
+            },
+            {
+              "check": "Account offers focus",
+              "ok": true,
+              "observed": "[\"focus\",\"set-value\"]"
+            },
+            {
+              "check": "element-action focus gives Passcode the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
+            },
+            {
+              "check": "element-action focus gives Account the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Account\"]"
             },
             {
               "check": "type reports the length, not the text",
@@ -719,6 +748,11 @@
               "check": "the Account field holds the typed text",
               "ok": true,
               "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab Passcode is focused",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
             },
             {
               "check": "after Tab the typing no longer reaches Account",
@@ -757,7 +791,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2218,
+          "elapsedMs": 2288,
           "notes": [],
           "checks": [
             {
@@ -815,7 +849,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 437,
+          "elapsedMs": 512,
           "notes": [],
           "checks": [
             {
@@ -858,7 +892,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 619,
+          "elapsedMs": 666,
           "notes": [],
           "checks": [
             {
@@ -903,7 +937,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 5993,
+          "elapsedMs": 6229,
           "notes": [],
           "checks": [
             {
@@ -967,7 +1001,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2846,
+          "elapsedMs": 2770,
           "notes": [],
           "checks": [
             {
@@ -978,12 +1012,12 @@
             {
               "check": "the wait resolves on the dialog",
               "ok": true,
-              "observed": "16 attempts"
+              "observed": "14 attempts"
             },
             {
               "check": "it resolves after the timer, not before",
               "ok": true,
-              "observed": "2560 ms"
+              "observed": "2358 ms"
             },
             {
               "check": "the dialog's window is enumerated",
@@ -1008,7 +1042,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 16830,
+          "elapsedMs": 16612,
           "notes": [],
           "checks": [
             {
@@ -1064,7 +1098,7 @@
             {
               "check": "the fixture is gone with it",
               "ok": true,
-              "observed": "353791"
+              "observed": "3539375"
             },
             {
               "check": "its runtime directory is gone",
@@ -1098,7 +1132,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 105,
+          "elapsedMs": 106,
           "notes": [],
           "checks": [
             {
@@ -1148,7 +1182,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 241,
+          "elapsedMs": 345,
           "notes": [],
           "checks": [
             {
@@ -1174,7 +1208,7 @@
             {
               "check": "its path is stable across reads",
               "ok": true,
-              "observed": "/app[354800]/window[0]/group[0]/text-field[0]"
+              "observed": "/app[3541447]/window[0]/group[0]/text-field[0]"
             },
             {
               "check": "element <path> resolves to it",
@@ -1208,16 +1242,28 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 760,
-          "notes": [
-            "Account focused by element-action focus",
-            "focused after Tab: @[\"Passcode\"]"
-          ],
+          "elapsedMs": 1425,
+          "notes": [],
           "checks": [
             {
               "check": "status idle before submit (negative control)",
               "ok": true,
               "observed": "State: idle"
+            },
+            {
+              "check": "Account offers focus",
+              "ok": true,
+              "observed": "[\"focus\",\"set-value\"]"
+            },
+            {
+              "check": "element-action focus gives Passcode the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
+            },
+            {
+              "check": "element-action focus gives Account the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Account\"]"
             },
             {
               "check": "type reports the length, not the text",
@@ -1228,6 +1274,11 @@
               "check": "the Account field holds the typed text",
               "ok": true,
               "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab Passcode is focused",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
             },
             {
               "check": "after Tab the typing no longer reaches Account",
@@ -1266,7 +1317,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2067,
+          "elapsedMs": 2132,
           "notes": [],
           "checks": [
             {
@@ -1324,7 +1375,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 437,
+          "elapsedMs": 487,
           "notes": [],
           "checks": [
             {
@@ -1367,7 +1418,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 514,
+          "elapsedMs": 642,
           "notes": [],
           "checks": [
             {
@@ -1412,7 +1463,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 5978,
+          "elapsedMs": 7311,
           "notes": [],
           "checks": [
             {
@@ -1476,7 +1527,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2680,
+          "elapsedMs": 2717,
           "notes": [],
           "checks": [
             {
@@ -1492,7 +1543,7 @@
             {
               "check": "it resolves after the timer, not before",
               "ok": true,
-              "observed": "2459 ms"
+              "observed": "2462 ms"
             },
             {
               "check": "the dialog's window is enumerated",
@@ -1517,7 +1568,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 13477,
+          "elapsedMs": 15991,
           "notes": [],
           "checks": [
             {
@@ -1573,7 +1624,7 @@
             {
               "check": "the fixture is gone with it",
               "ok": true,
-              "observed": "354800"
+              "observed": "3541447"
             },
             {
               "check": "its runtime directory is gone",
@@ -1657,7 +1708,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 265,
+          "elapsedMs": 266,
           "notes": [],
           "checks": [
             {
@@ -1683,7 +1734,7 @@
             {
               "check": "its path is stable across reads",
               "ok": true,
-              "observed": "/app[356054]/window[0]/group[0]/text-field[0]"
+              "observed": "/app[3549822]/window[0]/group[0]/text-field[0]"
             },
             {
               "check": "element <path> resolves to it",
@@ -1717,16 +1768,28 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 1363,
-          "notes": [
-            "Account offers no focus action (actions [\"set-value\"]); focused by a click at its centre",
-            "focused after Tab: @[\"Passcode\"]"
-          ],
+          "elapsedMs": 1727,
+          "notes": [],
           "checks": [
             {
               "check": "status idle before submit (negative control)",
               "ok": true,
               "observed": "State: idle"
+            },
+            {
+              "check": "Account offers focus",
+              "ok": true,
+              "observed": "[\"focus\",\"set-value\"]"
+            },
+            {
+              "check": "element-action focus gives Passcode the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
+            },
+            {
+              "check": "element-action focus gives Account the keyboard focus",
+              "ok": true,
+              "observed": "@[\"Account\"]"
             },
             {
               "check": "type reports the length, not the text",
@@ -1737,6 +1800,11 @@
               "check": "the Account field holds the typed text",
               "ok": true,
               "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab Passcode is focused",
+              "ok": true,
+              "observed": "@[\"Passcode\"]"
             },
             {
               "check": "after Tab the typing no longer reaches Account",
@@ -1775,7 +1843,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2116,
+          "elapsedMs": 2155,
           "notes": [],
           "checks": [
             {
@@ -1833,7 +1901,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 373,
+          "elapsedMs": 423,
           "notes": [],
           "checks": [
             {
@@ -1921,7 +1989,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 6053,
+          "elapsedMs": 5994,
           "notes": [],
           "checks": [
             {
@@ -1985,7 +2053,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 2771,
+          "elapsedMs": 2720,
           "notes": [],
           "checks": [
             {
@@ -2001,7 +2069,7 @@
             {
               "check": "it resolves after the timer, not before",
               "ok": true,
-              "observed": "2511 ms"
+              "observed": "2460 ms"
             },
             {
               "check": "the dialog's window is enumerated",
@@ -2026,7 +2094,7 @@
           ],
           "result": "pass",
           "error": null,
-          "elapsedMs": 14207,
+          "elapsedMs": 14603,
           "notes": [],
           "checks": [
             {
@@ -2082,7 +2150,7 @@
             {
               "check": "the fixture is gone with it",
               "ok": true,
-              "observed": "356054"
+              "observed": "3549822"
             },
             {
               "check": "its runtime directory is gone",
