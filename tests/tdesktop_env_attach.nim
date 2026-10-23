@@ -114,6 +114,25 @@ for name in getEnv("GUIENV_TARGETS", "sway,gnome").split(','):
       check host.byPid(p).pid == p
       check host.windows().len >= 1
 
+    if name == "sway":
+      test "an attached sway target holds no keyboard on the seat":
+        # desktop_env/sway "Why a held keyboard": a target that owns its
+        # sway holds one keyboard on the seat for its lifetime; an attached
+        # target never adds one to a session that is not its own (the seat
+        # is its owner's), and when it stops the seat is as it was.
+        proc keyboards(): int =
+          let (o, code) = execCmdEx("swaymsg -t get_inputs -r")
+          doAssert code == 0, o
+          o.count("\"type\": \"keyboard\"")
+        check keyboards() == 1      # the host target's own held keyboard
+        let a = attach(name)
+        a.start()
+        let p = host.spawn(@[helper("wm_probe"), "map", "hold=30000"]).processID
+        a.click(a.byPid(p).rect.center)
+        check keyboards() == 1
+        a.stop()
+        check keyboards() == 1
+
     if name == "gnome":
       test "attaching without unsafe mode fails by name and names the remedy":
         discard GnomeTarget(host).eval("(global.context.unsafe_mode = false, 1)")
