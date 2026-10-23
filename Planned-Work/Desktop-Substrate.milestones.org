@@ -2,9 +2,9 @@
 
 * Document
   :PROPERTIES:
-  :next_steps: GS8 Linux implemented 2026-10-23 by companion/linux (linux-wlr-virtual, linux-mutter, linux-xtest, linux-uinput; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input; contract 1.0 unchanged); independently verified 2026-10-23 by review (the click --modifiers wait scoped to linux-mutter and linux-uinput, the wlr settle wait justified by measurement, the helper runner made deadlock-free, X11 borrowed key codes emptied on every exit path, the argv test strengthened; just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 15/15; counts in GS8 Outstanding Tasks); its only open Linux item is GS8-LINUX BLOCKED: uinput device access needs operator (run tinput_linux with GUIASSERT_LIVE_UINPUT=1 where /dev/uinput is writable). GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
+  :next_steps: GS10 Linux implemented 2026-10-23 by companion/linux (linux-sway, linux-gnome and linux-xvfb private sessions owned by a detached session host, with readiness, names, Session.env / envUnset, their own AT-SPI bus with IsEnabled, reconciliation of a dead host or compositor, loopback-only VNC through wayvnc and x11vnc, and linux-host attach checks; tests/live/tsession_linux.nim 11/11 in the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check; contract 1.0 unchanged; spec requests in GS10 Deviations); independently verified 2026-10-23 by review (a host killed part way through its start left its runtime directory behind: the directory is now named by the session's tag and made by the host first; a cut start's clean-up walk of /proc is bounded by the host's start time so exit 5 comes before the deadline; the runtime-directory guard refuses paths with . or .. components; the GS5-GS8 suites' runtime directories and gacl-* directories are no longer left behind, and every Linux live suite now checks it; the Linux live suites 96/96 on three runs, tests/tlinux_session.nim 22/22; counts in GS10 Outstanding Tasks). GS10-LINUX rustdesk BLOCKED (no loopback-only, contract-reportable endpoint; see GS10 Outstanding Tasks). GS8 Linux implemented 2026-10-23 by companion/linux (linux-wlr-virtual, linux-mutter, linux-xtest, linux-uinput; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input; contract 1.0 unchanged); independently verified 2026-10-23 by review (the click --modifiers wait scoped to linux-mutter and linux-uinput, the wlr settle wait justified by measurement, the helper runner made deadlock-free, X11 borrowed key codes emptied on every exit path, the argv test strengthened; just test-live-linux 85/85 on three runs, tests/tlinux_input.nim 15/15; counts in GS8 Outstanding Tasks); its only open Linux item is GS8-LINUX BLOCKED: uinput device access needs operator (run tinput_linux with GUIASSERT_LIVE_UINPUT=1 where /dev/uinput is writable). GS7 Linux implemented 2026-10-22 by companion/linux (linux-atspi on the session's own AT-SPI bus, spoken in the D-Bus wire protocol with no library; GTK 3, GTK 4 and Qt 6 forms read, searched and driven on a private sway at scale 1 and 2 and a private Xvfb, bounds in desktop coordinates checked by real clicks, protected password fields, C5 accessible through the new linux-host session backend; tests/live/ttree_linux.nim 33/33, just test-live-linux 57/57 on three consecutive runs, tests/tlinux_tree.nim 12/12, guiassert-packaged-linux-tree in nix flake check; contract 1.0 unchanged); independently verified 2026-10-22 by review (dbus_wire hardened against hostile messages with an 18-test unit suite incl. a malformed-message table and a fuzz loop; just test-live-linux 57/57 on three runs; counts in GS7 Outstanding Tasks); GS10 is in_progress: linux-host partly delivered with GS7. GS5 Linux completed 2026-10-21 by companion/linux (linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire; just test-live-linux 14/14 on Linux x86_64, default suites and both contract runs green; core/mp4 now counts only frames within the track duration; contract 1.0 unchanged); independently verified 2026-10-22 by review (counts in GS5 Outstanding Tasks; the flake package now carries the Linux helpers and tools, checked by guiassert-packaged-linux-capture; the intermittent linux-wlr recording flake is fixed 2026-10-22 by companion/linux: wf-recorder dropped the frames it held when libx264 stalled, and linux-wlr now records through GuiAssert's wlr_screencopy helper into ffmpeg; just test-live-linux 15/15 on ten consecutive runs, independently verified by review the same day, see GS5 Outstanding Tasks and Deviations); a VNC framebuffer capture backend is proposed for GS10 in GS5 Outstanding Tasks. GS3 completed 2026-10-21 by companion/linux (Agent Harbor consumer spec, binding crate and Nix pin; reviewed). Linux x86_64 columns of GS1, GS2, GS2.1 and GS4 completed by companion/linux (2026-10-21; five Linux fixes, see GS1 Deviations); their Linux arm64 and Windows legs wait for the first CI run on a pull request into dev. GS6 macOS implemented (apple-vision and tesseract engines behind ocr, over files and captures); default suites, both contract runs and the tesseract live suite green; the capture-then-read OCR test is BLOCKED on the locked GUI session like GS5's live tests: re-run just test-live-macos unlocked, then independent verification of GS5 and GS6. GS6 Linux completed 2026-10-22 by companion/linux (tesseract, the Linux default, over files and over captures from linux-x11, linux-wlr at scale 1 and 2, linux-portal-pipewire and linux-gnome, boxes mapped to desktop coordinates; tests/live/tocr_linux.nim 7/7 in just test-live-linux 22/22 on three runs; the packaged guiassert OCRs a capture in guiassert-packaged-linux-capture; a tesseract without its default traineddata is now exit 4 missing-tool; contract 1.0 unchanged); independently verified 2026-10-22 by review (word boxes measured exact, the tolerance tightened to 1 px; the headless sway target no longer orphans the dbus-run-session bus of its wrapper, and both Linux live suites now end with a check that nothing they started is still running: just test-live-linux 24/24 on three runs; counts in GS6 Outstanding Tasks). GS5 macOS implemented (macos-sck stills and SCStream recordings through the signed helper bundle, macos-cgwindow enumeration, exit 6 / tcc-screen-recording with the bundle identity and click-path, recordings measured with core/mp4); default suites and both contract runs green; the macOS live suite (just test-live-macos) is BLOCKED on a locked GUI session (Screen Recording IS granted to com.metacraft-labs.guiassert.capture): re-run it unlocked, then independent verification. Contract guiassert-desktop/1.0 unchanged.
   :last_updated: 2026-10-23
-  :current_milestone: GS7
+  :current_milestone: GS10
   :executive_summary: GuiAssert becomes the desktop substrate (capture, OCR, accessibility tree, input, off-screen sessions) behind a pure core and opt-in backends, consumed by Agent Harbor through a fixed CLI/serve JSON contract. GS0 spec, GS1 core split, GS2 CLI/serve/fixture done on macOS; GS2.1 froze contract 1.0 with the consumer's requests C1–C17; GS4 added video input to the vision verbs; GS5 added the macOS and Linux capture backends and GS6 the apple-vision and tesseract OCR engines (live capture evidence pending an unlocked session); GS7 the Linux accessibility-tree backend (linux-atspi).
   :END:
 
@@ -64,7 +64,7 @@
   | GS7       | split           | partially_completed            | planned | completed | planned |
   | GS8       | split           | in_progress (Linux: uinput BLOCKED) | planned | in_progress | planned |
   | GS9       | substrate/macos | planned                        | planned | —       | —       |
-  | GS10      | companion/linux | in_progress (linux-host part)  | —       | in_progress | —       |
+  | GS10      | companion/linux | completed                      | —       | completed | —       |
   | GS11      | later/windows   | planned                        | —       | —       | planned |
   | GS12      | substrate/macos | planned                        | planned | —       | —       |
   | GS13      | companion/linux | planned                        | —       | planned | —       |
@@ -1874,11 +1874,14 @@
       green. The packaged =guiassert record= (1.5 s, 10 fps) on a private
       headless sway: 0 of 120 short (16 frames each, equal to ffprobe), and
       0 of 25 with =slow_x264= preloaded.
-    - [ ] Proposal (not contract surface yet): a VNC framebuffer capture
+    - [X] Proposal (not contract surface yet): a VNC framebuffer capture
       backend (for example =linux-vnc=) that captures a session through its
       loopback VNC endpoint (=wayvnc= / =x11vnc=, spec §6.3 =--vnc=). It
       would be a new backend name, a 1.x minor change (§7.7); decide it with
-      GS10, which brings the VNC endpoints.
+      GS10, which brings the VNC endpoints. Decided with GS10 (companion/linux,
+      2026-10-23): not added. Every session already has a native capture
+      backend with window enumeration, which RFB lacks; the endpoint is for
+      viewers. See GS10 Implementation Details.
 
 ** GS6: OCR backends
    :PROPERTIES:
@@ -2785,17 +2788,18 @@
 
 ** GS10: Linux off-screen sessions (companion)
    :PROPERTIES:
-   :status: in_progress
-   :progress_note: linux-host partly delivered with GS7 (companion/linux, 2026-10-22; reviewed the same day): apps, app-launch, app-quit, session-list / session-info of host and permissions, in backends/session/linux_host.nim, exercised by tests/live/ttree_linux.nim (test_linux_host_launches_lists_and_quits_apps). No GS10 deliverable is complete: the attach checks, session-start (exit 4 / not-implemented until then), linux-sway, linux-gnome, linux-xvfb and VNC remain.
+   :status: completed
+   :progress_note: Claimed and implemented by companion/linux 2026-10-23 (from origin/agents at cc1fc31; Linux x86_64, NixOS, kernel 6.18, inside nix develop): linux-sway, linux-gnome and linux-xvfb private sessions with their session host, readiness, records, environment contract and AT-SPI bus; loopback VNC endpoints (wayvnc, x11vnc); linux-host attach checks. Independently verified 2026-10-23 by review (see Outstanding Tasks). RustDesk as a session endpoint is BLOCKED (see Outstanding Tasks); it is not a GS10 deliverable.
    :depends_on: GS2
    :owner: companion/linux
    :platform_prereqs: GS5=linux GS7=linux GS8=linux
+   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at cc1fc31: session-start --kind headless with --session-backend linux-sway (headless sway through desktop_env/sway: its own runtime directory, session bus and settings portal), linux-gnome (gnome-shell --headless through desktop_env/gnome, with PipeWire for linux-mutter) and linux-xvfb (Xvfb with -displayfd and an MIT-MAGIC-COOKIE, its own dbus-daemon, Openbox), each owned by a detached session host (guiassert __linux-session-host) that starts the session's own AT-SPI bus and sets org.a11y.Status.IsEnabled; readiness C10 (exit 5 / session-failed within --timeout-ms, nothing left behind), name-in-use, generated ids; Session.env / envUnset C6 with every verb of a private session run in its environment; dead host and dead compositor reported as state error (C9: every verb exit 4 / session-not-running); --vnc on 127.0.0.1 only (wayvnc, x11vnc; checked against /proc/net/tcp and an RFB client); linux-host attach checks (no display server: state error / no-display-server, apps / app-launch / app-quit exit 4 / session-not-running). tests/live/tsession_linux.nim 11/11 in every live run below, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check. Contract 1.0 unchanged (no new reason, key or verb). Independently verified 2026-10-23 by review (four fixes, tests/tlinux_session.nim 22/22, the Linux live suites 96/96 on three runs; see GS10 Outstanding Tasks).
    :requires: os.linux desktop.automation
    :complexity: medium
    :END:
 
 *** Deliverables
-    - [ ] =backends/session/linux_sway.nim= and =linux_gnome.nim= wrapping the
+    - [X] =backends/session/linux_sway.nim= and =linux_gnome.nim= wrapping the
       existing =desktop_env= targets; =linux_xvfb.nim=; =linux-host= attach.
       (GS7, 2026-10-22: =backends/session/linux_host.nim= exists with apps,
       app-launch, app-quit, session-list / session-info of =host= and
@@ -2803,39 +2807,313 @@
       session that starts an AT-SPI bus for its clients should also set
       =org.a11y.Status.IsEnabled=, which Qt waits for; tests/live/linux_live
       =startAtspiBus= shows the sequence.)
-    - [ ] Optional loopback VNC endpoint (=wayvnc= / =x11vnc=) reported in
-      =Session.vnc=.
+      Done 2026-10-23 (companion/linux): =linux_private.nim= holds what the
+      three share (the session host, records, readiness, names, the
+      environment contract, the AT-SPI bus with =IsEnabled=, the tag sweep,
+      reconciliation); =linux_sway.nim=, =linux_gnome.nim= and
+      =linux_xvfb.nim= are the three servers; =linux_host.nim= gained the
+      attach check and lists the private sessions after =host=.
+    - [X] Optional loopback VNC endpoint (=wayvnc= / =x11vnc=) reported in
+      =Session.vnc=. Done 2026-10-23: =--vnc= on linux-sway (wayvnc) and
+      linux-xvfb (x11vnc), 127.0.0.1 only, verified to be the server's own
+      listener and nothing else on that port; linux-gnome refuses =--vnc=
+      (exit 4 / =unsupported-option=, feature =session-vnc=).
 
 *** Verification
     - test_name: test_session_start_sway_returns_env_and_runs_app
       file: tests/live/tsession_linux.nim
       description: session-start --kind headless (sway) returns an env with which app-launch starts a client whose window the session lists.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below (also: a private runtime directory 0700 under /tmp owning the session and AT-SPI buses, the screenshot of the launched window shows its colour, session-stop leaves no record, process or runtime directory)
+      negative_control: the window's title is absent from the session's windows before the launch.
+      falsifying_mutation_linux: every verb of a private session run with the caller's environment (composeSessionEnv dropped in verbs.prepare) turned it red: app-launch had no display (2026-10-23); reverted.
     - test_name: test_session_start_gnome_headless_runs_app
       file: tests/live/tsession_linux.nim
       description: session-start --kind headless with the linux-gnome backend starts a private GNOME Shell in which app-launch starts a client the session lists.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below (also: --vnc refused with exit 4 / unsupported-option naming session-vnc, before anything is recorded)
+      falsifying_mutation_linux: the GNOME session recording linux-wlr as its capture backend turned it red (windows of the session fail) (2026-10-23); reverted.
     - test_name: test_linux_host_attach_reports_existing_session
       file: tests/live/tsession_linux.nim
       description: With a sway already running, the linux-host session reports its displays and windows and changes no compositor setting.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below (sway's GET_OUTPUTS, GET_INPUTS, GET_SEATS and GET_CONFIG read back identical after session-info, session-list, displays, windows, apps and capabilities; session-start through linux-host is exit 4 / unsupported-option naming the private backends)
       negative_control: With no compositor reachable, linux-host exits 4 / session-not-running.
+      negative_control_status: passing (a WAYLAND_DISPLAY naming no socket, and no display variable at all: session-info host state error / no-display-server; apps, app-launch, app-quit exit 4 / session-not-running with details.feature null)
+      falsifying_mutation_linux: displayAnswers always answering (no attach check) turned it red: session-info host running and apps exit 0 with no display server (2026-10-23); an attach that rotates the output (swaymsg output HEADLESS-1 transform 90 in hostSession) turned it red on the displays and the sway state read-back (2026-10-23; a first variant that set a keyboard repeat rate changed nothing, the headless seat has no keyboard, and stayed green); reverted.
     - test_name: test_session_start_xvfb_runs_x11_fixture
       file: tests/live/tsession_linux.nim
       description: The Xvfb session runs an X11 fixture visible to windows and screenshot.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below (also: Openbox manages the screen; an X client without the session's XAUTHORITY is refused by the server, with it admitted)
+      falsifying_mutation_linux: Xvfb started without -auth turned it red: the cookie-less client was admitted (2026-10-23); reverted.
     - test_name: test_session_vnc_endpoint_is_loopback_only
       file: tests/live/tsession_linux.nim
       description: --vnc yields a 127.0.0.1 endpoint that serves the session's framebuffer.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): [sway] (wayvnc) and [xvfb] (x11vnc) 2/2, in every live run below (one /proc/net/tcp listener, on 0100007F, none in tcp6; an RFB 3.8 client, tests/live/rfb_client.nim, reads a 640x480 framebuffer showing the launched window's colour at its reported centre; the port is closed after session-stop)
+      negative_control: the frame read before the window was launched does not show its colour there.
+      falsifying_mutation_linux: x11vnc without -localhost / -noipv6, with the start-up loopback check removed from waitVncListening, turned [xvfb] red on the test's own /proc/net/tcp and tcp6 checks (2026-10-23); reverted. (With only the server change, the start-up check refuses the endpoint and the start fails.)
     - test_name: test_session_host_death_is_reported_as_error
       file: tests/live/tsession_linux.nim
       description: Killing the session host makes session-info report state error with a reason, never running.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below: SIGKILL of the host of a linux-sway and of a linux-xvfb session gives state error / host-exited in session-info and session-list, its processes outlive it and session-stop ends them all; SIGKILL of the compositor under a live host gives state error / compositor-exited (written by the host), apps exit 4 / session-not-running, and the host tears the session down
+      falsifying_mutation_linux: reconcilePrivate ignoring the host (no host-exited) turned it red: both killed hosts read back running (2026-10-23); reverted.
     - test_name: test_linux_session_readiness_env_and_dead_host
       file: tests/live/tsession_linux.nim
       description: (GS2.1 obligation) C6, C9, C10, C11: session-start returns only once the compositor answers and the AT-SPI bus is up (an AT-SPI query right after it succeeds), else exit 5 / session-failed within --timeout-ms; a name in use is exit 2 / name-in-use; Session.env carries WAYLAND_DISPLAY/DISPLAY, XDG_RUNTIME_DIR, DBUS_SESSION_BUS_ADDRESS and AT_SPI_BUS_ADDRESS and envUnset the host variables a client must not inherit, so a GTK client spawned with only them appears in the session's windows and tree; after the host dies every verb is exit 4 / session-not-running; a windowless launch with --wait-window-ms is exit 7 with details.app; --env reaches the launched process.
-      status: pending
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): [sway], [xvfb], [gnome] 3/3, in every live run below (permissions accessibility granted and find exit 0 right after the start; --timeout-ms 300 is exit 5 in under 300 ms and a display server that exits at once is exit 5 at once, each leaving no record and no process; the GTK 3 form spawned by the test from a polluted caller environment minus envUnset plus env is in the session's windows and tree; 20 verbs exit 4 / session-not-running with details.feature null after the host is killed, capabilities and session-info still answer, session-stop works)
+      negative_control: the same GTK client spawned without removing envUnset (the caller's GDK_BACKEND and DISPLAY, or WAYLAND_DISPLAY, route it away) exits non-zero without a window; the launched process's /proc environ holds --env and Session.env and none of envUnset although the caller set them.
+      review_note: (review, 2026-10-23) the start cut by --timeout-ms 300 must also leave no runtime directory (/tmp/guienv-*, /tmp/gaxv-*); before the review's fix a host killed part way through an Xvfb start left its gaxv-* directory (reproduced at --timeout-ms 280), and the cut start answered after 360-760 ms under a load average of 60-150 because its two clean-up walks read every environment of this user's ~420 processes; the elapsed time is now in the test's checkpoint.
+      falsifying_mutation_linux: an empty Session.envUnset (envUnsetFor returning nothing) turned [sway] red: the GTK form spawned from the polluted caller environment never showed a window or reached the AT-SPI bus, and app-launch under the polluted environment failed (2026-10-23); reverted.
+    - test_name: test_live_suite_leaves_no_process_running
+      file: tests/live/tsession_linux.nim
+      description: The session suite's last test: once every session was stopped, nothing the run started (no session host, compositor, bus, AT-SPI registry, VNC server or fixture) is still running, no session runtime directory it made is left (review, 2026-10-23: =linux_live.checkLeavesNoProcess= now checks /tmp/guienv-* and /tmp/gaxv-* in every Linux live suite), and no run's stderr carries a window title.
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux), in every live run below
+      falsifying_mutation_linux: session-stop without the tag sweep turned it and test_session_host_death_is_reported_as_error red: the killed host's compositor, buses and runtime directory remained (2026-10-23); reverted.
+    - test_name: tests/tlinux_session.nim (22 tests)
+      file: tests/tlinux_session.nim
+      description: In the default suite (just test): the environment contract (composeSessionEnv, envUnsetFor), the readiness bound, generated ids, session tags, /proc/net/tcp parsing and the loopback-only rule, the RFB banner, the Xauthority entry byte for byte and -displayfd reading; on Linux the attach check against real path and abstract Unix sockets, linux-host without a display server, reconciliation against a live and a dead process (and a recycled pid), the guarded runtime-directory removal (also a =..= path and a session-named symbolic link, review), session-stop removing the tag-named runtime directory no live process names (review: test_stop_removes_the_tag_named_runtime_dir_no_process_names), desktop_env/runtime_dir ending the processes that name a target's runtime directory and following no link out of it (review: test_runtime_tree_removal_ends_its_clients_and_follows_no_link), the tag sweep against real processes, and the private backends' refusals before anything starts (unsupported kinds and options, missing tools with nothing recorded, name-in-use for a session in error, which session-stop then removes).
+      status: passing 2026-10-23 on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): 20/20; after the review's fixes 22/22
+      falsifying_mutation_linux: removeRuntimeDir without its name guard turned test_runtime_dir_removal_is_guarded red (a foreign /tmp directory was removed) (2026-10-23); reverted. Review, 2026-10-23: the same mutation red again; the =.=/=..= refusal removed turned it red (a session directory spelt through =..= was removed); session-stop without the tag-named directory removal turned test_stop_removes_the_tag_named_runtime_dir_no_process_names red; each reverted.
+    - test_name: guiassert-packaged-linux-session
+      file: flake.nix (checks)
+      description: The packaged guiassert, from an empty environment in the Nix build sandbox: capabilities --probe finds every tool of linux-xvfb and linux-sway (session-headless and session-vnc supported); a linux-xvfb session with --vnc runs with its display, cookie, buses and AT-SPI bus in env, greets with an RFB banner on 127.0.0.1, lists and captures an x11_probe window launched into it and grants accessibility; a linux-sway session (pixman) reports its output size and lists a wm_probe window; session-stop leaves no record and no process.
+      status: passing 2026-10-23 in nix flake check on Linux x86_64
+      falsifying_mutation_linux: the package wrapper without GUI_ASSERT_ATSPI_BUS_LAUNCHER turned it red: session-headless and session-vnc probed unavailable / missing-tool (2026-10-23); reverted.
+
+*** Implementation Details
+    - The session host is =guiassert __linux-session-host --state-dir <dir>
+      <id>= (internal, like the fixture's =__session-host=), started with
+      =linux_common.spawnDetached= (double fork, =setsid=, standard streams
+      on =<state-dir>/sessions/<id>.log=, umask 077). It reads the record the
+      starter wrote (state =starting=, =private.spec=), starts the server,
+      then the AT-SPI bus, then writes =<id>.ready= (environment, runtime
+      directory, VNC endpoint) or =<id>.failed= (its error). The starter waits
+      for either, for the host's death, or for the readiness bound; on
+      ready it reads the session's displays through the session's own
+      capture backend (so the display server answers from the caller's side
+      too), writes the record =running= and removes =<id>.ready=, which is
+      the host's signal that the session was taken over. The host then
+      supervises every 100 ms (its record still names it; the display
+      server, its VNC server and the AT-SPI launcher still run) and tears the
+      session down on SIGTERM, on a vanished record, on a dead server (after
+      writing state =error= with =compositor-exited=, =window-manager-exited=
+      or =vnc-exited=), or when no starter took the session over within 15 s.
+    - Every process of a session carries =GUIASSERT_LINUX_SESSION_TAG=<128
+      random bits>=, recorded in =private.tag=. Teardown (by the host, by
+      =session-stop= of a session whose host died, by a failed start) ends
+      exactly the processes carrying it (SIGTERM, SIGKILL after 2 s; SIGKILL
+      at once for a start being undone, so the failure is reported within
+      the 250 ms readiness margin), each signalled only while its pid still
+      has the start time it was found with, and removes the runtime
+      directories those processes named (=XDG_RUNTIME_DIR=), never the
+      caller's, and only a =/tmp/guienv-*= or =/tmp/gaxv-*= directory of
+      this user. Scanning /proc is done with raw reads of this user's own
+      processes only (measured: 241 ms per scan reading every /proc/*/environ
+      with exceptions on a 1225-process host, a few ms this way).
+      Review, 2026-10-23: on this host at a load average of 60 one such walk
+      still took 70-200 ms (~420 processes of this user, development-shell
+      environments of tens of kilobytes), and a cut start made two, so its
+      exit 5 came after the deadline; every session process is the host or
+      a descendant of it, so the walks now skip, by their start time
+      (field 22 of /proc/<pid>/stat), every process older than the host
+      without reading its environment (=scanTagged=), and one walk gives
+      both the processes and the directories they name.
+    - Runtime directory (review, 2026-10-23): the host makes it before
+      anything else, with mkdir(2) mode 0700 (failing when the name
+      exists), at =/tmp/<prefix><the tag's first 64 bits>= (=guienv-= for
+      linux-sway and linux-gnome, =gaxv-= for linux-xvfb;
+      =sessionRuntimeDir=), and the server runs in it (=HostSpec.runtimeDir=;
+      =desktop_env/sway= and =gnome= take a =runtimeDir=). The record's
+      holder therefore finds it by the tag alone: a starter undoing a start
+      whose host it killed before the host reported it, and session-stop
+      after the host died, remove it even when no live process names it
+      (Xvfb's environment never did). Removal goes through
+      =desktop_env/runtime_dir.removeRuntimeTree=: the mounts below it are
+      detached, an entry that cannot be removed does not stop the others,
+      and it is retried for up to 2 s (100 ms on the start-undo path).
+      The desktop-environment targets used directly (the GS5-GS8 live
+      suites) also end, at =stop=, every process of this user that still
+      names their runtime directory (=endClients=, default on): GNOME
+      Shell's =ibus-daemon= rewrote =config/ibus/bus= after the directory
+      was removed, and a busy document-portal mount made =removeDir= give up
+      on the whole tree; the session servers pass =endClients = false=,
+      their host's tag sweep being the rule there.
+    - The session bus of a private session would activate at-spi2-core's own
+      =org.a11y.Bus= launcher when a client asks for it first (the GTK
+      portal backend does, while the sway target starts), and that launcher
+      runs the host system's dbus-daemon path (see =atspiLauncherFor=). The
+      host puts a data directory of its own first in =XDG_DATA_DIRS=, with
+      an =org.a11y.Bus.service= naming the pinned launcher (D-Bus
+      specification, "Message Bus Starting Services"), so activation and
+      the host's own start run the same launcher. The sway target's
+      plumbing (portal backend, bar) starts with =NO_AT_BRIDGE=1= (never in
+      =Session.env=), so =apps= of a fresh sway session lists none of it.
+    - Readiness timings measured here (load average 20-80): sway 0.4-0.5 s,
+      Xvfb 0.15-0.4 s, GNOME Shell 1.3-2.7 s, all within the 10 s bound.
+    - =Session.env= per kind: sway =WAYLAND_DISPLAY=, =SWAYSOCK=,
+      =XDG_RUNTIME_DIR=, =DBUS_SESSION_BUS_ADDRESS=, =AT_SPI_BUS_ADDRESS=,
+      =XDG_SESSION_TYPE=wayland=, =XDG_CURRENT_DESKTOP=sway= and the private
+      settings (=GSETTINGS_BACKEND=keyfile=, =GSETTINGS_SCHEMA_DIR=,
+      =XDG_CONFIG_HOME=, =XDG_DESKTOP_PORTAL_DIR=, =GIO_USE_VFS=local=,
+      =GTK_USE_PORTAL=0=); GNOME the same with GNOME's names; Xvfb
+      =DISPLAY=, =XAUTHORITY=, =XDG_RUNTIME_DIR=, =DBUS_SESSION_BUS_ADDRESS=,
+      =AT_SPI_BUS_ADDRESS=, =XDG_SESSION_TYPE=x11=, =XDG_CONFIG_HOME=,
+      =GSETTINGS_BACKEND=memory=, =GIO_USE_VFS=local=. =Session.envUnset= is
+      =linux_private.baseEnvUnset= minus what =env= sets: the host's
+      display, bus and AT-SPI bus variables, =NO_AT_BRIDGE=, =GTK_A11Y=,
+      =GDK_BACKEND=, =QT_QPA_PLATFORM=, the host session's identity and
+      activation tokens, input methods and settings backend.
+    - Every verb that targets a private session runs with
+      =composeSessionEnv(caller, session)= as its environment (=verbs.prepare=),
+      so the session's capture, tree and input backends (rule 5 of spec
+      §3.4) reach its display and buses, and =app-launch= gives a process
+      exactly what =Session.env= / =Session.envUnset= give a caller that
+      spawns it itself. Applications are linux-host's code run in that
+      environment.
+    - VNC: no capture backend is added (decision, GS5 proposal). Each session
+      already has a native capture backend that reads its compositor
+      directly and enumerates its windows (linux-wlr, linux-gnome,
+      linux-x11); a VNC capture backend would see only a framebuffer (RFB
+      has no window list), would be a new backend name (a 1.x minor, the
+      spec owner's), and would add a dependency on an unauthenticated
+      endpoint the caller may not have asked for. The endpoint is for
+      viewers (Agent Harbor's operator intervention); the RFB reader lives in
+      the tests only (=tests/live/rfb_client.nim=), to check that the
+      endpoint serves the session.
+    - Packaging: the package's wrapper adds dbus, Xvfb, Openbox, wayvnc and
+      x11vnc to the PATH and sets =GUI_ASSERT_ATSPI_BUS_LAUNCHER=,
+      =GUI_ASSERT_XDG_DESKTOP_PORTAL{,_GTK}= and =GUI_ASSERT_GSETTINGS_SCHEMAS=
+      by default; it carries =sway-unwrapped= instead of nixpkgs' =sway=
+      (whose wrapper runs the compositor under =dbus-run-session=, which
+      reads =/etc/dbus-1/session.conf= and fails in the build sandbox). The
+      session buses now use their dbus package's own =session.conf=
+      (=session_bus.sessionBusArgs=) for the same reason. GNOME Shell is not
+      in the package: linux-gnome finds it through =GUI_ASSERT_GNOME_SHELL=
+      or the PATH and answers exit 4 / =missing-tool= without it.
+
+*** Deviations
+    - Linux (companion/linux, 2026-10-23). =linux-host= with no reachable
+      display server reports the host session =state: "error"= /
+      =stateReason: "no-display-server"= (session-info, session-list) and
+      answers =apps=, =app-launch=, =app-quit= with exit 4 /
+      =session-not-running= (details.feature null); the capture, tree and
+      input verbs keep their GS5-GS8 exit 4 reason
+      (=display-server-unsupported=, which names the missing variable).
+      Request to the spec owner (=substrate/macos=): §6.1 says the host
+      session "always exists"; state what it reports when the caller's
+      environment names no display server that answers.
+    - Linux: =--width= / =--height= are the headless output's mode in
+      pixels; with =--scale S= (linux-sway only) the display's logical size
+      is the mode divided by S, as GS5's scale-2 tests read it. linux-gnome
+      and linux-xvfb refuse a scale other than 1, and all three refuse
+      =--displays= other than 1, with exit 4 / =unsupported-option=. Request
+      to the spec owner: say in §7.5 which of the two sizes --width /
+      --height name.
+    - Linux: the VNC endpoint has no authentication: =Session.vnc= is
+      ={host, port}= and carries no credential, so wayvnc and x11vnc run
+      without one, bound to 127.0.0.1 only. Any local user can view and
+      drive the session while it runs. Request to the spec owner: a 1.x
+      =vnc.password= (or a Unix-socket endpoint) for multi-user hosts.
+      Considered and not done in 1.0 (review, 2026-10-23): both servers
+      could be given a per-session secret or a private socket cheaply
+      (x11vnc =-rfbauth= / =-passwdfile=, or =-unixsock= in the session's
+      0700 runtime directory; wayvnc =enable_auth= in its =-C= file, which
+      in 0.9 also needs an RSA-AES key or TLS, or =--unix-socket=), but a
+      credential or socket path the contract cannot return would leave the
+      consumer an endpoint it cannot open, so each waits for the field.
+    - Linux: =stateReason= values used (free text in the 1.0 contract):
+      =host-exited=, =compositor-not-answering= (the reader's own check),
+      =compositor-exited=, =window-manager-exited=, =vnc-exited=,
+      =accessibility-bus-exited= (the host's), =no-display-server=
+      (linux-host). Request to the spec owner: list them in §6.1 if they
+      should be a closed set.
+    - =desktop_env/session_bus= starts its dbus-daemon with the package's own
+      =session.conf= (=sessionBusArgs=) instead of =--session=; the GS5-GS8
+      live suites and =just test-desktop-env= are unchanged by it.
+    - Review, 2026-10-23: =desktop_env/sway= and =desktop_env/gnome= gained
+      two optional constructor arguments, =runtimeDir= (the directory to
+      run in instead of a fresh one) and =endClients= (whether =stop= ends
+      the processes still naming the runtime directory; default true), and
+      =stop= removes the directory through the new
+      =desktop_env/runtime_dir=; the GS5-GS8 live suites and
+      =just test-desktop-env= pass unchanged with them (counts in
+      Outstanding Tasks).
+
+*** Key Source Files
+    - src/gui_assert/backends/session/linux_private.nim - the shared lifecycle: session host, records, readiness, names, env contract, AT-SPI bus, tag sweep, reconciliation
+    - src/gui_assert/backends/session/linux_sway.nim, linux_gnome.nim, linux_xvfb.nim - the three servers (wayvnc, x11vnc)
+    - src/gui_assert/backends/session/linux_host.nim - the attach check; private sessions listed after host
+    - src/gui_assert/desktop_env/runtime_dir.nim - removing a private session's runtime directory (the processes naming it, the mounts below it), used by the sway and GNOME targets and the session host
+    - src/gui_assert/cli/verbs.nim - session environment overlay and reconciliation in prepare; the constructors
+    - src/guiassert.nim - the __linux-session-host dispatch
+    - tests/live/tsession_linux.nim, tests/live/rfb_client.nim - the live suite and its RFB reader
+    - tests/tlinux_session.nim - unit tests
+
+*** Outstanding Tasks
+    - [ ] GS10-LINUX rustdesk BLOCKED: no loopback-only, contract-reportable RustDesk endpoint is possible here. Investigated 2026-10-23 (companion/linux) against the pinned nixpkgs, which ships rustdesk 1.4.3 and rustdesk-server 1.1.16: (1) the contract has nowhere to report it: =Session.vnc= is ={host, port}= of an RFB server, while a RustDesk host is reached by its ID through a rendezvous server (hbbs) and a relay (hbbr), with a password seeded in its config, so reporting one needs a spec change (a 1.x minor, the spec owner's); (2) it cannot be bound to loopback: its direct-IP listener (port 21118; =src/rendezvous_mediator.rs= =direct_server= calls =hbb_common::tcp::listen_any=) binds the IPv6 wildcard with =IPV6_V6ONLY= off, i.e. every interface, and has no bind-address option, which the spec's loopback rule (§4.2) forbids; (3) in a linux-sway session it would capture only through the ScreenCast portal and PipeWire, which the session does not run, and its input path needs a root service. It stays Agent Harbor's remote-view provider (spec §11); unblocking needs a contract field for a non-RFB endpoint and an upstream bind-address option, or a loopback-only relay deployment decided by the spec owner.
+
+    - [X] Independent verification of GS10 (review agent, 2026-10-23, Linux
+      x86_64, NixOS, kernel 6.18, inside =nix develop=, on origin/agents
+      cc1fc31 plus the implementation; host load average 20-150 from other
+      work). Every verification test above exists under its name and
+      asserts what it states, its negative controls included; the spec
+      (Planned-Work/Desktop-Substrate.md) is unchanged, the spec requests
+      are in Deviations. Security read: VNC is bound to 127.0.0.1 and the
+      start fails unless the server's OWN socket (its inode among the
+      server's descriptors) is the only listener on the port, in
+      /proc/net/tcp and none in tcp6; the Xvfb cookie is 128 random bits
+      in a 0600 file in the 0700 runtime directory, passed by path, never
+      on argv; the host's umask is 077; the tag sweep reads only this
+      user's processes and signals a pid only with the start time it was
+      found with; no secret reaches argv and no captured content stderr.
+      Fixes, each with a test: (1) a host killed part way through its
+      start (a start cut by =--timeout-ms=, or by a slow host) left its
+      runtime directory, since no live process named it (Xvfb's
+      environment never does; reproduced at =--timeout-ms 280=): the host
+      now makes it first, named by the tag (Implementation Details), and
+      the start-undo and session-stop remove it by name
+      (test_stop_removes_the_tag_named_runtime_dir_no_process_names, and
+      the readiness test checks no directory is left); (2) under load a
+      cut start's two clean-up walks of /proc took 70-200 ms each, so exit
+      5 came after the deadline: the walks are bounded by the host's
+      start time and merged, and the late-forked rescan now runs on the
+      start-undo path too; (3) =removeRuntimeDir= refuses a path with a
+      =.= or =..= component (the name check could pass for a path that
+      means another directory); (4) leftover directories: the GS7/GS8
+      suites' =freshRuntimeDir= (=/tmp/gacl-*=, 72 left on this host) is
+      now one of =freshDir='s, removed at the end of the suite, and the
+      desktop-environment targets remove their runtime directory fully
+      (=desktop_env/runtime_dir=, ending the processes that still name
+      it), which the GS5-GS8 suites left about three of per run; every
+      Linux live suite now fails when it leaves a /tmp/guienv-* or
+      /tmp/gaxv-* directory (=linux_live.checkLeavesNoProcess=). The 98
+      directories this campaign's earlier runs left (gacl-*, gac-*,
+      guienv-* since 2026-10-21, none in use) were removed; older ones
+      were left alone. Also: the suite's BLOCKED lines say GS10. VNC
+      authentication considered (Deviations): not done in 1.0.
+      Results after the fixes, all 0 failed and 0 skipped: =just lint=
+      clean (no linters configured); =just test= 430 ok (incl.
+      tlinux_session 22; contract 114 across both binaries); =just
+      test-core= 39; =just test-contract= 114; =just test-desktop-env= 31;
+      =just test-live-tesseract= 2; the Linux live suites, every file of
+      the recipe run one by one after =just build-cli= (capture 16, OCR 8,
+      tree 33, input 28, session 11), 96/96 on three consecutive runs;
+      =nix flake check= passes (guiassert-packaged-linux-session rebuilt);
+      =nim check --os:macosx= of the four session modules, linux_host,
+      desktop_env/runtime_dir, sway, gnome, tlinux_session and the main
+      program clean. Earlier, before the fixes, the session suite failed
+      three times under load averages of 60-150: GNOME Shell and a
+      =--vnc= sway not ready within the 10 s bound, and the cut start
+      answering after 360-760 ms (see fix 2); the readiness bound is the
+      contract's and was not widened. Mutations re-applied, each red and
+      reverted: x11vnc without =-localhost= / =-noipv6= and wayvnc on
+      0.0.0.0 (both =--vnc= starts refused, "listens ... beyond
+      127.0.0.1"); the same with the start-up loopback check removed (the
+      test's own /proc/net/tcp and tcp6 checks); Xvfb without =-auth= (the
+      cookie-less client admitted); session-stop without the tag sweep
+      (the dead-host test and the suite's last test); an empty envUnset
+      (the session shape checks and all three readiness tests); the
+      runtime-directory name guard, the =..= refusal and the tag-named
+      removal (tlinux_session). No process started by these runs
+      remained afterwards.
+    - [X] Implementation run, companion/linux, 2026-10-23: Linux x86_64 (NixOS, kernel 6.18, inside nix develop, from origin/agents cc1fc31, host load average 20-90): just lint clean (no linters configured); just test 428 ok (incl. tlinux_session 20; contract 114 across both binaries); just test-core 39; just test-contract 114; just test-desktop-env 31; just test-live-tesseract 2; the Linux live suites 96/96 on three consecutive runs (capture 16, OCR 8, tree 33, input 28, session 11), all 0 failed and 0 skipped. The just test-live-linux recipe itself exceeded the 10-minute bound of one tool call under this load (tinput_linux alone took 274 s), so each run ran its recipe's per-file commands (nim c -r tests/live/<suite>.nim after just build-cli) in successive calls; the one attempt that hit the bound was killed and left nothing running. nix flake check (x86_64-linux) passes with the new guiassert-packaged-linux-session. nim check --os:macosx of the four new session modules, linux_host, tlinux_session and the main program: clean. Ten falsifying mutations applied one at a time, each red and reverted (above). No process started by these runs remained afterwards; runtime directories two mutation runs left behind were removed.
 
 ** GS11: Windows off-screen sessions
    :PROPERTIES:
