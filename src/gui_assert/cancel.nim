@@ -96,11 +96,13 @@ proc checkpoint*(t: CancelToken) =
 proc sleepCancellable*(t: CancelToken, ms: int) =
   ## Sleep `ms` milliseconds in short slices, calling `checkpoint` between
   ## them, so a cancellation or deadline interrupts the sleep within about
-  ## 10 ms.
+  ## 10 ms. It never returns early: what is left is rounded UP to whole
+  ## milliseconds, since rounding it down ended each call up to 1 ms short
+  ## (a drag of twelve 25 ms steps took 298 ms of its 300).
   let until = nowNs() + int64(ms) * 1_000_000
   t.checkpoint()
   while true:
-    let left = (until - nowNs()) div 1_000_000
+    let left = (until - nowNs() + 999_999) div 1_000_000
     if left <= 0: break
     sleep(int(min(left, 10)))
     t.checkpoint()
