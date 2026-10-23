@@ -1,0 +1,2139 @@
+{
+  "schema": "guiassert-parity/1",
+  "milestone": "GS13",
+  "platform": "linux",
+  "arch": "amd64",
+  "kernel": "6.18.55",
+  "measuredAt": "2026-10-23T17:46:26Z",
+  "guiassert": {
+    "commit": "dfff95faa3-dirty",
+    "version": {
+      "guiassert": "0.1.0",
+      "contract": {
+        "name": "guiassert-desktop",
+        "major": 1,
+        "minor": 0
+      },
+      "platform": "linux",
+      "arch": "amd64",
+      "compiled": {
+        "capture": [
+          "linux-wlr",
+          "linux-gnome",
+          "linux-portal-pipewire",
+          "linux-x11",
+          "fixture"
+        ],
+        "ocr": [
+          "tesseract",
+          "fixture"
+        ],
+        "tree": [
+          "linux-atspi",
+          "fixture"
+        ],
+        "input": [
+          "linux-wlr-virtual",
+          "linux-mutter",
+          "linux-xtest",
+          "linux-uinput",
+          "fixture"
+        ],
+        "session": [
+          "linux-host",
+          "linux-sway",
+          "linux-gnome",
+          "linux-xvfb",
+          "fixture"
+        ],
+        "media": [
+          "ffmpeg"
+        ]
+      }
+    }
+  },
+  "display": [
+    1280,
+    800
+  ],
+  "runs": [
+    {
+      "run": "linux-sway/gtk3",
+      "sessionBackend": "linux-sway",
+      "toolkit": "gtk3",
+      "selected": {
+        "capture": "linux-wlr",
+        "ocr": "tesseract",
+        "tree": "linux-atspi",
+        "input": "linux-wlr-virtual",
+        "session": "linux-sway"
+      },
+      "scenarios": [
+        {
+          "id": "S2",
+          "scenario": "capability report of a live session",
+          "consumerScenarios": [
+            "e2e_linux_doctor_reports_capabilities"
+          ],
+          "verbs": [
+            "capabilities --probe --session"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 161,
+          "notes": [],
+          "checks": [
+            {
+              "check": "platform is linux",
+              "ok": true,
+              "observed": "linux"
+            },
+            {
+              "check": "selected backends follow the session",
+              "ok": true,
+              "observed": "{\"capture\":\"linux-wlr\",\"ocr\":\"tesseract\",\"tree\":\"linux-atspi\",\"input\":\"linux-wlr-virtual\",\"session\":\"linux-sway\"}"
+            },
+            {
+              "check": "every feature of the vocabulary exactly once",
+              "ok": true,
+              "observed": "19 of 19"
+            },
+            {
+              "check": "a reason exactly where a feature is not available",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the features the scenarios need are usable (degraded counts, with its reason)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "an unknown session is exit 3 / not-found",
+              "ok": true,
+              "observed": "exit 3 session"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "scenario": "element find by role, name and state",
+          "consumerScenarios": [
+            "e2e_linux_find_elements_filters_role_name_and_state"
+          ],
+          "verbs": [
+            "find --role",
+            "find --state",
+            "find --name",
+            "find --name-contains --ignore-case",
+            "element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 649,
+          "notes": [],
+          "checks": [
+            {
+              "check": "role button finds Sign in and Archive",
+              "ok": true,
+              "observed": "@[\"Sign in\", \"Archive\"]"
+            },
+            {
+              "check": "state enabled keeps only Sign in",
+              "ok": true,
+              "observed": "@[\"Sign in\"]"
+            },
+            {
+              "check": "the disabled button carries no enabled state",
+              "ok": true,
+              "observed": "[\"focusable\",\"visible\"]"
+            },
+            {
+              "check": "an editable text-field named Account, once",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its path is stable across reads",
+              "ok": true,
+              "observed": "/app[351833]/window[0]/group[0]/text-field[0]"
+            },
+            {
+              "check": "element <path> resolves to it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "name-contains --ignore-case finds Sign in",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "without --ignore-case the lower-case needle finds nothing",
+              "ok": true,
+              "observed": "0"
+            }
+          ]
+        },
+        {
+          "id": "S4",
+          "scenario": "form fill, submit and status readback",
+          "consumerScenarios": [
+            "e2e_linux_form_fill_submit_and_status_readback"
+          ],
+          "verbs": [
+            "element-action focus",
+            "type --stdin",
+            "key Tab",
+            "element-action press",
+            "wait --element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2642,
+          "notes": [
+            "Account focused by element-action focus",
+            "focused after Tab: @[]"
+          ],
+          "checks": [
+            {
+              "check": "status idle before submit (negative control)",
+              "ok": true,
+              "observed": "State: idle"
+            },
+            {
+              "check": "type reports the length, not the text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the Account field holds the typed text",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab the typing no longer reaches Account",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "the passcode field is protected and reports no value",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the status label reads back the submission",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the passcode appears in no output",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S1",
+          "scenario": "click, scroll and drag roundtrip",
+          "consumerScenarios": [
+            "e2e_linux_click_scroll_drag_roundtrip",
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "click --at",
+            "scroll --at",
+            "drag --from --to",
+            "element-action set-value"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2882,
+          "notes": [],
+          "checks": [
+            {
+              "check": "a click on the disabled button changes nothing",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the click is reported at the requested point",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the click on Sign in activates it",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll beside the list scrolls nothing",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll over the list moves it down",
+              "ok": true,
+              "observed": "State: scrolled 109"
+            },
+            {
+              "check": "the slider is at 50 before the drag (negative control)",
+              "ok": true,
+              "observed": "50"
+            },
+            {
+              "check": "the drag reports its path",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the drag moves the slider to the right end",
+              "ok": true,
+              "observed": "State: volume 100"
+            }
+          ]
+        },
+        {
+          "id": "S5",
+          "scenario": "OCR of a canvas-drawn fixture",
+          "consumerScenarios": [
+            "e2e_linux_ocr_extracts_text_from_canvas_fixture"
+          ],
+          "verbs": [
+            "windows",
+            "ocr --window",
+            "find"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 1647,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the painted words are in no accessible node (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR reads every painted word",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | Account harbor-pilot Passcode CIYYYYYYYYYY Y Signin | A State: volume 100 Row 6 …"
+            },
+            {
+              "check": "each painted word maps inside the canvas's desktop bounds",
+              "ok": true,
+              "observed": "(x: 0, y: 386, w: 1280, h: 80)"
+            },
+            {
+              "check": "the first painted word starts where it is painted (16 px in, ±10 px)",
+              "ok": true,
+              "observed": "word at x 18, canvas at x 0"
+            },
+            {
+              "check": "the capture is the window's",
+              "ok": true,
+              "observed": "window-crop"
+            }
+          ]
+        },
+        {
+          "id": "S9",
+          "scenario": "tree-then-OCR text extraction",
+          "consumerScenarios": [
+            "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
+          ],
+          "verbs": [
+            "find",
+            "element",
+            "ocr --region"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 1027,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the tree stage finds the canvas without text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a labelled button needs no OCR",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR of the element's bounds reads its text",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | COPPER LANTERN 52"
+            },
+            {
+              "check": "the capture is the element's region",
+              "ok": true,
+              "observed": "[0,386]"
+            },
+            {
+              "check": "OCR of another element's bounds does not read the canvas",
+              "ok": true,
+              "observed": "harbor-pilot"
+            }
+          ]
+        },
+        {
+          "id": "S6",
+          "scenario": "screenshot and recording pipeline",
+          "consumerScenarios": [
+            "e2e_linux_screenshot_recording_pipeline"
+          ],
+          "verbs": [
+            "screenshot",
+            "record --duration-ms",
+            "record-start",
+            "record-stop",
+            "ocr --image"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 7116,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the PNG decodes to the reported size",
+              "ok": true,
+              "observed": "1280x800"
+            },
+            {
+              "check": "the display capture is the session's display size",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the screenshot shows the fixture",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a capture from before the launch does not (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a window capture is the window's size",
+              "ok": true,
+              "observed": "1280x800 vs (x: 0, y: 0, w: 1280, h: 800)"
+            },
+            {
+              "check": "record: a finalized MP4 of the reported size",
+              "ok": true,
+              "observed": "1280x800 31 frames"
+            },
+            {
+              "check": "record: duration about 3 s (2.5 s .. 4.5 s)",
+              "ok": true,
+              "observed": "3100 ms, reported 3100"
+            },
+            {
+              "check": "record-start returns a recording in progress",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "record-stop finalizes it",
+              "ok": true,
+              "observed": "2100 ms"
+            }
+          ]
+        },
+        {
+          "id": "S7",
+          "scenario": "waiting for a timer-driven dialog",
+          "consumerScenarios": [
+            "e2e_linux_wait_observes_timer_driven_dialog"
+          ],
+          "verbs": [
+            "app-launch",
+            "wait --element --role dialog",
+            "wait --window",
+            "app-quit"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2848,
+          "notes": [],
+          "checks": [
+            {
+              "check": "before the timer the wait expires (negative control)",
+              "ok": true,
+              "observed": "exit 7 condition-not-met"
+            },
+            {
+              "check": "the wait resolves on the dialog",
+              "ok": true,
+              "observed": "17 attempts"
+            },
+            {
+              "check": "it resolves after the timer, not before",
+              "ok": true,
+              "observed": "2512 ms"
+            },
+            {
+              "check": "the dialog's window is enumerated",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S8",
+          "scenario": "zero-touch session bootstrap and teardown",
+          "consumerScenarios": [
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "session-start --kind headless",
+            "session-info",
+            "session-list",
+            "app-launch",
+            "find",
+            "session-stop"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 20583,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the session does not exist before the start (negative control)",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "session-start returns a running headless session",
+              "ok": true,
+              "observed": "running"
+            },
+            {
+              "check": "its environment names a private display and buses",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its runtime directory is the caller's, mode 0700",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-list has it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a launched client is on the session's AT-SPI bus and listed",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-stop reports it stopped",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-info no longer finds it",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "its record is gone",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "no process of the session is left",
+              "ok": true,
+              "observed": "0 left"
+            },
+            {
+              "check": "the fixture is gone with it",
+              "ok": true,
+              "observed": "351833"
+            },
+            {
+              "check": "its runtime directory is gone",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "linux-sway/gtk4",
+      "sessionBackend": "linux-sway",
+      "toolkit": "gtk4",
+      "selected": {
+        "capture": "linux-wlr",
+        "ocr": "tesseract",
+        "tree": "linux-atspi",
+        "input": "linux-wlr-virtual",
+        "session": "linux-sway"
+      },
+      "scenarios": [
+        {
+          "id": "S2",
+          "scenario": "capability report of a live session",
+          "consumerScenarios": [
+            "e2e_linux_doctor_reports_capabilities"
+          ],
+          "verbs": [
+            "capabilities --probe --session"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 155,
+          "notes": [],
+          "checks": [
+            {
+              "check": "platform is linux",
+              "ok": true,
+              "observed": "linux"
+            },
+            {
+              "check": "selected backends follow the session",
+              "ok": true,
+              "observed": "{\"capture\":\"linux-wlr\",\"ocr\":\"tesseract\",\"tree\":\"linux-atspi\",\"input\":\"linux-wlr-virtual\",\"session\":\"linux-sway\"}"
+            },
+            {
+              "check": "every feature of the vocabulary exactly once",
+              "ok": true,
+              "observed": "19 of 19"
+            },
+            {
+              "check": "a reason exactly where a feature is not available",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the features the scenarios need are usable (degraded counts, with its reason)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "an unknown session is exit 3 / not-found",
+              "ok": true,
+              "observed": "exit 3 session"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "scenario": "element find by role, name and state",
+          "consumerScenarios": [
+            "e2e_linux_find_elements_filters_role_name_and_state"
+          ],
+          "verbs": [
+            "find --role",
+            "find --state",
+            "find --name",
+            "find --name-contains --ignore-case",
+            "element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 368,
+          "notes": [],
+          "checks": [
+            {
+              "check": "role button finds Sign in and Archive",
+              "ok": true,
+              "observed": "@[\"Sign in\", \"Archive\"]"
+            },
+            {
+              "check": "state enabled keeps only Sign in",
+              "ok": true,
+              "observed": "@[\"Sign in\"]"
+            },
+            {
+              "check": "the disabled button carries no enabled state",
+              "ok": true,
+              "observed": "[\"focusable\",\"visible\"]"
+            },
+            {
+              "check": "an editable text-field named Account, once",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its path is stable across reads",
+              "ok": true,
+              "observed": "/app[353791]/window[0]/group[0]/text-field[0]"
+            },
+            {
+              "check": "element <path> resolves to it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "name-contains --ignore-case finds Sign in",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "without --ignore-case the lower-case needle finds nothing",
+              "ok": true,
+              "observed": "0"
+            }
+          ]
+        },
+        {
+          "id": "S4",
+          "scenario": "form fill, submit and status readback",
+          "consumerScenarios": [
+            "e2e_linux_form_fill_submit_and_status_readback"
+          ],
+          "verbs": [
+            "element-action focus",
+            "type --stdin",
+            "key Tab",
+            "element-action press",
+            "wait --element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2794,
+          "notes": [
+            "Account offers no focus action (actions [\"set-value\"]); focused by a click at its centre",
+            "focused after Tab: @[]"
+          ],
+          "checks": [
+            {
+              "check": "status idle before submit (negative control)",
+              "ok": true,
+              "observed": "State: idle"
+            },
+            {
+              "check": "type reports the length, not the text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the Account field holds the typed text",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab the typing no longer reaches Account",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "the passcode field is protected and reports no value",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the status label reads back the submission",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the passcode appears in no output",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S1",
+          "scenario": "click, scroll and drag roundtrip",
+          "consumerScenarios": [
+            "e2e_linux_click_scroll_drag_roundtrip",
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "click --at",
+            "scroll --at",
+            "drag --from --to",
+            "element-action set-value"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2218,
+          "notes": [],
+          "checks": [
+            {
+              "check": "a click on the disabled button changes nothing",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the click is reported at the requested point",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the click on Sign in activates it",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll beside the list scrolls nothing",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll over the list moves it down",
+              "ok": true,
+              "observed": "State: scrolled 73"
+            },
+            {
+              "check": "the slider is at 50 before the drag (negative control)",
+              "ok": true,
+              "observed": "50"
+            },
+            {
+              "check": "the drag reports its path",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the drag moves the slider to the right end",
+              "ok": true,
+              "observed": "State: volume 100"
+            }
+          ]
+        },
+        {
+          "id": "S5",
+          "scenario": "OCR of a canvas-drawn fixture",
+          "consumerScenarios": [
+            "e2e_linux_ocr_extracts_text_from_canvas_fixture"
+          ],
+          "verbs": [
+            "windows",
+            "ocr --window",
+            "find"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 437,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the painted words are in no accessible node (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR reads every painted word",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | Account harbor-pilot Passcode Signin | Archive State: volume 100 Row 4 Row 5 Row…"
+            },
+            {
+              "check": "each painted word maps inside the canvas's desktop bounds",
+              "ok": true,
+              "observed": "(x: 0, y: 382, w: 1280, h: 80)"
+            },
+            {
+              "check": "the first painted word starts where it is painted (16 px in, ±10 px)",
+              "ok": true,
+              "observed": "word at x 18, canvas at x 0"
+            },
+            {
+              "check": "the capture is the window's",
+              "ok": true,
+              "observed": "window-crop"
+            }
+          ]
+        },
+        {
+          "id": "S9",
+          "scenario": "tree-then-OCR text extraction",
+          "consumerScenarios": [
+            "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
+          ],
+          "verbs": [
+            "find",
+            "element",
+            "ocr --region"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 619,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the tree stage finds the canvas without text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a labelled button needs no OCR",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR of the element's bounds reads its text",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | COPPER LANTERN 52"
+            },
+            {
+              "check": "the capture is the element's region",
+              "ok": true,
+              "observed": "[0,382]"
+            },
+            {
+              "check": "OCR of another element's bounds does not read the canvas",
+              "ok": true,
+              "observed": "harbor-pilot"
+            }
+          ]
+        },
+        {
+          "id": "S6",
+          "scenario": "screenshot and recording pipeline",
+          "consumerScenarios": [
+            "e2e_linux_screenshot_recording_pipeline"
+          ],
+          "verbs": [
+            "screenshot",
+            "record --duration-ms",
+            "record-start",
+            "record-stop",
+            "ocr --image"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 5993,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the PNG decodes to the reported size",
+              "ok": true,
+              "observed": "1280x800"
+            },
+            {
+              "check": "the display capture is the session's display size",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the screenshot shows the fixture",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a capture from before the launch does not (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a window capture is the window's size",
+              "ok": true,
+              "observed": "1280x800 vs (x: 0, y: 0, w: 1280, h: 800)"
+            },
+            {
+              "check": "record: a finalized MP4 of the reported size",
+              "ok": true,
+              "observed": "1280x800 31 frames"
+            },
+            {
+              "check": "record: duration about 3 s (2.5 s .. 4.5 s)",
+              "ok": true,
+              "observed": "3100 ms, reported 3100"
+            },
+            {
+              "check": "record-start returns a recording in progress",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "record-stop finalizes it",
+              "ok": true,
+              "observed": "2100 ms"
+            }
+          ]
+        },
+        {
+          "id": "S7",
+          "scenario": "waiting for a timer-driven dialog",
+          "consumerScenarios": [
+            "e2e_linux_wait_observes_timer_driven_dialog"
+          ],
+          "verbs": [
+            "app-launch",
+            "wait --element --role dialog",
+            "wait --window",
+            "app-quit"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2846,
+          "notes": [],
+          "checks": [
+            {
+              "check": "before the timer the wait expires (negative control)",
+              "ok": true,
+              "observed": "exit 7 condition-not-met"
+            },
+            {
+              "check": "the wait resolves on the dialog",
+              "ok": true,
+              "observed": "16 attempts"
+            },
+            {
+              "check": "it resolves after the timer, not before",
+              "ok": true,
+              "observed": "2560 ms"
+            },
+            {
+              "check": "the dialog's window is enumerated",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S8",
+          "scenario": "zero-touch session bootstrap and teardown",
+          "consumerScenarios": [
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "session-start --kind headless",
+            "session-info",
+            "session-list",
+            "app-launch",
+            "find",
+            "session-stop"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 16830,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the session does not exist before the start (negative control)",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "session-start returns a running headless session",
+              "ok": true,
+              "observed": "running"
+            },
+            {
+              "check": "its environment names a private display and buses",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its runtime directory is the caller's, mode 0700",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-list has it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a launched client is on the session's AT-SPI bus and listed",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-stop reports it stopped",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-info no longer finds it",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "its record is gone",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "no process of the session is left",
+              "ok": true,
+              "observed": "0 left"
+            },
+            {
+              "check": "the fixture is gone with it",
+              "ok": true,
+              "observed": "353791"
+            },
+            {
+              "check": "its runtime directory is gone",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "linux-xvfb/gtk3",
+      "sessionBackend": "linux-xvfb",
+      "toolkit": "gtk3",
+      "selected": {
+        "capture": "linux-x11",
+        "ocr": "tesseract",
+        "tree": "linux-atspi",
+        "input": "linux-xtest",
+        "session": "linux-xvfb"
+      },
+      "scenarios": [
+        {
+          "id": "S2",
+          "scenario": "capability report of a live session",
+          "consumerScenarios": [
+            "e2e_linux_doctor_reports_capabilities"
+          ],
+          "verbs": [
+            "capabilities --probe --session"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 105,
+          "notes": [],
+          "checks": [
+            {
+              "check": "platform is linux",
+              "ok": true,
+              "observed": "linux"
+            },
+            {
+              "check": "selected backends follow the session",
+              "ok": true,
+              "observed": "{\"capture\":\"linux-x11\",\"ocr\":\"tesseract\",\"tree\":\"linux-atspi\",\"input\":\"linux-xtest\",\"session\":\"linux-xvfb\"}"
+            },
+            {
+              "check": "every feature of the vocabulary exactly once",
+              "ok": true,
+              "observed": "19 of 19"
+            },
+            {
+              "check": "a reason exactly where a feature is not available",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the features the scenarios need are usable (degraded counts, with its reason)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "an unknown session is exit 3 / not-found",
+              "ok": true,
+              "observed": "exit 3 session"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "scenario": "element find by role, name and state",
+          "consumerScenarios": [
+            "e2e_linux_find_elements_filters_role_name_and_state"
+          ],
+          "verbs": [
+            "find --role",
+            "find --state",
+            "find --name",
+            "find --name-contains --ignore-case",
+            "element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 241,
+          "notes": [],
+          "checks": [
+            {
+              "check": "role button finds Sign in and Archive",
+              "ok": true,
+              "observed": "@[\"Sign in\", \"Archive\"]"
+            },
+            {
+              "check": "state enabled keeps only Sign in",
+              "ok": true,
+              "observed": "@[\"Sign in\"]"
+            },
+            {
+              "check": "the disabled button carries no enabled state",
+              "ok": true,
+              "observed": "[\"focusable\",\"visible\"]"
+            },
+            {
+              "check": "an editable text-field named Account, once",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its path is stable across reads",
+              "ok": true,
+              "observed": "/app[354800]/window[0]/group[0]/text-field[0]"
+            },
+            {
+              "check": "element <path> resolves to it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "name-contains --ignore-case finds Sign in",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "without --ignore-case the lower-case needle finds nothing",
+              "ok": true,
+              "observed": "0"
+            }
+          ]
+        },
+        {
+          "id": "S4",
+          "scenario": "form fill, submit and status readback",
+          "consumerScenarios": [
+            "e2e_linux_form_fill_submit_and_status_readback"
+          ],
+          "verbs": [
+            "element-action focus",
+            "type --stdin",
+            "key Tab",
+            "element-action press",
+            "wait --element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 760,
+          "notes": [
+            "Account focused by element-action focus",
+            "focused after Tab: @[\"Passcode\"]"
+          ],
+          "checks": [
+            {
+              "check": "status idle before submit (negative control)",
+              "ok": true,
+              "observed": "State: idle"
+            },
+            {
+              "check": "type reports the length, not the text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the Account field holds the typed text",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab the typing no longer reaches Account",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "the passcode field is protected and reports no value",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the status label reads back the submission",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the passcode appears in no output",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S1",
+          "scenario": "click, scroll and drag roundtrip",
+          "consumerScenarios": [
+            "e2e_linux_click_scroll_drag_roundtrip",
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "click --at",
+            "scroll --at",
+            "drag --from --to",
+            "element-action set-value"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2067,
+          "notes": [],
+          "checks": [
+            {
+              "check": "a click on the disabled button changes nothing",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the click is reported at the requested point",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the click on Sign in activates it",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll beside the list scrolls nothing",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll over the list moves it down",
+              "ok": true,
+              "observed": "State: scrolled 73"
+            },
+            {
+              "check": "the slider is at 50 before the drag (negative control)",
+              "ok": true,
+              "observed": "50"
+            },
+            {
+              "check": "the drag reports its path",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the drag moves the slider to the right end",
+              "ok": true,
+              "observed": "State: volume 100"
+            }
+          ]
+        },
+        {
+          "id": "S5",
+          "scenario": "OCR of a canvas-drawn fixture",
+          "consumerScenarios": [
+            "e2e_linux_ocr_extracts_text_from_canvas_fixture"
+          ],
+          "verbs": [
+            "windows",
+            "ocr --window",
+            "find"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 437,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the painted words are in no accessible node (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR reads every painted word",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | Account harbor-pilot Passcode signin State: volume 100 Row 5 Row 6 Row 7 Row 8 R…"
+            },
+            {
+              "check": "each painted word maps inside the canvas's desktop bounds",
+              "ok": true,
+              "observed": "(x: 380, y: 465, w: 520, h: 80)"
+            },
+            {
+              "check": "the first painted word starts where it is painted (16 px in, ±10 px)",
+              "ok": true,
+              "observed": "word at x 398, canvas at x 380"
+            },
+            {
+              "check": "the capture is the window's",
+              "ok": true,
+              "observed": "window-crop"
+            }
+          ]
+        },
+        {
+          "id": "S9",
+          "scenario": "tree-then-OCR text extraction",
+          "consumerScenarios": [
+            "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
+          ],
+          "verbs": [
+            "find",
+            "element",
+            "ocr --region"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 514,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the tree stage finds the canvas without text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a labelled button needs no OCR",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR of the element's bounds reads its text",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | COPPER LANTERN 52"
+            },
+            {
+              "check": "the capture is the element's region",
+              "ok": true,
+              "observed": "[380,465]"
+            },
+            {
+              "check": "OCR of another element's bounds does not read the canvas",
+              "ok": true,
+              "observed": "harbor-pilot"
+            }
+          ]
+        },
+        {
+          "id": "S6",
+          "scenario": "screenshot and recording pipeline",
+          "consumerScenarios": [
+            "e2e_linux_screenshot_recording_pipeline"
+          ],
+          "verbs": [
+            "screenshot",
+            "record --duration-ms",
+            "record-start",
+            "record-stop",
+            "ocr --image"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 5978,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the PNG decodes to the reported size",
+              "ok": true,
+              "observed": "1280x800"
+            },
+            {
+              "check": "the display capture is the session's display size",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the screenshot shows the fixture",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a capture from before the launch does not (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a window capture is the window's size",
+              "ok": true,
+              "observed": "520x640 vs (x: 380, y: 87, w: 520, h: 640)"
+            },
+            {
+              "check": "record: a finalized MP4 of the reported size",
+              "ok": true,
+              "observed": "1280x800 31 frames"
+            },
+            {
+              "check": "record: duration about 3 s (2.5 s .. 4.5 s)",
+              "ok": true,
+              "observed": "3100 ms, reported 3100"
+            },
+            {
+              "check": "record-start returns a recording in progress",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "record-stop finalizes it",
+              "ok": true,
+              "observed": "2100 ms"
+            }
+          ]
+        },
+        {
+          "id": "S7",
+          "scenario": "waiting for a timer-driven dialog",
+          "consumerScenarios": [
+            "e2e_linux_wait_observes_timer_driven_dialog"
+          ],
+          "verbs": [
+            "app-launch",
+            "wait --element --role dialog",
+            "wait --window",
+            "app-quit"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2680,
+          "notes": [],
+          "checks": [
+            {
+              "check": "before the timer the wait expires (negative control)",
+              "ok": true,
+              "observed": "exit 7 condition-not-met"
+            },
+            {
+              "check": "the wait resolves on the dialog",
+              "ok": true,
+              "observed": "18 attempts"
+            },
+            {
+              "check": "it resolves after the timer, not before",
+              "ok": true,
+              "observed": "2459 ms"
+            },
+            {
+              "check": "the dialog's window is enumerated",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S8",
+          "scenario": "zero-touch session bootstrap and teardown",
+          "consumerScenarios": [
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "session-start --kind headless",
+            "session-info",
+            "session-list",
+            "app-launch",
+            "find",
+            "session-stop"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 13477,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the session does not exist before the start (negative control)",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "session-start returns a running headless session",
+              "ok": true,
+              "observed": "running"
+            },
+            {
+              "check": "its environment names a private display and buses",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its runtime directory is the caller's, mode 0700",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-list has it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a launched client is on the session's AT-SPI bus and listed",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-stop reports it stopped",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-info no longer finds it",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "its record is gone",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "no process of the session is left",
+              "ok": true,
+              "observed": "0 left"
+            },
+            {
+              "check": "the fixture is gone with it",
+              "ok": true,
+              "observed": "354800"
+            },
+            {
+              "check": "its runtime directory is gone",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "run": "linux-xvfb/gtk4",
+      "sessionBackend": "linux-xvfb",
+      "toolkit": "gtk4",
+      "selected": {
+        "capture": "linux-x11",
+        "ocr": "tesseract",
+        "tree": "linux-atspi",
+        "input": "linux-xtest",
+        "session": "linux-xvfb"
+      },
+      "scenarios": [
+        {
+          "id": "S2",
+          "scenario": "capability report of a live session",
+          "consumerScenarios": [
+            "e2e_linux_doctor_reports_capabilities"
+          ],
+          "verbs": [
+            "capabilities --probe --session"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 54,
+          "notes": [],
+          "checks": [
+            {
+              "check": "platform is linux",
+              "ok": true,
+              "observed": "linux"
+            },
+            {
+              "check": "selected backends follow the session",
+              "ok": true,
+              "observed": "{\"capture\":\"linux-x11\",\"ocr\":\"tesseract\",\"tree\":\"linux-atspi\",\"input\":\"linux-xtest\",\"session\":\"linux-xvfb\"}"
+            },
+            {
+              "check": "every feature of the vocabulary exactly once",
+              "ok": true,
+              "observed": "19 of 19"
+            },
+            {
+              "check": "a reason exactly where a feature is not available",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the features the scenarios need are usable (degraded counts, with its reason)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "an unknown session is exit 3 / not-found",
+              "ok": true,
+              "observed": "exit 3 session"
+            }
+          ]
+        },
+        {
+          "id": "S3",
+          "scenario": "element find by role, name and state",
+          "consumerScenarios": [
+            "e2e_linux_find_elements_filters_role_name_and_state"
+          ],
+          "verbs": [
+            "find --role",
+            "find --state",
+            "find --name",
+            "find --name-contains --ignore-case",
+            "element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 265,
+          "notes": [],
+          "checks": [
+            {
+              "check": "role button finds Sign in and Archive",
+              "ok": true,
+              "observed": "@[\"Sign in\", \"Archive\"]"
+            },
+            {
+              "check": "state enabled keeps only Sign in",
+              "ok": true,
+              "observed": "@[\"Sign in\"]"
+            },
+            {
+              "check": "the disabled button carries no enabled state",
+              "ok": true,
+              "observed": "[\"focusable\",\"visible\"]"
+            },
+            {
+              "check": "an editable text-field named Account, once",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its path is stable across reads",
+              "ok": true,
+              "observed": "/app[356054]/window[0]/group[0]/text-field[0]"
+            },
+            {
+              "check": "element <path> resolves to it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "name-contains --ignore-case finds Sign in",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "without --ignore-case the lower-case needle finds nothing",
+              "ok": true,
+              "observed": "0"
+            }
+          ]
+        },
+        {
+          "id": "S4",
+          "scenario": "form fill, submit and status readback",
+          "consumerScenarios": [
+            "e2e_linux_form_fill_submit_and_status_readback"
+          ],
+          "verbs": [
+            "element-action focus",
+            "type --stdin",
+            "key Tab",
+            "element-action press",
+            "wait --element"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 1363,
+          "notes": [
+            "Account offers no focus action (actions [\"set-value\"]); focused by a click at its centre",
+            "focused after Tab: @[\"Passcode\"]"
+          ],
+          "checks": [
+            {
+              "check": "status idle before submit (negative control)",
+              "ok": true,
+              "observed": "State: idle"
+            },
+            {
+              "check": "type reports the length, not the text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the Account field holds the typed text",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "after Tab the typing no longer reaches Account",
+              "ok": true,
+              "observed": "harbor-pilot"
+            },
+            {
+              "check": "the passcode field is protected and reports no value",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the status label reads back the submission",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the passcode appears in no output",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S1",
+          "scenario": "click, scroll and drag roundtrip",
+          "consumerScenarios": [
+            "e2e_linux_click_scroll_drag_roundtrip",
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "click --at",
+            "scroll --at",
+            "drag --from --to",
+            "element-action set-value"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2116,
+          "notes": [],
+          "checks": [
+            {
+              "check": "a click on the disabled button changes nothing",
+              "ok": true,
+              "observed": "State: signed in 1 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "the click is reported at the requested point",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the click on Sign in activates it",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll beside the list scrolls nothing",
+              "ok": true,
+              "observed": "State: signed in 2 as harbor-pilot; passcode of 13 characters"
+            },
+            {
+              "check": "a scroll over the list moves it down",
+              "ok": true,
+              "observed": "State: scrolled 73"
+            },
+            {
+              "check": "the slider is at 50 before the drag (negative control)",
+              "ok": true,
+              "observed": "50"
+            },
+            {
+              "check": "the drag reports its path",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the drag moves the slider to the right end",
+              "ok": true,
+              "observed": "State: volume 100"
+            }
+          ]
+        },
+        {
+          "id": "S5",
+          "scenario": "OCR of a canvas-drawn fixture",
+          "consumerScenarios": [
+            "e2e_linux_ocr_extracts_text_from_canvas_fixture"
+          ],
+          "verbs": [
+            "windows",
+            "ocr --window",
+            "find"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 373,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the painted words are in no accessible node (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR reads every painted word",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | Account harbor-pilot Passcode sign in State: volume 100 Row 5 Row 6 Row 7 Row 8 …"
+            },
+            {
+              "check": "each painted word maps inside the canvas's desktop bounds",
+              "ok": true,
+              "observed": "(x: 380, y: 461, w: 520, h: 80)"
+            },
+            {
+              "check": "the first painted word starts where it is painted (16 px in, ±10 px)",
+              "ok": true,
+              "observed": "word at x 398, canvas at x 380"
+            },
+            {
+              "check": "the capture is the window's",
+              "ok": true,
+              "observed": "window-crop"
+            }
+          ]
+        },
+        {
+          "id": "S9",
+          "scenario": "tree-then-OCR text extraction",
+          "consumerScenarios": [
+            "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
+          ],
+          "verbs": [
+            "find",
+            "element",
+            "ocr --region"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 540,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the tree stage finds the canvas without text",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a labelled button needs no OCR",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "OCR of the element's bounds reads its text",
+              "ok": true,
+              "observed": "COPPER LANTERN 52 | COPPER LANTERN 52"
+            },
+            {
+              "check": "the capture is the element's region",
+              "ok": true,
+              "observed": "[380,461]"
+            },
+            {
+              "check": "OCR of another element's bounds does not read the canvas",
+              "ok": true,
+              "observed": "harbor-pilot"
+            }
+          ]
+        },
+        {
+          "id": "S6",
+          "scenario": "screenshot and recording pipeline",
+          "consumerScenarios": [
+            "e2e_linux_screenshot_recording_pipeline"
+          ],
+          "verbs": [
+            "screenshot",
+            "record --duration-ms",
+            "record-start",
+            "record-stop",
+            "ocr --image"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 6053,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the PNG decodes to the reported size",
+              "ok": true,
+              "observed": "1280x800"
+            },
+            {
+              "check": "the display capture is the session's display size",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "the screenshot shows the fixture",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a capture from before the launch does not (negative control)",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a window capture is the window's size",
+              "ok": true,
+              "observed": "520x640 vs (x: 380, y: 87, w: 520, h: 640)"
+            },
+            {
+              "check": "record: a finalized MP4 of the reported size",
+              "ok": true,
+              "observed": "1280x800 31 frames"
+            },
+            {
+              "check": "record: duration about 3 s (2.5 s .. 4.5 s)",
+              "ok": true,
+              "observed": "3100 ms, reported 3100"
+            },
+            {
+              "check": "record-start returns a recording in progress",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "record-stop finalizes it",
+              "ok": true,
+              "observed": "2100 ms"
+            }
+          ]
+        },
+        {
+          "id": "S7",
+          "scenario": "waiting for a timer-driven dialog",
+          "consumerScenarios": [
+            "e2e_linux_wait_observes_timer_driven_dialog"
+          ],
+          "verbs": [
+            "app-launch",
+            "wait --element --role dialog",
+            "wait --window",
+            "app-quit"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 2771,
+          "notes": [],
+          "checks": [
+            {
+              "check": "before the timer the wait expires (negative control)",
+              "ok": true,
+              "observed": "exit 7 condition-not-met"
+            },
+            {
+              "check": "the wait resolves on the dialog",
+              "ok": true,
+              "observed": "17 attempts"
+            },
+            {
+              "check": "it resolves after the timer, not before",
+              "ok": true,
+              "observed": "2511 ms"
+            },
+            {
+              "check": "the dialog's window is enumerated",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        },
+        {
+          "id": "S8",
+          "scenario": "zero-touch session bootstrap and teardown",
+          "consumerScenarios": [
+            "e2e_linux_zero_touch_session_bootstrap"
+          ],
+          "verbs": [
+            "session-start --kind headless",
+            "session-info",
+            "session-list",
+            "app-launch",
+            "find",
+            "session-stop"
+          ],
+          "result": "pass",
+          "error": null,
+          "elapsedMs": 14207,
+          "notes": [],
+          "checks": [
+            {
+              "check": "the session does not exist before the start (negative control)",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "session-start returns a running headless session",
+              "ok": true,
+              "observed": "running"
+            },
+            {
+              "check": "its environment names a private display and buses",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "its runtime directory is the caller's, mode 0700",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-list has it",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "a launched client is on the session's AT-SPI bus and listed",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-stop reports it stopped",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "session-info no longer finds it",
+              "ok": true,
+              "observed": "exit 3"
+            },
+            {
+              "check": "its record is gone",
+              "ok": true,
+              "observed": ""
+            },
+            {
+              "check": "no process of the session is left",
+              "ok": true,
+              "observed": "0 left"
+            },
+            {
+              "check": "the fixture is gone with it",
+              "ok": true,
+              "observed": "356054"
+            },
+            {
+              "check": "its runtime directory is gone",
+              "ok": true,
+              "observed": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "outOfScope": [
+    {
+      "consumerScenario": "e2e_linux_remote_view_start_stop_preserves_session_identity",
+      "why": "remote view is a consumer surface (Desktop-Substrate.md §11)"
+    },
+    {
+      "consumerScenario": "e2e_linux_isolated_session_rustdesk_click_roundtrip",
+      "why": "RustDesk remote view is a consumer surface; the consumer's own test skips it"
+    },
+    {
+      "consumerScenario": "e2e_linux_orca_form_labels_required_state_and_alerts",
+      "why": "screen-reader speech capture is not in this initiative"
+    },
+    {
+      "consumerScenario": "e2e_linux_orca_read_all_matches_golden_transcript",
+      "why": "screen-reader speech capture is not in this initiative"
+    },
+    {
+      "consumerScenario": "e2e_linux_speech_dispatcher_module_emits_ndjson",
+      "why": "screen-reader speech capture is not in this initiative"
+    },
+    {
+      "consumerScenario": "e2e_linux_appium_and_orca_run_concurrently_without_loss",
+      "why": "speech capture alongside a tree backend; the tree half is S3/S4"
+    },
+    {
+      "consumerScenario": "e2e_linux_mcp_roundtrip_matches_cli_tree_output",
+      "why": "MCP is a consumer surface; CLI/serve parity is the contract suite's"
+    },
+    {
+      "consumerScenario": "e2e_linux_run_script_stdin_roundtrip_with_artifacts",
+      "why": "script running is a consumer surface"
+    },
+    {
+      "consumerScenario": "e2e_linux_agent_owned_profile_persists_login_without_profile_transfer",
+      "why": "browser profiles are a consumer surface; no desktop verb is involved"
+    },
+    {
+      "consumerScenario": "e2e_linux_appium_backend_attaches_to_gtk_fixture",
+      "why": "the consumer's Appium driver; GuiAssert reads the same AT-SPI tree directly (S3, S8)"
+    }
+  ]
+}

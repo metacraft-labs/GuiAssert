@@ -1,0 +1,1403 @@
+{
+  "schema": "ah-guiassert-parity/1",
+  "milestone": "GS13 (GuiAssert) / GA5a input",
+  "platform": "linux",
+  "arch": "x86_64",
+  "kernel": "6.18.55",
+  "measuredAt": "2026-10-23T18:05:12Z",
+  "agentHarbor": {
+    "commit": "v0.6.16-291-gad6fe9586f"
+  },
+  "guiassert": {
+    "guiassert": "0.1.0",
+    "contract": {
+      "name": "guiassert-desktop",
+      "major": 1,
+      "minor": 0
+    },
+    "platform": "linux",
+    "arch": "amd64",
+    "compiled": {
+      "capture": [
+        "linux-wlr",
+        "linux-gnome",
+        "linux-portal-pipewire",
+        "linux-x11",
+        "fixture"
+      ],
+      "ocr": [
+        "tesseract",
+        "fixture"
+      ],
+      "tree": [
+        "linux-atspi",
+        "fixture"
+      ],
+      "input": [
+        "linux-wlr-virtual",
+        "linux-mutter",
+        "linux-xtest",
+        "linux-uinput",
+        "fixture"
+      ],
+      "session": [
+        "linux-host",
+        "linux-sway",
+        "linux-gnome",
+        "linux-xvfb",
+        "fixture"
+      ],
+      "media": [
+        "ffmpeg"
+      ]
+    }
+  },
+  "display": [
+    1280,
+    800
+  ],
+  "rows": [
+    {
+      "session": "linux-sway",
+      "id": "A7",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "wait for a timer-driven dialog",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the timer the wait times out (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop wait resolves on the dialog",
+          "ok": true,
+          "observed": "[\"Timer Dialog\"]"
+        },
+        {
+          "check": "it resolves after the timer",
+          "ok": true,
+          "observed": "3223 ms"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A0",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "launch and tree contract",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop launch reports success and the pid",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
+          "observed": "application"
+        },
+        {
+          "assertion": "the fixture window has role \"frame\"",
+          "observed": "window"
+        },
+        {
+          "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
+          "observed": "[\"app\",\"window\"]"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A1",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click, scroll and drag roundtrip",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no Logged in status before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the coordinate click activates Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop scroll reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the scroll moves the list",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "no Slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop drag reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the drag moves the slider",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the semantic click activates Login a second time",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
+          "observed": "\"injected\""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A2",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "find by role, name and state",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role button finds Login and the disabled button",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "both buttons, each with path and role",
+          "ok": true,
+          "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --state enabled",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every element found by state enabled has it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the disabled button is not among them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --name (substring, any case)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "name filter finds Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "find --role \"push button\" finds buttons (AT-SPI role names)",
+          "observed": "0"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A3",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "form fill, submit and status readback",
+      "result": "fail",
+      "checks": [
+        {
+          "check": "the first editable entry is found by role text-field and state",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop focus on it",
+          "ok": false,
+          "observed": ""
+        },
+        {
+          "check": "focus reports success",
+          "ok": false,
+          "observed": "Error: GuiAssert `element-action` failed (tree-failed): linux-atspi: tree-failed: the element at /app[951885]/window[0]/group[0]/group[0]/group[0]/text-field[0]"
+        },
+        {
+          "check": "desktop type",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type reports success and only the length",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry holds the typed text",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status does not read \"Status: Logged in 3\" before the submit (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click on Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status label reads the next sign-in after submit",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop key Tab",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "key reports success",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "find --role text --state editable finds the entries (AT-SPI role names)",
+          "observed": "0"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A4",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "capability report",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop doctor --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "host, executionMode and capabilities present",
+          "ok": true,
+          "observed": "{\"host\":\"linux\",\"executionMode\":\"guiassert 0.1.0 (guiassert-desktop 1.0)\"}"
+        },
+        {
+          "check": "every entry has a valid state, a requires array, and a reasonCode exactly when not usable (supported or available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "every non-available entry carries a reasonCode (\"supported\" entries carry none)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports tree.read available (the zero-touch probe's native name and state)",
+          "observed": ""
+        },
+        {
+          "assertion": "doctor reports feature \"tree.read\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"tree.write\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"screenshot\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"screen_reader\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"remote_view\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"window-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A5",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "OCR of a canvas-drawn fixture",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the canvas, OCR does not read its words (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "at least 4 of the 5 painted words are read",
+          "ok": true,
+          "observed": "5/5"
+        },
+        {
+          "check": "boxes are in desktop coordinates inside the session display",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "ah desktop ocr with no --region or --app (the binding sends no --display; guiassert needs a target)",
+          "observed": "Error: invalid GuiAssert request `ocr` (missing-argument): ocr needs --image, or --display, --window or --region with --out"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A6",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "screenshot and recording pipeline",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop screenshot --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the PNG is the session's display, as the manifest reports",
+          "ok": true,
+          "observed": "1280x800"
+        },
+        {
+          "check": "desktop screenshot --region succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a region capture is the region's size (300x150), not the display's (negative control)",
+          "ok": true,
+          "observed": "300x150"
+        },
+        {
+          "check": "desktop record --duration 3 succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 has the display's width and at least 2 s",
+          "ok": true,
+          "observed": "1280 px, 3.100000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A8",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "tree-then-OCR fallback trace",
+      "result": "n/a",
+      "checks": [],
+      "gaps": [
+        {
+          "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
+          "observed": "For more information, try '--help'."
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G1",
+      "consumerScenario": "-",
+      "scenario": "session new",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session new is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session list is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G3",
+      "consumerScenario": "-",
+      "scenario": "session kill",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session kill is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G4",
+      "consumerScenario": "-",
+      "scenario": "record-start",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop record-start` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "record-start is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G5",
+      "consumerScenario": "-",
+      "scenario": "record-stop",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop record-stop` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nativ"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "record-stop is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop capture-pass` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "capture-pass is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G7",
+      "consumerScenario": "-",
+      "scenario": "run-script",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop run-script` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "run-script is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G8",
+      "consumerScenario": "-",
+      "scenario": "type --cadence",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --cadence is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "type --cadence is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G9",
+      "consumerScenario": "-",
+      "scenario": "click --motion",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --motion is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click --motion is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G10",
+      "consumerScenario": "-",
+      "scenario": "drag --motion",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --motion is a curved `drag --path` composed by Agent Harbor; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "drag --motion is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A9",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session teardown",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session-stop reports the session stopped",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session-info no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "every process launched into the session is gone",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's runtime directory is gone",
+          "ok": true,
+          "observed": "guienv-d8737d9b4908d33c"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A7",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "wait for a timer-driven dialog",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the timer the wait times out (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop wait resolves on the dialog",
+          "ok": true,
+          "observed": "[\"Timer Dialog\"]"
+        },
+        {
+          "check": "it resolves after the timer",
+          "ok": true,
+          "observed": "3266 ms"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A0",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "launch and tree contract",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop launch reports success and the pid",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
+          "observed": "application"
+        },
+        {
+          "assertion": "the fixture window has role \"frame\"",
+          "observed": "window"
+        },
+        {
+          "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
+          "observed": "[\"app\",\"window\"]"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A1",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click, scroll and drag roundtrip",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no Logged in status before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the coordinate click activates Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop scroll reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the scroll moves the list",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "no Slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop drag reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the drag moves the slider",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the semantic click activates Login a second time",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
+          "observed": "\"injected\""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A2",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "find by role, name and state",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role button finds Login and the disabled button",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "both buttons, each with path and role",
+          "ok": true,
+          "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --state enabled",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every element found by state enabled has it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the disabled button is not among them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --name (substring, any case)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "name filter finds Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "find --role \"push button\" finds buttons (AT-SPI role names)",
+          "observed": "0"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A3",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "form fill, submit and status readback",
+      "result": "fail",
+      "checks": [
+        {
+          "check": "the first editable entry is found by role text-field and state",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop focus on it",
+          "ok": false,
+          "observed": ""
+        },
+        {
+          "check": "focus reports success",
+          "ok": false,
+          "observed": "Error: GuiAssert `element-action` failed (tree-failed): linux-atspi: tree-failed: the element at /app[956014]/window[0]/group[0]/group[0]/group[0]/text-field[0]"
+        },
+        {
+          "check": "desktop type",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type reports success and only the length",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry holds the typed text",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status does not read \"Status: Logged in 3\" before the submit (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click on Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status label reads the next sign-in after submit",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop key Tab",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "key reports success",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "find --role text --state editable finds the entries (AT-SPI role names)",
+          "observed": "0"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A4",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "capability report",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop doctor --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "host, executionMode and capabilities present",
+          "ok": true,
+          "observed": "{\"host\":\"linux\",\"executionMode\":\"guiassert 0.1.0 (guiassert-desktop 1.0)\"}"
+        },
+        {
+          "check": "every entry has a valid state, a requires array, and a reasonCode exactly when not usable (supported or available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "every non-available entry carries a reasonCode (\"supported\" entries carry none)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"region-capture\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports tree.read available (the zero-touch probe's native name and state)",
+          "observed": ""
+        },
+        {
+          "assertion": "doctor reports feature \"tree.read\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"tree.write\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"screenshot\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"screen_reader\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        },
+        {
+          "assertion": "doctor reports feature \"remote_view\" exactly once (native feature names)",
+          "observed": "[\"window-enumeration\",\"display-capture\",\"window-capture\",\"region-capture\",\"own-pixels-capture\",\"recording\",\"ocr\",\"tree-read\",\"element-actions\",\"pointer-input\",\"keyboard-input\",\"window-management\",\"session-management\",\"app-management\",\"session-virtual-display\",\"session-isolated\",\"session-headless\",\"session-vnc\",\"video-decode\"]"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A5",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "OCR of a canvas-drawn fixture",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the canvas, OCR does not read its words (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "at least 4 of the 5 painted words are read",
+          "ok": true,
+          "observed": "5/5"
+        },
+        {
+          "check": "boxes are in desktop coordinates inside the session display",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "ah desktop ocr with no --region or --app (the binding sends no --display; guiassert needs a target)",
+          "observed": "Error: invalid GuiAssert request `ocr` (missing-argument): ocr needs --image, or --display, --window or --region with --out"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A6",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "screenshot and recording pipeline",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop screenshot --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the PNG is the session's display, as the manifest reports",
+          "ok": true,
+          "observed": "1280x800"
+        },
+        {
+          "check": "desktop screenshot --region succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a region capture is the region's size (300x150), not the display's (negative control)",
+          "ok": true,
+          "observed": "300x150"
+        },
+        {
+          "check": "desktop record --duration 3 succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 has the display's width and at least 2 s",
+          "ok": true,
+          "observed": "1280 px, 3.100000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A8",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "tree-then-OCR fallback trace",
+      "result": "n/a",
+      "checks": [],
+      "gaps": [
+        {
+          "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
+          "observed": "For more information, try '--help'."
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G1",
+      "consumerScenario": "-",
+      "scenario": "session new",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session new is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session list is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G3",
+      "consumerScenario": "-",
+      "scenario": "session kill",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "session kill is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G4",
+      "consumerScenario": "-",
+      "scenario": "record-start",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop record-start` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "record-start is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G5",
+      "consumerScenario": "-",
+      "scenario": "record-stop",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop record-stop` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nativ"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "record-stop is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop capture-pass` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "capture-pass is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G7",
+      "consumerScenario": "-",
+      "scenario": "run-script",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: `ah desktop run-script` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "run-script is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G8",
+      "consumerScenario": "-",
+      "scenario": "type --cadence",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --cadence is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "type --cadence is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G9",
+      "consumerScenario": "-",
+      "scenario": "click --motion",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --motion is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click --motion is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G10",
+      "consumerScenario": "-",
+      "scenario": "drag --motion",
+      "result": "gap",
+      "checks": [
+        {
+          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "ok": true,
+          "observed": "Error: --motion is a curved `drag --path` composed by Agent Harbor; it is not routed through the GuiAssert substrate yet"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "drag --motion is not routed through the GuiAssert substrate",
+          "observed": ""
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A9",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session teardown",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session-stop reports the session stopped",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session-info no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "every process launched into the session is gone",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's runtime directory is gone",
+          "ok": true,
+          "observed": "gaxv-cb893aeff1e57dec"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "native e2e script, unchanged",
+      "result": "pass",
+      "checks": [],
+      "gaps": [],
+      "observed": "PASS: Linux desktop doctor capability schema is valid"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "native e2e script, unchanged",
+      "result": "pass",
+      "checks": [],
+      "gaps": [],
+      "observed": "PASS: Zero-touch production desktop session bootstrap and cleanup succeeded"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "error: production desktop session cleanup leaked owned resources"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "FAIL: OCR returned no text; left behind after its own cleanup: 6 process(es): dbus-daemon sway ah dbus-daemon sway ruby"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "FAIL: record output is not valid JSON; left behind after its own cleanup: 6 process(es): dbus-daemon sway ah dbus-daemon sway ruby"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    }
+  ]
+}
