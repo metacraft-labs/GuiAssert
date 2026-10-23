@@ -35,3 +35,21 @@ suite "sleepCancellable":
     expect ContractError:
       t.sleepCancellable(5_000)
     check elapsedNs(t0) < 1_000 * 1_000_000
+
+  test "test_deadline_ends_a_sleep_at_the_next_slice":
+    # A deadline that passes DURING the sleep ends it within a slice or so
+    # (the rounding up adds at most 1 ms per slice), never at the sleep's
+    # own end.
+    let t = newCancelToken()
+    defer: t.free()
+    t.setDeadline(40)
+    let t0 = getMonoTime()
+    var kind = ekInternal
+    try:
+      t.sleepCancellable(5_000)
+    except ContractError as e:
+      kind = e.kind
+    let ms = elapsedNs(t0) div 1_000_000
+    check kind == ekTimeout
+    check ms >= 40
+    check ms < 250
