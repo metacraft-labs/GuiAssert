@@ -23,6 +23,10 @@
 #                    Xvfb (inside `nix develop`).
 # `just test-live-tesseract` - the tesseract OCR engine against the pinned
 #                    tesseract (GS6; Linux and macOS, inside `nix develop`).
+# `just test-parity-linux` - the Linux parity evidence (GS13): the consumer's
+#                    Linux computer-use scenarios through the real `guiassert`
+#                    in private linux-sway and linux-xvfb sessions; writes
+#                    build/parity/linux-parity.json (inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
 #                    the REAL built binaries, run once per binary.
 # `just lint`      - placeholder; required by the workspace pre-commit
@@ -117,6 +121,15 @@ test-live-linux: build-cli
 # permission and no display.
 test-live-tesseract: build-cli
     nim c -r --hints:off tests/live/tocr_tesseract.nim
+
+# The Linux parity harness (GS13, tests/parity/linux_parity.sh): every scenario
+# of the consumer's Linux computer-use suite, restated in GuiAssert's terms,
+# against the invented GTK 3 and GTK 4 application tests/parity/fixtures/
+# parity_lab.c in private linux-sway and linux-xvfb sessions it starts with
+# `session-start`. Extra arguments go to the harness (`--sessions
+# sway,xvfb,gnome`, `--only S1,S4`, `--evidence PATH`).
+test-parity-linux *args: build-cli
+    GUIASSERT_CONTRACT_BIN="$PWD/build/bin/guiassert" bash tests/parity/linux_parity.sh {{args}}
 
 # Run only the R6 human-cadence pacing tests (pure + deterministic; no TCC).
 test-pacing:

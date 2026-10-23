@@ -71,3 +71,5 @@ tests/tlinux_input
 tests/live/tinput_linux
 tests/tlinux_session
 tests/live/tsession_linux
+tests/parity/linux_parity
+build/parity/
