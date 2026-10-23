@@ -792,7 +792,12 @@ proc main(): int =
       of "evidence": evidence = absolutePath(val)
       of "sessions": sessions = val.split(',')
       of "toolkits": toolkits = val.split(',')
-      of "only": only = val.split(',')
+      of "only":
+        only = val.split(',')
+        for id in only:
+          if id notin ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"]:
+            stderr.writeLine "linux_parity: unknown scenario " & id
+            return 2
       else:
         stderr.writeLine "linux_parity: unknown option --" & key
         return 2
@@ -842,7 +847,8 @@ proc main(): int =
   echo "PARITY SUMMARY ", total - failed, "/", total, " scenario runs passed",
        (if left.len > 0: "; " & $left.len & " leftover process(es) killed" else: ""),
        "; evidence: ", evidence.relativePath(repoRootDir)
-  if failed > 0 or left.len > 0: 1 else: 0
+  # A selection that ran no scenario at all is not a pass.
+  if total == 0 or failed > 0 or left.len > 0: 1 else: 0
 
 when isMainModule:
   quit(main())
