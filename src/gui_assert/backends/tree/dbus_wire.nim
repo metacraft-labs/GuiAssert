@@ -143,6 +143,15 @@ proc dstruct*(fields: varargs[DValue]): DValue =
   DValue(sig: s & ")", kind: dkStruct, items: @fields)
 proc darray*(elemSig: string, items: seq[DValue] = @[]): DValue =
   DValue(sig: "a" & elemSig, kind: dkArray, items: items)
+proc ddictEntry*(key, value: DValue): DValue =
+  ## One entry of a dictionary (`a{kv}`): an array of these is a dictionary.
+  DValue(sig: "{" & key.sig & value.sig & "}", kind: dkDictEntry, items: @[key, value])
+proc dvardict*(entries: openArray[(string, DValue)]): DValue =
+  ## The `a{sv}` dictionary of `entries`, each value wrapped in a variant
+  ## (the option dictionaries most D-Bus APIs take).
+  var items: seq[DValue]
+  for (k, v) in entries: items.add ddictEntry(dstr(k), dvariant(v))
+  darray("{sv}", items)
 
 proc asInt*(v: DValue): int64 =
   ## The value of an integer-typed `v`. Raises `DbusError` for another type.

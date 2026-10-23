@@ -64,13 +64,16 @@
               ./helpers
             ];
           };
-          # The Linux capture backends (spec §4.2) run GuiAssert's own C
-          # helpers (`helpers/linux`: `x11_probe` for linux-x11,
+          # The Linux capture and input backends (spec §4.2) run GuiAssert's own
+          # C helpers (`helpers/linux`: `x11_probe` for linux-x11,
           # `portal_screencast` for linux-portal-pipewire and `wlr_screencopy`
-          # for linux-wlr recordings, beside the desktop-environment targets'
-          # `wm_probe` and `virtual_pointer`) and these tools: grim (linux-wlr
-          # stills), swaymsg (sway's IPC, linux-wlr), gdbus (GNOME Shell,
-          # linux-gnome) and ffmpeg (the encoder of every Linux recorder
+          # for linux-wlr recordings; `wayland_input` for linux-wlr-virtual and
+          # linux-mutter's keymap check, `xtest_input` for linux-xtest and
+          # `uinput_input` for linux-uinput (GS8); beside the
+          # desktop-environment targets' `wm_probe` and `virtual_pointer`) and
+          # these tools: grim (linux-wlr stills), swaymsg (sway's IPC,
+          # linux-wlr and linux-wlr-virtual's window management), gdbus (GNOME
+          # Shell, linux-gnome) and ffmpeg (the encoder of every Linux recorder
           # helper, via FFMPEG_BIN).
           linuxHelperInputs = with pkgs; [
             wayland
@@ -78,6 +81,9 @@
             wlr-protocols
             xorg.libX11
             xorg.libXres
+            xorg.libXtst
+            xorg.libXi
+            libxkbcommon
             glib
             pipewire
           ];
@@ -93,6 +99,9 @@
             "wlr_screencopy"
             "wm_probe"
             "virtual_pointer"
+            "wayland_input"
+            "xtest_input"
+            "uinput_input"
           ];
           mkGuiassert =
             name: defines: wrap:
@@ -409,6 +418,110 @@
                          .accessible == true)] | length == 1)' apps.json || { cat apps.json; exit 1; }
                 touch "$out"
               '';
+
+          # The packaged `guiassert` sends input on Linux with no dev shell and
+          # no PATH (GS8): in a private Xvfb with its own session and AT-SPI
+          # buses, linux-xtest (the session-following default with DISPLAY
+          # set) must probe pointer and keyboard input `supported`; a click at
+          # the centre of the invented GTK 3 form's Display name field (its
+          # bounds read through linux-atspi) and a `type --stdin` of a text
+          # with a character outside the server's keymap (typed through a
+          # borrowed key code by the packaged `xtest_input`) must set the
+          # field's value, read back through the tree; a click beside Submit
+          # must press nothing and a click at its centre must add the status
+          # label. Typed text must reach neither stdout nor stderr.
+          guiassert-packaged-linux-input =
+            pkgs.runCommandCC "guiassert-packaged-linux-input"
+              {
+                nativeBuildInputs = [
+                  pkgs.jq
+                  pkgs.xorg.xvfb
+                  pkgs.dbus
+                  pkgs.pkg-config
+                ];
+                buildInputs = [ pkgs.gtk3 ];
+                FONTCONFIG_FILE = pkgs.makeFontsConf { fontDirectories = [ pkgs.dejavu_fonts ]; };
+              }
+              ''
+                export HOME="$TMPDIR"
+                cc -O1 -Wall -Werror -o form ${./tests/live/fixtures/atspi_form.c} \
+                  $(pkg-config --cflags --libs gtk+-3.0)
+                run="$TMPDIR/run"
+                mkdir -m 700 "$run"
+                Xvfb :73 -screen 0 800x900x24 -nolisten tcp > xvfb.log 2>&1 &
+                xvfb=$!
+                dbus-daemon --config-file=${pkgs.dbus}/share/dbus-1/session.conf --nofork \
+                  --address="unix:path=$run/bus" > bus.log 2>&1 &
+                bus=$!
+                trap 'kill $xvfb $bus' EXIT
+                for _ in $(seq 100); do
+                  [ -e /tmp/.X11-unix/X73 ] && [ -S "$run/bus" ] && break
+                  sleep 0.1
+                done
+                [ -S "$run/bus" ] || { cat bus.log xvfb.log; exit 1; }
+                session=(DISPLAY=:73 XDG_RUNTIME_DIR="$run" DBUS_SESSION_BUS_ADDRESS="unix:path=$run/bus")
+                env -i HOME="$HOME" "''${session[@]}" \
+                  ${atspiLauncherFor pkgs}/libexec/at-spi-bus-launcher --launch-immediately \
+                  > launcher.log 2>&1 &
+                launcher=$!
+                trap 'kill $launcher $xvfb $bus' EXIT
+                for _ in $(seq 100); do
+                  env -i "''${session[@]}" dbus-send --session --print-reply \
+                    --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+                    org.freedesktop.DBus.NameHasOwner string:org.a11y.Bus 2>/dev/null \
+                    | grep -q 'boolean true' && break
+                  sleep 0.1
+                done
+                env -i HOME="$HOME" "''${session[@]}" GDK_BACKEND=x11 GSETTINGS_BACKEND=memory \
+                  FONTCONFIG_FILE="$FONTCONFIG_FILE" ./form --title "Input Form 8" \
+                  --position 40,30 > form.out 2> form.log &
+                form=$!
+                trap 'kill $form $launcher $xvfb $bus' EXIT
+                ga() {
+                  env -i HOME="$HOME" "''${session[@]}" ${guiassert}/bin/guiassert \
+                    --state-dir "$TMPDIR/state" "$@"
+                }
+                centre() { jq -r '.data.elements[0].bounds as [$x, $y, $w, $h] |
+                                  "\($x + ($w / 2 | floor)),\($y + ($h / 2 | floor))"' "$1"; }
+                ga wait --element --role button --name Submit \
+                  --wait-ms 30000 > ready.json || { cat ready.json form.log launcher.log; exit 1; }
+                ga capabilities --probe > caps.json
+                jq -e '.ok == true and .data.selected.input == "linux-xtest" and
+                       ([.data.features[] | select((.feature == "pointer-input" or
+                         .feature == "keyboard-input") and .backend == "linux-xtest" and
+                         .state == "supported")] | length == 2)' caps.json || { cat caps.json; exit 1; }
+                ga windows --title "Input Form 8" > windows.json
+                ga window-focus "$(jq -r '.data.windows[0].id' windows.json)" > focus.json \
+                  || { cat focus.json; exit 1; }
+                ga find --app guiassert-form --role text-field --name "Display name" > field.json
+                ga click --at "$(centre field.json)" > click.json || { cat click.json; exit 1; }
+                printf 'Wren Halloway 7 \xc3\xa9' | ga type --stdin > type.json 2> type.err \
+                  || { cat type.json type.err; exit 1; }
+                [ ! -s type.err ] || { cat type.err; exit 1; }
+                jq -e '.ok == true and .data.input.length == 17 and .data.input.kind == "type"' \
+                  type.json || { cat type.json; exit 1; }
+                if grep -q Halloway type.json; then cat type.json; exit 1; fi
+                for _ in $(seq 50); do
+                  ga find --app guiassert-form --role text-field --name "Display name" > value.json
+                  jq -e '.data.elements[0].value == "Wren Halloway 7 é"' value.json \
+                    > /dev/null && break
+                  sleep 0.1
+                done
+                jq -e '.data.elements[0].value == "Wren Halloway 7 é"' value.json \
+                  || { cat value.json; exit 1; }
+                ga find --app guiassert-form --role button --name Submit > submit.json
+                above=$(jq -r '.data.elements[0].bounds as [$x, $y, $w, $h] |
+                               "\($x + ($w / 2 | floor)),\($y - 4)"' submit.json)
+                ga click --at "$above" > beside.json || { cat beside.json; exit 1; }
+                sleep 0.5
+                ga find --app guiassert-form --role label --name-contains Submitted > none.json
+                jq -e '.data.elements | length == 0' none.json || { cat none.json; exit 1; }
+                ga click --at "$(centre submit.json)" > press.json || { cat press.json; exit 1; }
+                ga wait --element --app guiassert-form --role label \
+                  --name-contains "Submitted Wren Halloway" --wait-ms 10000 > status.json \
+                  || { cat status.json; exit 1; }
+                touch "$out"
+              '';
         }
       );
 
@@ -470,13 +583,15 @@
             # invented form fixtures are compiled against (Qt's platform
             # plugins are named by GUI_ASSERT_QT_PLUGIN_PATH below), and
             # libXtst for the X11 click helper that presses a fixture button
-            # at the centre of its reported bounds. (GTK brings
+            # at the centre of its reported bounds (and for `xtest_input`,
+            # GS8; libxkbcommon for `wayland_input`). (GTK brings
             # at-spi2-core; a test session starts its private AT-SPI bus with
             # the launcher named by GUI_ASSERT_ATSPI_BUS_LAUNCHER below.)
             gtk3
             gtk4
             qt6.qtbase
             xorg.libXtst
+            libxkbcommon
           ];
         in
         {

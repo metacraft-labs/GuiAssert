@@ -49,6 +49,10 @@ when linuxTreeCompiledIn or linuxSessionCompiledIn:
 when linuxSessionCompiledIn:
   import ../backends/session/linux_host
 
+when linuxInputCompiledIn:
+  import ../backends/input/[linux_common as input_common, linux_wlr_virtual, linux_mutter,
+                              linux_xtest, linux_uinput]
+
 when appleVisionCompiledIn:
   import ../backends/ocr/apple_vision
 
@@ -361,11 +365,24 @@ proc treeBackend*(e: VerbEnv): TreeBackend =
   raise noConstructor(modTree, name)
 
 proc inputBackend*(e: VerbEnv): InputBackend =
-  ## The selected input backend.
+  ## The selected input backend. A Linux backend learns the session's
+  ## displays and windows from the session's capture backend (the pointer
+  ## extent of linux-uinput, the window `window-focus` reports).
   e.ensureAvailable(modInput)
-  case e.selection[modInput].name
-  of fixtureBackendName: newFixtureInput(e.fixtureCfg)
-  else: raise noConstructor(modInput, e.selection[modInput].name)
+  let name = e.selection[modInput].name
+  if name == fixtureBackendName: return newFixtureInput(e.fixtureCfg)
+  when linuxInputCompiledIn:
+    let env = e
+    let cfg = LinuxInputConfig(stateDir: e.stateDir, token: e.ctx.token, env: e.ctx.env,
+      displays: proc (): seq[Display] = env.captureBackend().displays(env.session),
+      windows: proc (): seq[Window] =
+        env.captureBackend().windows(env.session,
+          WindowFilter(allLayers: true, includeOffscreen: true)).windows)
+    if name == linuxWlrVirtualName: return newLinuxWlrVirtualInput(cfg)
+    if name == linuxMutterName: return newLinuxMutterInput(cfg)
+    if name == linuxXtestName: return newLinuxXtestInput(cfg)
+    if name == linuxUinputName: return newLinuxUinputInput(cfg)
+  raise noConstructor(modInput, name)
 
 proc sessionBackend*(e: VerbEnv): SessionBackend =
   ## The selected session backend.

@@ -67,3 +67,5 @@ tests/live/tocr_tesseract
 tests/live/tocr_linux
 tests/tlinux_tree
 tests/live/ttree_linux
+tests/tlinux_input
+tests/live/tinput_linux

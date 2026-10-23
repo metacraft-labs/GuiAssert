@@ -33,7 +33,7 @@ default: test
 # Run every default unit test against the local nim toolchain, then the
 # contract suite against the built binaries.
 test: && test-contract
-    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tswift_helper_cache; do \
+    @for f in tnimcache_is_worktree_local tparser ttalking_head tdriver_browser tdriver_vscode tmedia teditor tcapture tappium twindow_layout tinput tpacing tartifact_project tartifact_pipeline tdesktop_env tcore_types tcore_contract tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tlinux_input tswift_helper_cache; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/$f.nim || exit 1; \
     done
@@ -102,7 +102,7 @@ test-live-macos: build-cli
 # fails; the recipe fails when any does. Run inside `nix develop` (it pins
 # every server and tool the suites start).
 test-live-linux: build-cli
-    @status=0; for f in tcapture_linux tocr_linux ttree_linux; do \
+    @status=0; for f in tcapture_linux tocr_linux ttree_linux tinput_linux; do \
       echo "===== $f ====="; \
       nim c -r --hints:off tests/live/$f.nim || status=1; \
     done; exit $status

@@ -15,7 +15,9 @@
 ## and the Linux capture backends `linux-wlr`, `linux-gnome`, `linux-x11` and
 ## `linux-portal-pipewire`, GS6 the OCR engines `apple-vision` and `tesseract`,
 ## GS7 the Linux tree backend `linux-atspi` and, for the applications of the
-## caller's own session, the `linux-host` session backend.
+## caller's own session, the `linux-host` session backend, GS8 the Linux input
+## backends `linux-wlr-virtual`, `linux-mutter`, `linux-xtest` and
+## `linux-uinput`.
 ## Until a backend is implemented, selecting it is
 ## `backend-unavailable` with reason `not-implemented` on its own platform,
 ## `wrong-platform` elsewhere, and `not-compiled-in` in a build that omits it,
@@ -108,10 +110,14 @@ const
     KnownBackend(module: modTree, name: "fixture", platforms: allPlatforms,
                  implemented: true),
     KnownBackend(module: modInput, name: "macos-cgevent", platforms: {hpMacos}),
-    KnownBackend(module: modInput, name: "linux-wlr-virtual", platforms: {hpLinux}),
-    KnownBackend(module: modInput, name: "linux-mutter", platforms: {hpLinux}),
-    KnownBackend(module: modInput, name: "linux-xtest", platforms: {hpLinux}),
-    KnownBackend(module: modInput, name: "linux-uinput", platforms: {hpLinux}),
+    KnownBackend(module: modInput, name: "linux-wlr-virtual", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modInput, name: "linux-mutter", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modInput, name: "linux-xtest", platforms: {hpLinux},
+                 implemented: true),
+    KnownBackend(module: modInput, name: "linux-uinput", platforms: {hpLinux},
+                 implemented: true),
     KnownBackend(module: modInput, name: "windows-sendinput", platforms: {hpWindows}),
     KnownBackend(module: modInput, name: "fixture", platforms: allPlatforms,
                  implemented: true),
@@ -177,6 +183,10 @@ const
     not defined(guiassertNoSession) and not defined(guiassertNoLinuxHost)
     ## Whether the `linux-host` session backend's code is linked into this
     ## binary.
+  linuxInputCompiledIn* = not minimalBuild and defined(linux) and
+    not defined(guiassertNoInput)
+    ## Whether the Linux input backends' code is linked into this binary
+    ## (`compiledIn` decides which of them is selectable).
 
 const
   appleVisionCompiledIn* = not minimalBuild and defined(macosx) and
@@ -256,12 +266,25 @@ proc linuxHostCaptureDefault*(env: Table[string, string]): string =
   if get("DISPLAY").len > 0: return "linux-x11"
   "linux-wlr"
 
+proc linuxHostInputDefault*(env: Table[string, string]): string =
+  ## The input backend of the caller's own Linux session (spec §4.2,
+  ## "Default follows the session"), by the same reading of the environment
+  ## as `linuxHostCaptureDefault`: `linux-wlr-virtual` on sway (and any other
+  ## wlroots compositor), `linux-mutter` in a GNOME Wayland session,
+  ## `linux-xtest` on an X display without Wayland. `linux-uinput` is never a
+  ## default: it needs device access the operator grants.
+  case linuxHostCaptureDefault(env)
+  of "linux-gnome": "linux-mutter"
+  of "linux-x11": "linux-xtest"
+  else: "linux-wlr-virtual"
+
 proc defaultFor*(module: Module, env: Table[string, string]): string =
   ## The default backend of `module` for an invocation with environment
   ## `env` (rule 6 of spec §3.4): the platform default, except that on Linux
-  ## the capture default follows the caller's session
-  ## (`linuxHostCaptureDefault`).
+  ## the capture and input defaults follow the caller's session
+  ## (`linuxHostCaptureDefault`, `linuxHostInputDefault`).
   if currentPlatform == hpLinux and module == modCapture: linuxHostCaptureDefault(env)
+  elif currentPlatform == hpLinux and module == modInput: linuxHostInputDefault(env)
   else: platformDefault(module)
 
 # ---------------------------------------------------------------------------

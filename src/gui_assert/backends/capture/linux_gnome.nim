@@ -125,7 +125,7 @@ proc gdbus(cfg: LinuxCaptureConfig, dest, path, meth: string, args: seq[string])
   cfg.runTool(linuxGnomeName, @[exe, "call", "--session", "-d", dest, "-o", path,
                                 "-m", meth] & args)
 
-proc eval(cfg: LinuxCaptureConfig, js: string): JsonNode =
+proc eval*(cfg: LinuxCaptureConfig, js: string): JsonNode =
   ## Evaluate `js` (an expression) inside GNOME Shell; its value comes back
   ## as JSON through a file the shell writes in a private directory.
   let dir = cfg.privateTempDir(linuxGnomeName, "eval")
