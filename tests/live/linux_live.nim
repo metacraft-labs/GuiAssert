@@ -12,7 +12,7 @@
 ## cannot start FAILS the test that needs it, with `GS5-LINUX BLOCKED:` and
 ## the reason (never a skip).
 
-import std/[json, os, osproc, streams, strtabs, strutils, tempfiles, times, unittest]
+import std/[json, os, osproc, streams, strtabs, strutils, times, unittest]
 from std/posix import nil
 
 import ../contract/harness
@@ -64,6 +64,20 @@ proc ownProcesses*(): seq[(int, string)] =
     except IOError, OSError:
       discard   # gone meanwhile, or not ours to read
 
+proc sessionRuntimeDirs*(): seq[string] =
+  ## This user's private-session runtime directories under /tmp (the
+  ## desktop-environment targets' `guienv-*`, linux-xvfb's `gaxv-*`).
+  let uid = posix.getuid()
+  for kind, path in walkDir("/tmp"):
+    let base = path.extractFilename
+    if kind == pcDir and (base.startsWith("guienv-") or base.startsWith("gaxv-")):
+      var info: posix.Stat
+      if posix.stat(path.cstring, info) == 0 and info.st_uid == uid: result.add path
+
+let runtimeDirsAtStart* = sessionRuntimeDirs()
+  ## What earlier runs left when this one began; a run must add nothing to
+  ## it (`checkLeavesNoProcess`).
+
 proc killProcesses*(processes: seq[(int, string)]) =
   ## SIGKILL each of `processes` (pids from `ownProcesses`).
   for (pid, _) in processes: discard posix.kill(posix.Pid(pid), posix.SIGKILL)
@@ -72,7 +86,9 @@ template checkLeavesNoProcess*() =
   ## Inside a test run after every server was stopped: fails the test when
   ## anything this run started is still running 10 s later (processes that
   ## were signalled may take a moment to exit), naming each, and then kills
-  ## them so a failing run leaves nothing behind either.
+  ## them so a failing run leaves nothing behind either; and when a session
+  ## runtime directory (`sessionRuntimeDirs`) that was not there when the
+  ## run began is left.
   block:
     var left = ownProcesses()
     let deadline = epochTime() + 10
@@ -82,6 +98,13 @@ template checkLeavesNoProcess*() =
     if left.len > 0: checkpoint "still running: " & $left
     check left.len == 0
     killProcesses(left)
+    # Nor a session runtime directory: every target, session and server
+    # removes its own when it stops.
+    var newDirs: seq[string]
+    for d in sessionRuntimeDirs():
+      if d notin runtimeDirsAtStart: newDirs.add d
+    if newDirs.len > 0: checkpoint "left behind: " & $newDirs
+    check newDirs.len == 0
 
 proc blocked*(reason: string): ref AssertionDefect =
   newException(AssertionDefect, "GS5-LINUX BLOCKED: " & reason)
@@ -343,8 +366,11 @@ proc stop*(s: var PortalStack) =
   s.processes.setLen 0
 
 proc freshRuntimeDir*(): string =
-  ## A short private directory under /tmp (sockets must fit `sun_path`).
-  result = createTempDir("gacl-", "", "/tmp")
+  ## A short private directory under /tmp (sockets must fit `sun_path`),
+  ## mode 0700 as a runtime directory must be. It is one of `freshDir`'s,
+  ## so the suite's closing `cleanupFreshDirs` removes it and a live run
+  ## leaves no directory behind.
+  result = freshDir("rt")
   setFilePermissions(result, {fpUserRead, fpUserWrite, fpUserExec})
 
 # ---------------------------------------------------------------------------

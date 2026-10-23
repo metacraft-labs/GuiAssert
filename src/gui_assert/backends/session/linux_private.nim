@@ -91,6 +91,7 @@ import ../../core/[contract, desktop_types, geometry, interfaces]
 import ../../[cancel, state_store]
 import ../capture/linux_common
 import ../tree/[dbus_wire, linux_atspi]
+import ../../desktop_env/runtime_dir
 import ./linux_host
 
 export linux_host.displayAnswers, linux_host.sessionNotRunning
@@ -384,31 +385,6 @@ proc markError(stateDir, id: string, me: int, why: string) =
 # Processes
 # ---------------------------------------------------------------------------
 
-proc readSmallFile(path: string, limit = 1 shl 20): string =
-  ## The start of a /proc file (at most `limit` bytes), "" when it cannot be
-  ## read. Raw reads, no exception on the common "not ours" case: walking
-  ## every process must stay cheap (thousands of processes on a CI host).
-  let fd = posix.open(path.cstring, O_RDONLY or O_CLOEXEC)
-  if fd < 0: return ""
-  defer: discard posix.close(fd)
-  var buf: array[16384, char]
-  while result.len < limit:
-    let n = posix.read(fd, addr buf[0], buf.len)
-    if n <= 0: break
-    let old = result.len
-    result.setLen(old + n)
-    copyMem(addr result[old], addr buf[0], n)
-
-proc environHas(environ, entry: string): bool =
-  ## Whether the NUL-separated `environ` holds exactly `entry`.
-  var i = environ.find(entry)
-  while i >= 0:
-    let starts = i == 0 or environ[i - 1] == '\0'
-    let ends = i + entry.len == environ.len or environ[i + entry.len] == '\0'
-    if starts and ends: return true
-    i = environ.find(entry, i + 1)
-  false
-
 proc environValue(environ, key: string): string =
   ## The value of `key` in the NUL-separated `environ`, "" when unset.
   for kv in environ.split('\0'):
@@ -441,7 +417,7 @@ iterator ownProcessEnvirons(notBefore = 0'i64):
     let pid = parseInt(name)
     let started = processStartTime(pid)
     if started.len == 0 or startTicks(started) < notBefore: continue
-    let environ = readSmallFile(path / "environ")
+    let environ = readProcFile(path / "environ")
     if environ.len > 0: yield (pid, started, environ)
 
 type TaggedScan = object
@@ -475,7 +451,7 @@ proc taggedRuntimeDirs*(tag: string): seq[string] =
   ## `sessionRuntimeDir`, for a host that died before any process named it.)
   scanTagged(tag).dirs
 
-proc removeRuntimeDir*(dir: string)
+proc removeRuntimeDir*(dir: string, waitMs = 2000)
 
 proc sweepTagged*(tag: string, exceptPid = 0, graceMs = sweepGraceMs,
                   keepDirs: openArray[string] = [], hostStartTime = "") =
@@ -514,7 +490,7 @@ proc sweepTagged*(tag: string, exceptPid = 0, graceMs = sweepGraceMs,
       discard kill(Pid(p.pid), SIGKILL)
   for d in late.dirs:
     if d notin keepDirs and d notin dirs: dirs.add d
-  for d in dirs: removeRuntimeDir(d)
+  for d in dirs: removeRuntimeDir(d, waitMs = (if graceMs > 0: 2000 else: 100))
 
 proc waitGone(pid: int, startTime: string, ms: int): bool =
   let startNs = monoNowNs()
@@ -523,7 +499,7 @@ proc waitGone(pid: int, startTime: string, ms: int): bool =
     sleep(20)
   true
 
-proc removeRuntimeDir*(dir: string) =
+proc removeRuntimeDir*(dir: string, waitMs = 2000) =
   ## Remove a session's runtime directory, but only one that is a private
   ## session's: an absolute directory directly under /tmp, named by a
   ## GuiAssert target (`guienv-` for sway and GNOME, `gaxv-` for Xvfb),
@@ -540,19 +516,11 @@ proc removeRuntimeDir*(dir: string) =
   if not (base.startsWith("guienv-") or base.startsWith("gaxv-")): return
   var st: Stat
   if lstat(dir.cstring, st) != 0 or not S_ISDIR(st.st_mode) or st.st_uid != getuid(): return
-  for mount in ["doc", "gvfs"]:
-    if dirExists(dir / mount):
-      for tool in ["fusermount3", "fusermount"]:
-        let exe = findExe(tool)
-        if exe.len > 0:
-          try:
-            let p = startProcess(exe, args = ["-uz", dir / mount], options = {})
-            discard p.waitForExit(2000)
-            p.close()
-          except OSError: discard
-          break
-  try: removeDir(dir)
-  except OSError: discard
+  # The tag sweep has ended the session's processes; the mounts a portal
+  # left below it are detached and the tree removed, retried briefly while
+  # something still holds it (`runtime_dir.removeRuntimeTree`). Clients
+  # started INTO the session are not ended here.
+  removeRuntimeTree(dir, endProcesses = false, waitMs = waitMs)
 
 # ---------------------------------------------------------------------------
 # Tools
@@ -927,8 +895,8 @@ proc abandon(cfg: LinuxPrivateConfig, server: PrivateServer, id: string, pid: in
     discard waitGone(pid, startTime, 1000)
   sweepTagged(tag, graceMs = 0, keepDirs = [cfg.env.getOrDefault("XDG_RUNTIME_DIR", "")],
               hostStartTime = (if pid > 0: startTime else: ""))
-  removeRuntimeDir(runtimeDir)
-  removeRuntimeDir(sessionRuntimeDir(server.name, tag))
+  removeRuntimeDir(runtimeDir, waitMs = 100)
+  removeRuntimeDir(sessionRuntimeDir(server.name, tag), waitMs = 100)
   for p in [sessionRecordPath(cfg.stateDir, id), readyPath(cfg.stateDir, id),
             failedPath(cfg.stateDir, id), logPath(cfg.stateDir, id)]:
     removeQuiet(p)

@@ -84,18 +84,6 @@ var startedSessions: seq[tuple[st, id: string]]
 var launched: seq[int]
   ## Every process a test spawned itself, killed at the end.
 
-proc sessionRuntimeDirs(): seq[string] =
-  ## This user's private-session runtime directories under /tmp (the
-  ## desktop-environment targets' `guienv-*`, linux-xvfb's `gaxv-*`).
-  for kind, path in walkDir("/tmp"):
-    let base = path.extractFilename
-    if kind == pcDir and (base.startsWith("guienv-") or base.startsWith("gaxv-")):
-      var info: Stat
-      if stat(path.cstring, info) == 0 and info.st_uid == getuid(): result.add path
-
-let runtimeDirsAtStart = sessionRuntimeDirs()
-  ## What earlier runs left; this run must add nothing to it.
-
 template mustRun(args: seq[string], env: StringTableRef): JsonNode =
   ## The data of a successful run. A template, so a failed `check` counts
   ## against the test.
@@ -747,9 +735,7 @@ suite "the run's own processes":
       discard runCli(@["session-stop", id], callerEnv(st), timeoutMs = sessionTimeoutMs)
     startedSessions.setLen 0
     terminateAll(launched)
-    checkLeavesNoProcess()
-    # Nor any private session's runtime directory (/tmp/guienv-*, /tmp/gaxv-*).
-    check sessionRuntimeDirs().filterIt(it notin runtimeDirsAtStart) == newSeq[string]()
+    checkLeavesNoProcess()   # nor any session runtime directory
     # No captured content on stderr: the suite's runs wrote nothing there
     # but diagnostics, and none of them a window title.
     for o in outputs: check "Probe " notin o and "Env Form" notin o

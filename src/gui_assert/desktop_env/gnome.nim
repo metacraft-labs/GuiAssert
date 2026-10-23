@@ -40,7 +40,7 @@
 ## with one motion when it is created.
 
 import std/[json, os, osproc, sequtils, strtabs, strutils, tables, tempfiles, times]
-import ../desktop_env, ./session_bus, ./wayland_probe
+import ../desktop_env, ./runtime_dir, ./session_bus, ./wayland_probe
 
 type
   GnomeTarget* = ref object of TargetEnvironment
@@ -49,18 +49,24 @@ type
     presetRuntimeDir: string
       ## The runtime directory `start` uses instead of making one (see
       ## `newGnomeTarget`), "" for a fresh one.
+    endClients: bool
+      ## Whether `stop` ends every process still naming the runtime
+      ## directory (`newGnomeTarget`).
     shell: Process
     bus: SessionBus
     facts: Table[string, Fact]
     probed: bool
     evalSeq: int
 
-proc newGnomeTarget*(width = 1920; height = 1080; runtimeDir = ""): GnomeTarget =
+proc newGnomeTarget*(width = 1920; height = 1080; runtimeDir = "";
+                     endClients = true): GnomeTarget =
   ## A private headless GNOME Shell. `runtimeDir`, when given, is the
   ## directory (an existing one or one to create, mode 0700) the session
-  ## runs in, instead of a fresh `/tmp/guienv-*` (see `newSwayTarget`).
+  ## runs in, instead of a fresh `/tmp/guienv-*`; `endClients` as for
+  ## `newSwayTarget` (GNOME Shell's `ibus-daemon`, for one, outlives the
+  ## shell and writes into the directory after it was removed).
   GnomeTarget(name: "gnome", width: width, height: height, presetRuntimeDir: runtimeDir,
-              sessionEnv: newStringTable(modeCaseSensitive))
+              endClients: endClients, sessionEnv: newStringTable(modeCaseSensitive))
 
 proc attachGnomeTarget*(allowConfigure = false): GnomeTarget =
   ## A target for the GNOME session this process runs in. Nothing is
@@ -254,11 +260,7 @@ method stop*(t: GnomeTarget) =
     t.shell.close()
     t.shell = nil
   if t.runtimeDir.len > 0:
-    for mount in ["doc", "gvfs"]:
-      if dirExists(t.runtimeDir / mount):
-        discard execCmdEx(quoteShellCommand(["fusermount", "-uz", t.runtimeDir / mount]))
-    try: removeDir(t.runtimeDir)
-    except OSError: discard
+    removeRuntimeTree(t.runtimeDir, endProcesses = t.endClients)
   t.started = false
 
 proc requireStarted(t: GnomeTarget; operation: string) =

@@ -68,8 +68,10 @@ proc startWayvnc(env: OrderedTable[string, string], runtimeDir: string):
 
 proc swayHostStart(spec: HostSpec): ServerRun =
   ## In the session host: the target, then wayvnc when asked.
+  # The host ends the session's processes by its tag (`linux_private`);
+  # clients started into the session are not the target's to end.
   let t = newSwayTarget(spec.width, spec.height, scale = spec.scale,
-                        runtimeDir = spec.runtimeDir)
+                        runtimeDir = spec.runtimeDir, endClients = false)
   # The session's own plumbing (the settings portal's GTK backend, the
   # bar) does not register on the AT-SPI bus: `apps` of a fresh session then
   # lists what was started into it, not the session's machinery.

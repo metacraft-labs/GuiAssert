@@ -18,7 +18,7 @@
 
 import std/[json, os, osproc, streams, strtabs, strutils, tables, tempfiles, times]
 from std/posix import nil
-import ../desktop_env, ./helpers, ./session_bus, ./wayland_probe
+import ../desktop_env, ./helpers, ./runtime_dir, ./session_bus, ./wayland_probe
 
 type
   SwayTarget* = ref object of TargetEnvironment
@@ -34,6 +34,9 @@ type
     presetRuntimeDir: string
       ## The runtime directory `start` uses instead of making one (see
       ## `newSwayTarget`), "" for a fresh one.
+    endClients: bool
+      ## Whether `stop` ends every process still naming the runtime
+      ## directory (`newSwayTarget`).
     swaySock: string
     sway: Process
     pointer: Process
@@ -43,15 +46,19 @@ type
 
 proc newSwayTarget*(width = 1920; height = 1080;
                     floatingAppIds: seq[string] = @[]; scale = 1.0;
-                    runtimeDir = ""): SwayTarget =
+                    runtimeDir = ""; endClients = true): SwayTarget =
   ## A private headless sway. `runtimeDir`, when given, is the directory
   ## (an existing one or one to create, mode 0700) the session runs in,
   ## instead of a fresh `/tmp/guienv-*`: a caller that must be able to
   ## remove it after a crash names it before anything is started in it.
-  ## `stop` removes it either way.
+  ## `stop` removes it either way (`runtime_dir.removeRuntimeTree`), and
+  ## with `endClients` first ends every process of this user that still
+  ## names it as its `XDG_RUNTIME_DIR` (the session's own helpers and the
+  ## clients started into it); a caller that ends the session's processes
+  ## itself, by its own rule, passes false.
   SwayTarget(name: "sway", width: width, height: height, scale: scale,
              floatingAppIds: floatingAppIds, presetRuntimeDir: runtimeDir,
-             sessionEnv: newStringTable(modeCaseSensitive))
+             endClients: endClients, sessionEnv: newStringTable(modeCaseSensitive))
 
 proc outputScale(t: SwayTarget): float =
   ## `scale`, or 1 for a target built without one (`attachSwayTarget`).
@@ -295,8 +302,7 @@ method stop*(t: SwayTarget) =
     t.sway.close()
     t.sway = nil
   if t.runtimeDir.len > 0:
-    try: removeDir(t.runtimeDir)
-    except OSError: discard
+    removeRuntimeTree(t.runtimeDir, endProcesses = t.endClients)
   t.started = false
 
 proc pointerCommand(t: SwayTarget; cmd, operation: string) =

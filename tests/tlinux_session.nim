@@ -14,6 +14,8 @@
 ##   an abstract one, and a path nothing listens on), and `linux-host` with
 ##   no display server: session-info `error` / `no-display-server`, `apps`
 ##   exit 4 / `session-not-running` with `details.feature` null;
+## * the runtime-directory removal of the desktop-environment targets
+##   (`runtime_dir`: the processes naming it ended, no link followed);
 ## * reconciliation of a recorded session against a real live and a real
 ##   dead process, the guarded runtime-directory removal, and the tag sweep
 ##   against real `sleep` processes (only the tagged one is ended);
@@ -34,6 +36,7 @@ import ../src/gui_assert/backends/capture/linux_common
 import ../src/gui_assert/backends/tree/linux_atspi
 import ../src/gui_assert/backends/session/[linux_host, linux_private, linux_sway, linux_xvfb]
 import ../src/gui_assert/backends/session/linux_gnome as session_gnome
+import ../src/gui_assert/desktop_env/runtime_dir
 
 proc ordered(pairs: openArray[(string, string)]): OrderedTable[string, string] =
   for (k, v) in pairs: result[k] = v
@@ -310,6 +313,60 @@ when defined(linux):
       check stopPrivate(st, "lost", false).state == ssStopped
       check not dirExists(rt)
       check not fileExists(sessionRecordPath(st, "lost"))
+
+    test "test_runtime_tree_removal_ends_its_clients_and_follows_no_link":
+      # desktop_env/runtime_dir: a target's stop ends the processes naming
+      # its runtime directory (a late writer such as GNOME Shell's
+      # ibus-daemon would recreate it), not one naming another directory,
+      # and removes the tree without following a link out of it.
+      let rt = createTempDir("guienv-", "", "/tmp")
+      let other = createTempDir("gs10-other-", "", "/tmp")
+      defer:
+        removeDir(rt)
+        removeDir(other)
+      writeFile(other / "keep", "x")
+      createSymlink(other, rt / "link")
+      createDir(rt / "config" / "ibus")
+      var named = newStringTable(modeCaseSensitive)
+      for k, v in envPairs(): named[k] = v
+      named["XDG_RUNTIME_DIR"] = rt
+      var unrelated = newStringTable(modeCaseSensitive)
+      for k, v in envPairs(): unrelated[k] = v
+      unrelated["XDG_RUNTIME_DIR"] = other
+      let a = startProcess("/bin/sh", args = ["-c", "exec sleep 60"], env = named)
+      let b = startProcess("/bin/sh", args = ["-c", "exec sleep 60"], env = unrelated)
+      defer:
+        for p in [a, b]:
+          if p.running: p.kill()
+          discard p.waitForExit()
+          p.close()
+      var found: seq[int]
+      for _ in 1 .. 200:
+        found = processesNaming(rt).mapIt(it.pid)
+        if a.processID in found: break
+        sleep(10)
+      check found == @[a.processID]
+      removeRuntimeTree(rt)
+      discard a.waitForExit(2000)
+      check not a.running
+      check b.running
+      check not dirExists(rt)
+      check fileExists(other / "keep")
+      # Without endProcesses (the session host's rule: its tag sweep decides)
+      # a process naming it is left alone.
+      let rt2 = createTempDir("guienv-", "", "/tmp")
+      defer: removeDir(rt2)
+      named["XDG_RUNTIME_DIR"] = rt2
+      let c = startProcess("/bin/sh", args = ["-c", "exec sleep 60"], env = named)
+      defer:
+        if c.running: c.kill()
+        discard c.waitForExit()
+        c.close()
+      for _ in 1 .. 200:
+        if c.processID in processesNaming(rt2).mapIt(it.pid): break
+        sleep(10)
+      removeRuntimeTree(rt2, endProcesses = false)
+      check c.running and not dirExists(rt2)
 
     test "test_tag_sweep_ends_only_the_tagged":
       let tag = newTag()

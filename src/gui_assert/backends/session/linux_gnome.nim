@@ -61,7 +61,9 @@ proc gnomeHostStart(spec: HostSpec): ServerRun =
   ## In the session host: the target, then PipeWire when it is installed.
   if getEnv("GUI_ASSERT_GNOME_SHELL").len == 0:
     putEnv("GUI_ASSERT_GNOME_SHELL", gnomeShellPath(processEnv()))
-  let t = newGnomeTarget(spec.width, spec.height, runtimeDir = spec.runtimeDir)
+  # As in linux_sway: the host ends the session's processes by its tag.
+  let t = newGnomeTarget(spec.width, spec.height, runtimeDir = spec.runtimeDir,
+                         endClients = false)
   try:
     t.start()
   except CatchableError:
