@@ -4,9 +4,9 @@
   "platform": "linux",
   "arch": "x86_64",
   "kernel": "6.18.55",
-  "measuredAt": "2026-10-24T02:08:03Z",
+  "measuredAt": "2026-10-24T06:58:51Z",
   "agentHarbor": {
-    "commit": "v0.6.16-403-g1f0e7697a4"
+    "commit": "v0.6.16-446-g30fa43d34a"
   },
   "guiassert": {
     "guiassert": "0.1.0",
@@ -67,7 +67,7 @@
         {
           "check": "session new reports the session ready on the GuiAssert substrate",
           "ok": true,
-          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16ba821ab\"}"
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16cb221ab\"}"
         },
         {
           "check": "GuiAssert runs it: running, on linux-sway, 1280x800",
@@ -77,7 +77,7 @@
         {
           "check": "its lifecycle host (Agent Harbor's policy) runs",
           "ok": true,
-          "observed": "pid 2990335"
+          "observed": "pid 218192"
         },
         {
           "check": "displayHandle comes from Session.env",
@@ -87,7 +87,7 @@
         {
           "check": "the same name again is refused (negative control)",
           "ok": true,
-          "observed": "Error: desktop session name is already in use: parity-sway-2915161"
+          "observed": "Error: desktop session name is already in use: parity-sway-217280"
         },
         {
           "check": "and starts no second GuiAssert session",
@@ -122,7 +122,7 @@
         {
           "check": "the name resolves to the session",
           "ok": true,
-          "observed": "{\"id\":\"d-01a16ba821ab\",\"state\":\"ready\",\"degradedFeatures\":null}"
+          "observed": "{\"id\":\"d-01a16cb221ab\",\"state\":\"ready\",\"degradedFeatures\":null}"
         },
         {
           "check": "an unknown session is not found, exit 69 (negative control)",
@@ -152,7 +152,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "3369 ms"
+          "observed": "3026 ms"
         }
       ],
       "gaps": []
@@ -193,7 +193,7 @@
         },
         {
           "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
-          "observed": "[\"app\",\"window\"]",
+          "observed": "[\"app\",\"app_id\",\"app_name\",\"args\",\"launch_method\",\"launched\",\"pid\",\"window\"]",
           "disposition": "native-specific"
         }
       ]
@@ -549,7 +549,7 @@
         {
           "check": "the MP4 has the display's width and at least 2 s",
           "ok": true,
-          "observed": "1280 px, 3.100000 s"
+          "observed": "1280 px, 3.000000 s"
         },
         {
           "check": "the manifest's duration is the measured one",
@@ -614,7 +614,7 @@
         {
           "check": "the MP4 is finalized: the display's width and about 3 s",
           "ok": true,
-          "observed": "1280 px, 3.300000 s"
+          "observed": "1280 px, 3.500000 s"
         },
         {
           "check": "the manifest's duration is the measured one",
@@ -649,7 +649,7 @@
         {
           "check": "the script reports success",
           "ok": true,
-          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-3VGBJio5u8/g7-artifacts/g7.png\"}"
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-5EMHnRprqf/g7-artifacts/g7.png\"}"
         },
         {
           "check": "its click signed in once more",
@@ -699,12 +699,12 @@
         {
           "check": "every character was its own keystroke, typos corrected, text never echoed",
           "ok": true,
-          "observed": "{\"length\":10,\"keystrokes\":11,\"typos\":1}"
+          "observed": "{\"length\":10,\"keystrokes\":16,\"typos\":6}"
         },
         {
           "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
           "ok": true,
-          "observed": "1458 ms"
+          "observed": "2649 ms"
         },
         {
           "check": "the entry holds exactly the text",
@@ -759,7 +759,7 @@
         {
           "check": "it was one drag through a curved path",
           "ok": true,
-          "observed": "45"
+          "observed": "30"
         },
         {
           "check": "the drag moves the slider down",
@@ -859,7 +859,7 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "guienv-ff0de48921c013fc"
+          "observed": "guienv-36f8fa9e5b86e574"
         }
       ],
       "gaps": []
@@ -874,7 +874,7 @@
         {
           "check": "session new reports the session ready on the GuiAssert substrate",
           "ok": true,
-          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16ba8a513\"}"
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16cb2b63e\"}"
         },
         {
           "check": "GuiAssert runs it: running, on linux-xvfb, 1280x800",
@@ -884,7 +884,7 @@
         {
           "check": "its lifecycle host (Agent Harbor's policy) runs",
           "ok": true,
-          "observed": "pid 2999762"
+          "observed": "pid 230682"
         },
         {
           "check": "displayHandle comes from Session.env",
@@ -894,7 +894,7 @@
         {
           "check": "the same name again is refused (negative control)",
           "ok": true,
-          "observed": "Error: desktop session name is already in use: parity-xvfb-2915161"
+          "observed": "Error: desktop session name is already in use: parity-xvfb-217280"
         },
         {
           "check": "and starts no second GuiAssert session",
@@ -929,7 +929,7 @@
         {
           "check": "the name resolves to the session",
           "ok": true,
-          "observed": "{\"id\":\"d-01a16ba8a513\",\"state\":\"ready\",\"degradedFeatures\":null}"
+          "observed": "{\"id\":\"d-01a16cb2b63e\",\"state\":\"ready\",\"degradedFeatures\":null}"
         },
         {
           "check": "an unknown session is not found, exit 69 (negative control)",
@@ -959,7 +959,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "3222 ms"
+          "observed": "3006 ms"
         }
       ],
       "gaps": []
@@ -1000,7 +1000,7 @@
         },
         {
           "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
-          "observed": "[\"app\",\"window\"]",
+          "observed": "[\"app\",\"app_id\",\"app_name\",\"args\",\"launch_method\",\"launched\",\"pid\",\"window\"]",
           "disposition": "native-specific"
         }
       ]
@@ -1456,7 +1456,7 @@
         {
           "check": "the script reports success",
           "ok": true,
-          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-3VGBJio5u8/g7-artifacts/g7.png\"}"
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-5EMHnRprqf/g7-artifacts/g7.png\"}"
         },
         {
           "check": "its click signed in once more",
@@ -1506,12 +1506,12 @@
         {
           "check": "every character was its own keystroke, typos corrected, text never echoed",
           "ok": true,
-          "observed": "{\"length\":10,\"keystrokes\":12,\"typos\":2}"
+          "observed": "{\"length\":10,\"keystrokes\":14,\"typos\":4}"
         },
         {
           "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
           "ok": true,
-          "observed": "1824 ms"
+          "observed": "2172 ms"
         },
         {
           "check": "the entry holds exactly the text",
@@ -1666,7 +1666,7 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "gaxv-a46565c7a1a06b18"
+          "observed": "gaxv-dba7152929d69266"
         }
       ],
       "gaps": []
@@ -1759,7 +1759,7 @@
       "result": "skip",
       "checks": [],
       "gaps": [],
-      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+      "observed": "SKIP: ah desktop get-text --fallback --trace is not implemented (on either substrate)"
     }
   ]
 }
