@@ -1,12 +1,12 @@
 {
   "schema": "ah-guiassert-parity/1",
-  "milestone": "GS13 (GuiAssert) / GA5a input",
+  "milestone": "GS13/GS15 (GuiAssert) / GA5a",
   "platform": "linux",
   "arch": "x86_64",
   "kernel": "6.18.55",
-  "measuredAt": "2026-10-23T23:10:56Z",
+  "measuredAt": "2026-10-24T02:08:03Z",
   "agentHarbor": {
-    "commit": "v0.6.16-362-gdf7083c12b"
+    "commit": "v0.6.16-403-g1f0e7697a4"
   },
   "guiassert": {
     "guiassert": "0.1.0",
@@ -59,6 +59,81 @@
   "rows": [
     {
       "session": "linux-sway",
+      "id": "G1",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session new",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session new reports the session ready on the GuiAssert substrate",
+          "ok": true,
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16ba821ab\"}"
+        },
+        {
+          "check": "GuiAssert runs it: running, on linux-sway, 1280x800",
+          "ok": true,
+          "observed": "{\"state\":\"running\",\"backend\":\"linux-sway\",\"d\":[0,0,1280,800]}"
+        },
+        {
+          "check": "its lifecycle host (Agent Harbor's policy) runs",
+          "ok": true,
+          "observed": "pid 2990335"
+        },
+        {
+          "check": "displayHandle comes from Session.env",
+          "ok": true,
+          "observed": "wayland-1"
+        },
+        {
+          "check": "the same name again is refused (negative control)",
+          "ok": true,
+          "observed": "Error: desktop session name is already in use: parity-sway-2915161"
+        },
+        {
+          "check": "and starts no second GuiAssert session",
+          "ok": true,
+          "observed": "2 -> 2"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list and info",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session list --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the list has the session, ready, joined with GuiAssert's record",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session info by friendly name succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the name resolves to the session",
+          "ok": true,
+          "observed": "{\"id\":\"d-01a16ba821ab\",\"state\":\"ready\",\"degradedFeatures\":null}"
+        },
+        {
+          "check": "an unknown session is not found, exit 69 (negative control)",
+          "ok": true,
+          "observed": "exit 69"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
       "id": "A7",
       "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
       "scenario": "wait for a timer-driven dialog",
@@ -77,7 +152,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "2649 ms"
+          "observed": "3369 ms"
         }
       ],
       "gaps": []
@@ -501,213 +576,273 @@
     },
     {
       "session": "linux-sway",
-      "id": "G1",
-      "consumerScenario": "-",
-      "scenario": "session new",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session new is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-sway",
-      "id": "G2",
-      "consumerScenario": "-",
-      "scenario": "session list",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session list is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-sway",
-      "id": "G3",
-      "consumerScenario": "-",
-      "scenario": "session kill",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session kill is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-sway",
       "id": "G4",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
       "scenario": "record-start",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "record-stop with nothing recording is refused (negative control)",
           "ok": true,
-          "observed": "Error: `ah desktop record-start` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+          "observed": ""
+        },
+        {
+          "check": "record-start reports a recording id in the session",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it as recording",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "record-start is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "G5",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
       "scenario": "record-stop",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "record-stop succeeds",
           "ok": true,
-          "observed": "Error: `ah desktop record-stop` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nativ"
+          "observed": ""
+        },
+        {
+          "check": "the MP4 is finalized: the display's width and about 3 s",
+          "ok": true,
+          "observed": "1280 px, 3.300000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it stopped",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "record-stop is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-sway",
-      "id": "G6",
-      "consumerScenario": "-",
-      "scenario": "capture-pass",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop capture-pass` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "capture-pass is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "G7",
       "consumerScenario": "-",
       "scenario": "run-script",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "the status does not read \"Status: Logged in 4\" before the script (negative control)",
           "ok": true,
-          "observed": "Error: `ah desktop run-script` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native"
+          "observed": ""
+        },
+        {
+          "check": "run-script succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the script reports success",
+          "ok": true,
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-3VGBJio5u8/g7-artifacts/g7.png\"}"
+        },
+        {
+          "check": "its click signed in once more",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its screenshot is the display (ffprobe)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an XPath query is refused with a clear error (negative control)",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "run-script is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "G8",
       "consumerScenario": "-",
       "scenario": "type --cadence",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "clear the entry",
           "ok": true,
-          "observed": "Error: --cadence is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "an invalid --cadence is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "and typed nothing",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type --cadence succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every character was its own keystroke, typos corrected, text never echoed",
+          "ok": true,
+          "observed": "{\"length\":10,\"keystrokes\":11,\"typos\":1}"
+        },
+        {
+          "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
+          "ok": true,
+          "observed": "1458 ms"
+        },
+        {
+          "check": "the entry holds exactly the text",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "type --cadence is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "G9",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
       "scenario": "click --motion",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "the status does not read \"Status: Logged in 5\" before the click (negative control)",
           "ok": true,
-          "observed": "Error: --motion is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "click --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the curved approach ends in the click on Login",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "click --motion is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-sway",
       "id": "G10",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
       "scenario": "drag --motion",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "no low slider status before the drag (negative control)",
           "ok": true,
-          "observed": "Error: --motion is a curved `drag --path` composed by Agent Harbor; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "drag --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "it was one drag through a curved path",
+          "ok": true,
+          "observed": "45"
+        },
+        {
+          "check": "the drag moves the slider down",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "pass",
+      "checks": [
         {
-          "assertion": "drag --motion is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
+          "check": "the focused window is smaller than the display, so a display capture fails the size check (precondition)",
+          "ok": true,
+          "observed": "640x800, beside a second window"
+        },
+        {
+          "check": "capture-pass succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "one screen, titled as the focused window",
+          "ok": true,
+          "observed": "[\"Parity Spacer\"]"
+        },
+        {
+          "check": "the capture is the focused window's size (ffprobe)",
+          "ok": true,
+          "observed": "640x800 vs 640x800"
+        },
+        {
+          "check": "the manifest names it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a session that does not exist is refused as display-gone, storing nothing (negative control)",
+          "ok": true,
+          "observed": ""
         }
-      ]
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G3",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session kill",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the kill GuiAssert runs the session (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "ah desktop session kill succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "Agent Harbor no longer lists it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its lifecycle host has exited",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
     },
     {
       "session": "linux-sway",
@@ -717,16 +852,6 @@
       "result": "pass",
       "checks": [
         {
-          "check": "session-stop reports the session stopped",
-          "ok": true,
-          "observed": ""
-        },
-        {
-          "check": "session-info no longer finds it (exit 3)",
-          "ok": true,
-          "observed": "exit 3"
-        },
-        {
           "check": "every process launched into the session is gone",
           "ok": true,
           "observed": ""
@@ -734,7 +859,82 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "guienv-09a2b9519a6615a1"
+          "observed": "guienv-ff0de48921c013fc"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G1",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session new",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session new reports the session ready on the GuiAssert substrate",
+          "ok": true,
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16ba8a513\"}"
+        },
+        {
+          "check": "GuiAssert runs it: running, on linux-xvfb, 1280x800",
+          "ok": true,
+          "observed": "{\"state\":\"running\",\"backend\":\"linux-xvfb\",\"d\":[0,0,1280,800]}"
+        },
+        {
+          "check": "its lifecycle host (Agent Harbor's policy) runs",
+          "ok": true,
+          "observed": "pid 2999762"
+        },
+        {
+          "check": "displayHandle comes from Session.env",
+          "ok": true,
+          "observed": ":0"
+        },
+        {
+          "check": "the same name again is refused (negative control)",
+          "ok": true,
+          "observed": "Error: desktop session name is already in use: parity-xvfb-2915161"
+        },
+        {
+          "check": "and starts no second GuiAssert session",
+          "ok": true,
+          "observed": "2 -> 2"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list and info",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session list --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the list has the session, ready, joined with GuiAssert's record",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session info by friendly name succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the name resolves to the session",
+          "ok": true,
+          "observed": "{\"id\":\"d-01a16ba8a513\",\"state\":\"ready\",\"degradedFeatures\":null}"
+        },
+        {
+          "check": "an unknown session is not found, exit 69 (negative control)",
+          "ok": true,
+          "observed": "exit 69"
         }
       ],
       "gaps": []
@@ -759,7 +959,7 @@
         {
           "check": "it resolves after the timer",
           "ok": true,
-          "observed": "3282 ms"
+          "observed": "3222 ms"
         }
       ],
       "gaps": []
@@ -1183,213 +1383,273 @@
     },
     {
       "session": "linux-xvfb",
-      "id": "G1",
-      "consumerScenario": "-",
-      "scenario": "session new",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session new is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-xvfb",
-      "id": "G2",
-      "consumerScenario": "-",
-      "scenario": "session list",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session list is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-xvfb",
-      "id": "G3",
-      "consumerScenario": "-",
-      "scenario": "session kill",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop session` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native` t"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "session kill is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-xvfb",
       "id": "G4",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
       "scenario": "record-start",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "record-stop with nothing recording is refused (negative control)",
           "ok": true,
-          "observed": "Error: `ah desktop record-start` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
+          "observed": ""
+        },
+        {
+          "check": "record-start reports a recording id in the session",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it as recording",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "record-start is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "G5",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
       "scenario": "record-stop",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "record-stop succeeds",
           "ok": true,
-          "observed": "Error: `ah desktop record-stop` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nativ"
+          "observed": ""
+        },
+        {
+          "check": "the MP4 is finalized: the display's width and about 3 s",
+          "ok": true,
+          "observed": "1280 px, 3.300000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it stopped",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "record-stop is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
-    },
-    {
-      "session": "linux-xvfb",
-      "id": "G6",
-      "consumerScenario": "-",
-      "scenario": "capture-pass",
-      "result": "gap",
-      "checks": [
-        {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
-          "ok": true,
-          "observed": "Error: `ah desktop capture-pass` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate nati"
-        }
-      ],
-      "gaps": [
-        {
-          "assertion": "capture-pass is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "G7",
       "consumerScenario": "-",
       "scenario": "run-script",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "the status does not read \"Status: Logged in 4\" before the script (negative control)",
           "ok": true,
-          "observed": "Error: `ah desktop run-script` is not routed through the GuiAssert desktop substrate yet (specs/Computer-Use/GuiAssert-Substrate.md); select `--substrate native"
+          "observed": ""
+        },
+        {
+          "check": "run-script succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the script reports success",
+          "ok": true,
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-3VGBJio5u8/g7-artifacts/g7.png\"}"
+        },
+        {
+          "check": "its click signed in once more",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its screenshot is the display (ffprobe)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an XPath query is refused with a clear error (negative control)",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "run-script is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "G8",
       "consumerScenario": "-",
       "scenario": "type --cadence",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "clear the entry",
           "ok": true,
-          "observed": "Error: --cadence is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "an invalid --cadence is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "and typed nothing",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type --cadence succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every character was its own keystroke, typos corrected, text never echoed",
+          "ok": true,
+          "observed": "{\"length\":10,\"keystrokes\":12,\"typos\":2}"
+        },
+        {
+          "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
+          "ok": true,
+          "observed": "1824 ms"
+        },
+        {
+          "check": "the entry holds exactly the text",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "type --cadence is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "G9",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
       "scenario": "click --motion",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "the status does not read \"Status: Logged in 5\" before the click (negative control)",
           "ok": true,
-          "observed": "Error: --motion is composed from per-step requests and needs the serve transport; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "click --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the curved approach ends in the click on Login",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
-        {
-          "assertion": "click --motion is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
-        }
-      ]
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
       "id": "G10",
-      "consumerScenario": "-",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
       "scenario": "drag --motion",
-      "result": "gap",
+      "result": "pass",
       "checks": [
         {
-          "check": "refused under the GuiAssert substrate with the not-routed error",
+          "check": "no low slider status before the drag (negative control)",
           "ok": true,
-          "observed": "Error: --motion is a curved `drag --path` composed by Agent Harbor; it is not routed through the GuiAssert substrate yet"
+          "observed": ""
+        },
+        {
+          "check": "drag --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "it was one drag through a curved path",
+          "ok": true,
+          "observed": "22"
+        },
+        {
+          "check": "the drag moves the slider down",
+          "ok": true,
+          "observed": ""
         }
       ],
-      "gaps": [
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "pass",
+      "checks": [
         {
-          "assertion": "drag --motion is not routed through the GuiAssert substrate",
-          "observed": "",
-          "disposition": "open"
+          "check": "the focused window is smaller than the display, so a display capture fails the size check (precondition)",
+          "ok": true,
+          "observed": "800x638"
+        },
+        {
+          "check": "capture-pass succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "one screen, titled as the focused window",
+          "ok": true,
+          "observed": "[\"Agent Harbor Test Fixture\"]"
+        },
+        {
+          "check": "the capture is the focused window's size (ffprobe)",
+          "ok": true,
+          "observed": "800x638 vs 800x638"
+        },
+        {
+          "check": "the manifest names it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a session that does not exist is refused as display-gone, storing nothing (negative control)",
+          "ok": true,
+          "observed": ""
         }
-      ]
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G3",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session kill",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the kill GuiAssert runs the session (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "ah desktop session kill succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "Agent Harbor no longer lists it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its lifecycle host has exited",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
     },
     {
       "session": "linux-xvfb",
@@ -1399,16 +1659,6 @@
       "result": "pass",
       "checks": [
         {
-          "check": "session-stop reports the session stopped",
-          "ok": true,
-          "observed": ""
-        },
-        {
-          "check": "session-info no longer finds it (exit 3)",
-          "ok": true,
-          "observed": "exit 3"
-        },
-        {
           "check": "every process launched into the session is gone",
           "ok": true,
           "observed": ""
@@ -1416,7 +1666,7 @@
         {
           "check": "the session's runtime directory is gone",
           "ok": true,
-          "observed": "gaxv-f89b4a0bd8615bf6"
+          "observed": "gaxv-a46565c7a1a06b18"
         }
       ],
       "gaps": []

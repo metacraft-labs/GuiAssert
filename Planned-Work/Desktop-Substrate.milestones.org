@@ -3664,6 +3664,36 @@
       recordings, capture-pass, run-script, cadence, the restated
       native-specific assertions, the flip itself) are planned in Agent
       Harbor GA5a.
+      Steps 2–4 of that plan (Agent Harbor GA5a steps 1–3: the session
+      lifecycle, recordings by id, capture passes, scripts and human
+      cadence) implemented 2026-10-24 by companion/linux and reviewed the
+      same day: the consumer leg's former gap rows G1–G10 are checked rows,
+      and all 40 GuiAssert rows pass on linux-sway and linux-xvfb with the
+      pinned package (GuiAssert agents 09ce0ce; evidence
+      tests/parity/evidence/linux-consumer-substrate.json, refreshed at
+      Agent Harbor 1f0e7697a4). At review the capture-pass row (G6) gained
+      a precondition that the focused window is smaller than the display
+      (on linux-sway a second window is opened so the tiles are half the
+      output), so a capture of the whole display now fails it on both
+      sessions. Agent-owned sessions (=--lifetime owner=) are not routed yet
+      on the consumer side and block the default flip there. No
+      GuiAssert change was needed: Agent Harbor drives =session-start= /
+      =session-list= / =session-info= / =session-stop=, =record-start= /
+      =record-stop= / =recordings=, =windows=, =screenshot --region=,
+      =type --stdin= per character, =move=, and =drag --path --duration-ms=
+      as specified. Consumer notes: Agent Harbor reads =Recording.source.session=
+      to find a session's recording in progress, and treats =session-stop=
+      not-found as already stopped.
+    - [ ] Spec request (c) for substrate/macos, from the GS15 Linux work (companion/linux,
+      2026-10-24): a read-only pointer-position query (for example
+      =pointer= → ={"at": [x, y]}= in desktop coordinates, per session).
+      Agent Harbor composes human-cadence pointer paths that must start where
+      the pointer is; GuiAssert reports where input was delivered but not
+      where the pointer is now, so Agent Harbor starts a path at the last
+      point it delivered itself (remembered per session) or at the primary
+      display's centre, which jumps the pointer when anything else moved it.
+      Not blocking: the cadence is routed without it. Owner of the contract:
+      substrate/macos (§7.5 is theirs to change).
     - [ ] Windows default flipped (after GS14).
 
 *** Verification
