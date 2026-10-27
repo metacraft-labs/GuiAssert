@@ -8,3 +8,4 @@ tserve_protocol
 tcontract_decisions
 tvision_verbs
 tocr_verbs
+tsecret_frames

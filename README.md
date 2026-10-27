@@ -84,6 +84,22 @@ printf '%s\n' '{"v":1,"id":"r1","op":"run","argv":["displays"]}' \
 just test-contract                 # the contract suite, against both binaries
 ```
 
+Contract 1.1 (GS17) adds what an unattended sign-in needs: `session-start
+--vnc-socket` serves a private session over VNC on an owner-only Unix socket
+(`Session.vncSocket`; a person watches or takes over through
+`ssh -L <port>:<socket> <host>` and a viewer), and `screenshot --secret-stdin`
+/ `ocr … --secret-stdin` keep a frame or answer its words only when the secret
+given on stdin is not legible in it (else exit 5 / `secret-visible`).
+
+Another flake consumes the program as `packages.<system>.guiassert` of this
+flake, pinned by revision (on Linux it carries Xvfb, Openbox, x11vnc, wayvnc,
+sway and tesseract on its own PATH):
+
+```nix
+inputs.gui-assert.url = "github:metacraft-labs/GuiAssert/<rev>";
+# devShell: packages = [ inputs.gui-assert.packages.${system}.guiassert ];
+```
+
 `guiassert-fixture` (built `-d:guiassertMinimal`) contains only the pure core
 and the fixture backends; consumers' contract tests run against it. The
 platform backends (spec §4) answer `backend-unavailable` / `not-implemented`

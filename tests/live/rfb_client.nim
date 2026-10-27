@@ -1,7 +1,8 @@
 ## A minimal RFB (VNC) client for the session live suite: it reads one whole
 ## framebuffer from a server, so a test can check that a session's VNC
 ## endpoint serves THAT session's pixels (GS10,
-## test_session_vnc_endpoint_is_loopback_only).
+## test_session_vnc_endpoint_is_loopback_only), over TCP or over an
+## owner-only Unix socket (GS17, test_session_vnc_socket_is_owner_only).
 ##
 ## The protocol is RFC 6143 (https://www.rfc-editor.org/rfc/rfc6143): the
 ## ProtocolVersion handshake at 3.8 (§7.1.1), security type None (§7.1.2,
@@ -49,15 +50,42 @@ proc be32(v: int): string =
   char((v shr 24) and 0xFF) & char((v shr 16) and 0xFF) & char((v shr 8) and 0xFF) &
     char(v and 0xFF)
 
+proc put(s: Socket, data: string) =
+  ## Send `data`, failing when the server has gone. Not `net.send`: on a
+  ## Unix socket whose peer closed it retries EPIPE forever (measured
+  ## 2026-10-27, Nim 2.2.4, against an x11vnc that refused the client), so
+  ## a refusing server would hang the test instead of failing it.
+  if not s.trySend(data): fail("the server closed the connection")
+
+proc readFrameOn(s: Socket, deadline: float): RfbFrame
+
 proc readFrame*(host: string, port: int, timeoutMs = 15_000): RfbFrame =
   ## One whole framebuffer of the server at `host`:`port`.
   let deadline = epochTime() + timeoutMs / 1000
   let s = newSocket()
   try:
     s.connect(host, Port(port), timeoutMs)
+    result = readFrameOn(s, deadline)
+  finally:
+    s.close()
+
+proc readFrameUnix*(path: string, timeoutMs = 15_000): RfbFrame =
+  ## One whole framebuffer of the server on the Unix socket `path` (an
+  ## owner-only `--vnc-socket` endpoint, GS17).
+  let deadline = epochTime() + timeoutMs / 1000
+  let s = newSocket(Domain.AF_UNIX, SockType.SOCK_STREAM, Protocol.IPPROTO_IP)
+  try:
+    s.connectUnix(path)
+    result = readFrameOn(s, deadline)
+  finally:
+    s.close()
+
+proc readFrameOn(s: Socket, deadline: float): RfbFrame =
+  ## The handshake and one framebuffer over the connected socket `s`.
+  block:
     let version = s.readExact(12, deadline)
     if not version.startsWith("RFB 003."): fail("not an RFB server: " & version.escape)
-    s.send("RFB 003.008\n")
+    s.put("RFB 003.008\n")
     let n = u8(s.readExact(1, deadline), 0)
     if n == 0:
       let reason = s.readExact(4, deadline)
@@ -65,9 +93,9 @@ proc readFrame*(host: string, port: int, timeoutMs = 15_000): RfbFrame =
            s.readExact(min(u32(reason, 0), 4096), deadline))
     let types = s.readExact(n, deadline)
     if '\x01' notin types: fail("the server offers no None security type")
-    s.send("\x01")
+    s.put("\x01")
     if u32(s.readExact(4, deadline), 0) != 0: fail("the server failed the None security")
-    s.send("\x01")                                   # ClientInit: shared
+    s.put("\x01")                                   # ClientInit: shared
     let init = s.readExact(24, deadline)
     result.width = u16(init, 0)
     result.height = u16(init, 2)
@@ -77,10 +105,10 @@ proc readFrame*(host: string, port: int, timeoutMs = 15_000): RfbFrame =
     result.name = s.readExact(min(u32(init, 20), 4096), deadline)
     # 32 bpp, depth 24, little-endian, true colour, 8 bits per channel, red
     # at bit 16, green at 8, blue at 0: pixels arrive as B, G, R, X.
-    s.send("\x00\x00\x00\x00" & "\x20\x18\x00\x01" & be16(255) & be16(255) & be16(255) &
+    s.put("\x00\x00\x00\x00" & "\x20\x18\x00\x01" & be16(255) & be16(255) & be16(255) &
            "\x10\x08\x00" & "\x00\x00\x00")
-    s.send("\x02\x00" & be16(1) & be32(0))          # SetEncodings: Raw
-    s.send("\x03\x00" & be16(0) & be16(0) & be16(result.width) & be16(result.height))
+    s.put("\x02\x00" & be16(1) & be32(0))          # SetEncodings: Raw
+    s.put("\x03\x00" & be16(0) & be16(0) & be16(result.width) & be16(result.height))
     result.rgb = newSeq[uint8](result.width * result.height * 3)
     var covered = 0
     let total = result.width * result.height
@@ -114,8 +142,6 @@ proc readFrame*(host: string, port: int, timeoutMs = 15_000): RfbFrame =
         let head = s.readExact(7, deadline)
         discard s.readExact(min(u32(head, 3), 1 shl 20), deadline)
       else: fail("unknown server message " & $kind)
-  finally:
-    s.close()
 
 proc pixel*(f: RfbFrame, x, y: int): array[3, int] =
   let o = (y * f.width + x) * 3

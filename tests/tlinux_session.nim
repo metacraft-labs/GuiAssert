@@ -5,8 +5,9 @@
 ##
 ## * the environment contract (C6): `composeSessionEnv` and `envUnsetFor`;
 ## * the readiness bound (C10), generated ids, session tags;
-## * the loopback check of a VNC endpoint (`parseProcNetTcp`,
-##   `isLoopbackOnly`, with invented /proc/net/tcp tables) and the RFB
+## * the loopback check of a VNC endpoint (`parseProcNetTcp`, `vncTcpVerdict`,
+##   `isLoopbackOnly`, with invented /proc/net/tcp tables), the owner-only
+##   socket check (`parseProcNetUnix`, `vncSocketVerdict`, GS17) and the RFB
 ##   banner;
 ## * Xvfb's pieces: the Xauthority entry (byte for byte, against the Xau
 ##   format) and the `-displayfd` reading;
@@ -150,6 +151,50 @@ suite "the VNC endpoint check":
     check not isLoopbackOnly(lo, v6, 0x170C)
     check not isLoopbackOnly(@[], @[], 0x170C)   # nothing listens: not "loopback only"
     check isLoopbackOnly(lo, v6, 0x170D) == false
+
+  test "test_vnc_tcp_verdict_refuses_any_other_listener_of_the_server":
+    # GS17: x11vnc listened on 127.0.0.1:P AND on [::1]:5900 (0x170C); the
+    # server's own other listener, on another port, fails the check.
+    let lo = parseProcNetTcp(header &
+      "   0: 0100007F:1771 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 21 1\n" &
+      "   1: 0100007F:2000 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 99 1\n")
+    let v6extra = parseProcNetTcp(header &
+      "   0: 00000000000000000000000001000000:170C 00000000000000000000000000000000:0000 0A " &
+      "00000000:00000000 00:00000000 00000000 1000 0 22 1\n")
+    check vncTcpVerdict(lo, @[], @["21"], 0x1771) == ""
+    # Another process's listener (inode 99) is not the server's: still clean.
+    check vncTcpVerdict(lo, v6extra, @["21"], 0x1771) == ""
+    check "IPv6" in vncTcpVerdict(lo, v6extra, @["21", "22"], 0x1771)
+    check "another address" in vncTcpVerdict(lo, @[], @["21", "99"], 0x1771)
+    check vncTcpVerdict(lo, @[], @["21"], 0x1772) == "not-listening"
+    check vncTcpVerdict(@[], @[], @[], 0x1771) == "not-listening"
+
+  test "test_proc_net_unix_and_the_vnc_socket_verdict":
+    let unixRows = parseProcNetUnix(
+      "Num       RefCount Protocol Flags    Type St Inode Path\n" &
+      "0000000000000000: 00000002 00000000 00010000 0001 01 3101 /tmp/gaxv-1/vnc.sock\n" &
+      "0000000000000000: 00000003 00000000 00000000 0001 03 3102 /tmp/gaxv-1/vnc.sock\n" &
+      "0000000000000000: 00000002 00000000 00010000 0001 01 3103 @/tmp/.X11-unix/X5\n" &
+      "0000000000000000: 00000002 00000000 00000000 0002 01 3104\n" &
+      "0000000000000000: 00000002 00000000 00010000 0001 01 3105 /tmp/a dir/s.sock\n" &
+      "garbage\n")
+    check unixRows.len == 5
+    check unixRows[0].flags == 0x10000 and unixRows[0].inode == "3101" and
+          unixRows[0].path == "/tmp/gaxv-1/vnc.sock"
+    check unixRows[3].path == "" and unixRows[4].path == "/tmp/a dir/s.sock"
+    let path = "/tmp/gaxv-1/vnc.sock"
+    check vncSocketVerdict(unixRows, @[], @[], @["3101"], path) == ""
+    # A connected (not listening) socket at the path is not the listener.
+    check vncSocketVerdict(unixRows, @[], @[], @["3102"], path) == "not-listening"
+    # Another process's listener at the path is not the server's.
+    check vncSocketVerdict(unixRows, @[], @[], @["7"], path) == "not-listening"
+    # Any listening TCP socket of the server fails it.
+    let tcp6 = parseProcNetTcp(header &
+      "   0: 00000000000000000000000000000000:170C 00000000000000000000000000000000:0000 0A " &
+      "00000000:00000000 00:00000000 00000000 1000 0 3200 1\n")
+    check "TCP port 5900" in vncSocketVerdict(unixRows, @[], tcp6, @["3101", "3200"], path)
+    check vncSocketVerdict(unixRows, @[], tcp6, @["3101"], path) == ""
+    check vncSocketPath("/tmp/gaxv-1") == path
 
   test "test_rfb_banner":
     check isRfbBanner("RFB 003.008\n")

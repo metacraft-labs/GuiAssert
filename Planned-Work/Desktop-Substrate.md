@@ -5,7 +5,9 @@ the core split, and GS2, the `guiassert` CLI, `serve`, the fixture backend
 and the contract suite, implemented; GS2.1 decided and implemented the
 companion campaign's change requests C1–C17, and **contract
 `guiassert-desktop/1.0` is frozen** (§7.7); the platform backends of §4 are
-not implemented) · Execution:
+not implemented; GS17 specifies contract **1.1**: an owner-only VNC socket
+for watching and taking over a session (§6.5) and secret-guarded frames
+(§7.5)) · Execution:
 [[Desktop-Substrate.milestones.org]] · Related:
 [[Vision-Understanding.md]], [[../src/gui_assert/image_math.nim]],
 [[../src/gui_assert/ocr.nim]], [[../src/gui_assert/screen_capture.nim]],
@@ -241,7 +243,7 @@ code identity (§9.4).
 | ocr | **`tesseract`** | Pinned by the flake. |
 | tree | **`linux-atspi`** (AT-SPI2 over D-Bus, on the session's own bus), `appium` (optional) | Requires the application's toolkit accessibility bridge; a session backend starts the AT-SPI bus inside the session it owns. |
 | input | **`linux-wlr-virtual`** (wlroots virtual-pointer and virtual-keyboard protocols; the existing `helpers/linux/virtual_pointer.c` and `wtype`), `linux-mutter` (Clutter virtual devices inside GNOME Shell, as `desktop_env/gnome` does today), `linux-xtest` (XTest, for Xvfb), `linux-uinput` (`/dev/uinput`, compositor-independent, needs device access) | Default follows the session. |
-| session | **`linux-host`** (attach to the caller's session; `attachSwayTarget` / `attachGnomeTarget`), `linux-sway` (private headless sway), `linux-gnome` (private headless GNOME Shell), `linux-xvfb` (Xvfb plus a minimal window manager) | §6.3. Optional per-session VNC endpoint through `wayvnc` (sway) or `x11vnc` (Xvfb), bound to loopback. |
+| session | **`linux-host`** (attach to the caller's session; `attachSwayTarget` / `attachGnomeTarget`), `linux-sway` (private headless sway), `linux-gnome` (private headless GNOME Shell), `linux-xvfb` (Xvfb plus a minimal window manager) | §6.3. Optional per-session VNC endpoint through `wayvnc` (sway) or `x11vnc` (Xvfb), bound to loopback (`--vnc`) or on an owner-only Unix socket (`--vnc-socket`, 1.1), §6.5. |
 
 ### 4.3 Windows
 
@@ -370,11 +372,12 @@ the host session, and says so.
 - **`linux-sway`**: a private headless sway (`WLR_BACKENDS=headless`), with its
   own runtime directory, session bus, settings portal and AT-SPI bus: the
   existing `desktop_env/sway` target. Virtual outputs give the requested size;
-  optional `wayvnc` exposes it on loopback (`--vnc`).
+  optional `wayvnc` exposes it on loopback (`--vnc`) or on an owner-only Unix
+  socket (`--vnc-socket`), §6.5.
 - **`linux-gnome`**: a private `gnome-shell --headless` (the existing
   `desktop_env/gnome` target).
 - **`linux-xvfb`**: Xvfb with a minimal window manager, for X11-only
-  applications; optional `x11vnc`.
+  applications; optional `x11vnc` (`--vnc` or `--vnc-socket`, §6.5).
 - **`linux-host`**: attach to the caller's sway or GNOME session
   (`attach…Target`), never modifying settings unless asked.
 
@@ -390,6 +393,47 @@ All three private kinds isolate pixels, input and clipboard (`isolation` all
   with the window station (`isolation.clipboard: false`).
 - A separate interactive Windows session (a second RDP / console session) is a
   later option, measured in GS11 before it is promised.
+
+### 6.5 Remote view and takeover (VNC; GS17, contract 1.1)
+
+A private Linux session can serve its framebuffer to a VNC viewer, so that a
+person can watch what a consumer drives and take the session over: a
+challenge only a person can answer, a step the consumer cannot automate.
+There are two endpoints, and a session has at most one:
+
+- **`--vnc`** (1.0): a TCP listener on 127.0.0.1 without a password;
+  `Session.vnc` is `{host, port}`. Any local user can connect to it; nothing
+  on another host can. The server listens on that address and port and
+  **nowhere else**: `session-start` checks every TCP socket the server
+  process holds (/proc/net/tcp and tcp6), and a server that listens anywhere
+  else as well fails the start (exit 5 / `session-failed`). *Measured
+  2026-10-27 (GS17):* x11vnc 0.9.17 started with `-localhost -noipv6
+  -rfbport P` also listened on `[::1]:5900`, its default IPv6 port, which
+  1.0's check did not look at; it is now started with `-rfbportv6 -1`.
+- **`--vnc-socket`** (1.1): a Unix stream socket, `vnc.sock` in the session's
+  private runtime directory (mode 0700, the caller's), and no TCP listener at
+  all; `Session.vncSocket` is its path and `Session.vnc` is `null`. Only the
+  caller's user (and root) can connect, by the directory's permission. A
+  viewer on another machine reaches it through SSH's stream-local forwarding
+  (`ssh -L <port>:<socket path> <host>`, then a viewer on
+  `localhost:<port>`). x11vnc serves it with `-unixsock <path> -rfbport 0
+  -rfbportv6 -1`, wayvnc with `--unix-socket <path>`. `session-start` checks
+  that the server process holds the listening socket bound to that path
+  (/proc/net/unix), holds no listening TCP socket, and greets with an RFB
+  banner there; otherwise the start fails (exit 5 / `session-failed`).
+
+`--vnc` with `--vnc-socket` is exit 2 / `conflicting-arguments`. Both need
+the feature `session-vnc`: `linux-gnome` and the fixture offer neither (exit
+4 / `unsupported-option`).
+
+Both endpoints accept input: a viewer's pointer and keyboard reach the
+session as a seat's would (x11vnc through XTest, wayvnc through the virtual
+pointer and keyboard protocols), so a person can type into the application
+the consumer started. GuiAssert does not arbitrate between a person and a
+consumer driving one session at once: a consumer that hands a session over
+stops sending input until the person is done, and decides how it learns that
+(its policy, §11). A session started without `--vnc` or `--vnc-socket` has
+no remote view.
 
 ## 7. The CLI contract (contract `guiassert-desktop/1`)
 
@@ -477,7 +521,7 @@ cannot run at all).
 | 2 | `bad-args` | malformed invocation | `unknown-verb`, `unknown-flag`, `missing-argument`, `invalid-value`, `conflicting-arguments`, `unknown-backend`, `contract-unsupported`, `invalid-name`, `name-in-use` |
 | 3 | `not-found` | a named object does not resolve | `session`, `display`, `window`, `app`, `element`, `recording`, `file`, `request` (serve `cancel` target) |
 | 4 | `backend-unavailable` | the selected backend cannot do this here | `not-compiled-in`, `wrong-platform`, `missing-tool`, `display-server-unsupported`, `unsupported-option`, `not-implemented`, `no-isolated-session`, `session-not-running` |
-| 5 | `backend-error` | the backend tried and failed | `capture-failed`, `ocr-failed`, `tree-failed`, `input-failed`, `session-failed`, `busy`, `stale-path` |
+| 5 | `backend-error` | the backend tried and failed | `capture-failed`, `ocr-failed`, `tree-failed`, `input-failed`, `session-failed`, `busy`, `stale-path`, `secret-visible` (1.1) |
 | 6 | `permission-denied` | the OS refused for lack of a permission | `tcc-screen-recording`, `tcc-accessibility`, `uinput-access`, `atspi-disabled`, `desktop-access` |
 | 7 | `timeout` | a deadline or wait condition expired | `deadline`, `condition-not-met` |
 | 8 | `cancelled` | cancelled by the caller (serve `cancel`, SIGINT, SIGTERM) | `request`, `signal`, `shutdown` |
@@ -533,6 +577,7 @@ Session   = {"id": str, "name": str|null, "kind": "host"|"virtual-display"|"isol
              "stateReason": str|null, "lifetime": "detached"|"owner",
              "isolation": Isolation, "displays": [Display], "env": {str: str},
              "envUnset": [str], "vnc": {"host": str, "port": int}|null,
+             "vncSocket": str|null /* 1.1 */,
              "backends": {"capture": str, "tree": str, "input": str},
              "createdAt": str, "hostPid": int|null}
 ImageRef  = {"path": str, "format": "png", "width": int, "height": int,
@@ -556,6 +601,9 @@ InputReport = {"kind": str, "at": Point|null, "to": Point|null, "button": str|nu
 
 What the newer keys mean:
 
+- `Session.vncSocket` (1.1): the path of the session's owner-only VNC socket
+  (`--vnc-socket`, §6.5); `null` otherwise, and always `null` when `vnc` is
+  set.
 - `Window.document`: the document the window shows, as the platform names it
   (macOS `AXDocument`, a file URL); `null` where the platform has no
   equivalent or the window shows none. A caller can verify which document a
@@ -729,7 +777,7 @@ key as `a`–`z` and normalize to lower case (an upper-case letter is
 
 | Verb | Arguments | `data` |
 | --- | --- | --- |
-| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc] [--account <user>]` (`--account` only for `isolated`); returns once the session is ready, else exit 5 / `session-failed`; a `--name` in use is exit 2 / `name-in-use` (§6.1) | `{"session": Session}` (state `running`) |
+| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc \| --vnc-socket] [--account <user>]` (`--account` only for `isolated`; `--vnc-socket` 1.1, §6.5); returns once the session is ready, else exit 5 / `session-failed`; a `--name` in use is exit 2 / `name-in-use` (§6.1) | `{"session": Session}` (state `running`) |
 | `session-list` | — | `{"sessions": [Session]}` (includes `host`) |
 | `session-info` | `<id>` | `{"session": Session}` |
 | `session-stop` | `<id> [--force]` | `{"session": Session}` (state `stopped`); stopping `host` is `bad-args` |
@@ -760,7 +808,7 @@ most once) sets a variable for the launched process over `Session.env`
 
 | Verb | Arguments | `data` |
 | --- | --- | --- |
-| `screenshot` | `--out <path.png> [--display <id> \| --window <id> \| --region x,y,w,h] [--own-pixels] [--no-cursor]` | `{"image": ImageRef}` |
+| `screenshot` | `--out <path.png> [--display <id> \| --window <id> \| --region x,y,w,h] [--own-pixels] [--no-cursor] [--secret-stdin]` (`--secret-stdin` 1.1, below) | `{"image": ImageRef}` |
 | `record` | `--out <path.mp4> --duration-ms N [--display\|--window\|--region] [--fps F]` (blocking) | `{"recording": Recording}`; serve streams `progress` |
 | `record-start` | `--out <path.mp4> [--display\|--window\|--region] [--fps F]` | `{"recording": Recording}` (state `recording`) |
 | `record-stop` | `<recording-id>` | `{"recording": Recording}` (state `stopped`, `durationMs` and `frames` set) |
@@ -786,10 +834,36 @@ and renamed when complete, so a reader never sees a partial PNG or MP4.
 
 | Verb | Arguments | `data` |
 | --- | --- | --- |
-| `ocr` | `(--image <path> \| (--display <id> \| --window <id> \| --region x,y,w,h) --out <path.png>) [--lang <code>…] [--psm N] [--upscale F] [--invert auto\|never\|always] [--min-confidence C]` | `{"image": ImageRef, "backend": str, "languages": [str], "words": [OcrWord], "text": str}` (`text` in reading order) |
+| `ocr` | `(--image <path> \| (--display <id> \| --window <id> \| --region x,y,w,h) --out <path.png>) [--lang <code>…] [--psm N] [--upscale F] [--invert auto\|never\|always] [--min-confidence C] [--secret-stdin]` (`--secret-stdin` 1.1, below) | `{"image": ImageRef, "backend": str, "languages": [str], "words": [OcrWord], "text": str}` (`text` in reading order) |
 
 Capturing for OCR requires `--out`, so the frame the words refer to is always
-available to the caller. `--psm` and `--invert` are Tesseract preprocessing
+available to the caller.
+
+**Secret-guarded frames (1.1, GS17).** `screenshot --secret-stdin` and `ocr
+… --secret-stdin` read a secret from standard input (the rules of `type
+--stdin` below: whole, at most 1 MiB, valid UTF-8; over `serve`, the `run`
+request's `stdin`) and keep a frame, or answer its words, only when the secret
+is **not** legible in it. The verb reads the frame with the OCR backend (the
+one `ocr` would use, with the default language and no preprocessing knob for
+`screenshot`; so `screenshot --secret-stdin` needs the feature `ocr` as well,
+and without it is exit 4 naming `ocr`). The secret is **visible** when the
+recognized text, with every white-space character removed and compared
+case-insensitively, contains a run of the secret's length (the secret likewise
+without white space) that differs from it in at most ⌊(n − 4)/4⌋ characters, n
+being that length (none for 4 to 7 characters, one for 8 to 11, two for 12 to
+15, …): a few glyphs the engine misreads in a long secret still count as
+visible, while a short one, which ordinary text matches by chance when a
+character may differ, must match exactly. A
+visible secret is exit 5 / `secret-visible`: a frame the verb captured is
+removed (an `ocr --image` file is the caller's and is left in place), and the
+envelope carries no image, no word and no text, and its message does not
+repeat the secret. A secret with fewer than 4 characters once white space is
+removed is exit 2 / `invalid-value`, because it would match ordinary text.
+The check guards a consumer against keeping, logging or sending a frame in
+which a secret it typed is readable (typed into the wrong field, a "show
+password" toggle); it is as good as the OCR engine is on that font, so it
+lowers the risk and does not prove a frame clean. It masks nothing (masking
+and redaction stay the consumer's, §11). `--psm` and `--invert` are Tesseract preprocessing
 knobs; an engine that has no equivalent rejects them (`unsupported-option`).
 
 **Accessibility tree**
@@ -824,7 +898,8 @@ users through the process table, and `--text-file` puts the text on disk.
 `type --stdin` reads the text to type from standard input, and
 `element-action <path> set-value --value-stdin` the value to set; both take
 the input whole and exactly as given (nothing is stripped, a trailing newline
-is typed), at most 1 MiB, and it must be valid UTF-8. Exactly one of `<text>`,
+is typed), at most 1 MiB, and it must be valid UTF-8 (`--secret-stdin`, 1.1,
+reads the same way). Exactly one of `<text>`,
 `--text-file` and `--stdin` is given. The input is read to its end (a
 terminal, too, until end-of-file); an empty input is the empty string, and a
 standard input that is closed or cannot be read is exit 2 / `invalid-value`.
@@ -931,6 +1006,12 @@ below, and anything that would change a shape or a meaning needs major 2.
   enforces (`core/contract`, `core/keys`).
 - A binary implements exactly one major. `--contract <major>` and the serve
   `hello` let a consumer fail fast on a mismatch.
+
+**Contract 1.1** (GS17, 2026-10-27; additive): `session-start --vnc-socket`
+and the `Session` key `vncSocket` (§6.5); `screenshot --secret-stdin` and
+`ocr --secret-stdin`, and the exit 5 reason `secret-visible` (§7.5). The
+x11vnc change of §6.5 makes 1.0's own "127.0.0.1 only" rule hold; it changes
+no shape or meaning.
 
 ## 8. `guiassert serve`
 

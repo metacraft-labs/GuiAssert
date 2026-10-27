@@ -55,6 +55,7 @@ tests/contract/tcontract_schema
 tests/contract/tserve_protocol
 tests/tcore_contract
 tests/tcore_mp4
+tests/tcore_secret_guard
 tests/contract/tcontract_decisions
 tests/contract/tvision_verbs
 tests/tmacos_capture
@@ -63,6 +64,7 @@ tests/tswift_helper_cache
 tests/live/tcapture_macos
 tests/live/tcapture_linux
 tests/contract/tocr_verbs
+tests/contract/tsecret_frames
 tests/live/tocr_macos
 tests/live/tocr_tesseract
 tests/live/tocr_linux

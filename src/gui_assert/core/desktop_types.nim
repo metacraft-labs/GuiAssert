@@ -119,6 +119,9 @@ type
       ## The variables a process spawned into the session must not inherit
       ## from the caller (for example the host's `DISPLAY`).
     vnc*: Option[VncEndpoint]
+    vncSocket*: Option[string]
+      ## The path of the session's owner-only VNC socket (`--vnc-socket`,
+      ## contract 1.1, spec §6.5); none when it has none.
     backends*: SessionBackends
     createdAt*: string       ## RFC 3339 UTC with milliseconds
     hostPid*: Option[int]

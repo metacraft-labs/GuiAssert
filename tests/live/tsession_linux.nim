@@ -16,7 +16,14 @@
 ##   listener is on the loopback address and nowhere else (/proc/net/tcp and
 ##   tcp6), and an RFB client (`rfb_client`) reads the colour of a window
 ##   launched into the session at its reported position (and not before it
-##   was launched); the port is closed after `session-stop`;
+##   was launched); the port is closed after `session-stop`; and the VNC
+##   server holds no other listening TCP socket at all (GS17: x11vnc also
+##   listened on [::1]:5900);
+## * `--vnc-socket` (GS17, contract 1.1) serves it on a Unix socket in the
+##   session's 0700 runtime directory and nowhere on TCP: the server holds
+##   the listening socket at that path and no TCP listener, an RFB client
+##   over the socket reads a launched window's colour, and the socket is gone
+##   after `session-stop`; `--vnc` with `--vnc-socket` is exit 2;
 ## * a killed session host makes `session-info` report `state: "error"`
 ##   with `stateReason: "host-exited"` (and a killed compositor
 ##   `compositor-exited`), never `running`; `session-stop` then ends every
@@ -60,7 +67,7 @@ import ../contract/harness
 import ./[linux_live, rfb_client]
 import ../../src/gui_assert/desktop_env/helpers as env_helpers
 from ../../src/gui_assert/backends/session/linux_private import TcpSocketRow,
-  taggedProcesses, parseProcNetTcp, listenersOn
+  taggedProcesses, parseProcNetTcp, listenersOn, tcpListenersOf, parseProcNetUnix
 
 const
   sessionTimeoutMs = 120_000
@@ -370,11 +377,30 @@ proc listeners(port: int): tuple[v4, v6: seq[TcpSocketRow]] =
   (listenersOn(parseProcNetTcp(readFile("/proc/net/tcp")), port),
    listenersOn(parseProcNetTcp(readFile("/proc/net/tcp6")), port))
 
+proc vncServerSockets(st, name: string): seq[string] =
+  ## The socket inodes the session's VNC server (x11vnc or wayvnc, found by
+  ## the session's tag) holds open.
+  let tag = privateOf(st, name)["tag"].getStr
+  for (pid, prog) in tagged(tag):
+    if "x11vnc" in prog or "wayvnc" in prog:
+      for kind, path in walkDir("/proc/" & $pid & "/fd"):
+        try:
+          let target = expandSymlink(path)
+          if target.startsWith("socket:["): result.add target[8 .. ^2]
+        except OSError: discard
+
+proc serverTcpListeners(st, name: string): seq[TcpSocketRow] =
+  ## Every listening TCP socket (IPv4 and IPv6, any port) of the session's
+  ## VNC server.
+  tcpListenersOf(parseProcNetTcp(readFile("/proc/net/tcp")),
+                 parseProcNetTcp(readFile("/proc/net/tcp6")), vncServerSockets(st, name))
+
 template checkVnc(backend, name: string, st, work: string,
                   launch: proc (title: string): seq[string]) =
   let env = callerEnv(st)
   let s = start(backend, st, name, @["--width", "640", "--height", "480", "--vnc"])
   check s["vnc"].kind == JObject
+  check s["vncSocket"].kind == JNull
   let host = s["vnc"]["host"].getStr
   let port = s["vnc"]["port"].getInt
   check host == "127.0.0.1" and port > 0
@@ -382,6 +408,10 @@ template checkVnc(backend, name: string, st, work: string,
   let (v4, v6) = listeners(port)
   check v4.len == 1 and v4[0].localAddr == "0100007F"
   check v6.len == 0
+  # And it is the server's ONLY listening TCP socket, on any port (GS17).
+  let all = serverTcpListeners(st, name)
+  check vncServerSockets(st, name).len > 0       # the server was found
+  check all.len == 1 and all[0].localPort == port and all[0].localAddr == "0100007F"
   # Its framebuffer is the session's.
   let title = "Vnc Probe " & nonce()
   let before = readFrame(host, port)
@@ -404,6 +434,65 @@ template checkVnc(backend, name: string, st, work: string,
   stopSession(st, name)
   let (gone4, gone6) = listeners(port)
   check gone4.len == 0 and gone6.len == 0
+
+template checkVncSocket(backend, name: string, st, work: string,
+                        launch: proc (title: string): seq[string]) =
+  let env = callerEnv(st)
+  let s = start(backend, st, name, @["--width", "640", "--height", "480", "--vnc-socket"])
+  check s["vnc"].kind == JNull
+  check s["vncSocket"].kind == JString
+  let path = s["vncSocket"].getStr
+  let rt = privateOf(st, name)["runtimeDir"].getStr
+  check path == rt / "vnc.sock"
+  # The directory is the caller's and 0700: no other user can reach the
+  # socket in it.
+  var dst: Stat
+  check stat(rt.cstring, dst) == 0
+  check (dst.st_mode.int and 0o777) == 0o700 and dst.st_uid == getuid()
+  # The server listens there and on no TCP port.
+  let mine = vncServerSockets(st, name)
+  check mine.len > 0
+  let rows = parseProcNetUnix(readFile("/proc/net/unix"))
+  check rows.anyIt(it.path == path and it.inode in mine and (it.flags and 0x10000) != 0)
+  check serverTcpListeners(st, name).len == 0
+  # Its framebuffer is the session's.
+  let title = "Vnc Probe " & nonce()
+  let before = readFrameUnix(path)
+  check before.width == 640 and before.height == 480
+  let d = mustRun(@["--session", name, "app-launch", "--wait-window-ms", "20000", "--"] &
+                  launch(title), env)
+  let (cx, cy) = centreOf(d["window"])
+  check not near(before.pixel(cx, cy), colourA)       # negative control
+  var after: RfbFrame
+  let t0 = getMonoTime()
+  while true:
+    after = readFrameUnix(path)
+    if near(after.pixel(cx, cy), colourA) or msSince(t0) > 10_000: break
+    sleep(100)
+  check near(after.pixel(cx, cy), colourA)
+  stopSession(st, name)
+  check not fileExists(path) and not dirExists(rt)
+
+suite "--vnc-socket: an owner-only VNC socket (GS17)":
+  let st = freshDir("sess-vncs")
+  let work = freshDir("sess-vncs-work")
+
+  test "test_session_vnc_socket_is_owner_only [sway]":
+    live:
+      checkVncSocket("linux-sway", "vncs-sway", st, work,
+                     proc (title: string): seq[string] = swayProbe(title, colourA))
+
+  test "test_session_vnc_socket_is_owner_only [xvfb]":
+    live:
+      checkVncSocket("linux-xvfb", "vncs-xvfb", st, work,
+                     proc (title: string): seq[string] = x11Probe(title, colourA, "200x150+300+200"))
+
+  test "test_session_vnc_and_vnc_socket_conflict":
+    let x = failsWith(@["--session-backend", "linux-xvfb", "session-start", "--kind",
+                        "headless", "--name", "vncs-both", "--vnc", "--vnc-socket"],
+                      callerEnv(st), 2, "conflicting-arguments")
+    check x["kind"].getStr == "bad-args"
+    check not fileExists(st / "sessions" / "vncs-both.json")
 
 suite "--vnc: a loopback VNC endpoint":
   let st = freshDir("sess-vnc")

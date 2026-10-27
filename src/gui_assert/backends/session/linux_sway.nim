@@ -20,6 +20,10 @@
 ## any local user, never from another host. The start fails unless
 ## `linux_private.waitVncListening` sees wayvnc itself listening there and
 ## only there, greeting with an RFB banner (RFC 6143 §7.1.1).
+##
+## **Owner-only VNC** (`--vnc-socket`, contract 1.1, spec §6.5): wayvnc
+## `--unix-socket` on `vnc.sock` in the session's 0700 runtime directory,
+## with no TCP listener; `linux_private.waitVncSocketListening` checks it.
 
 import std/[options, os, osproc, strtabs, tables]
 
@@ -66,6 +70,24 @@ proc startWayvnc(env: OrderedTable[string, string], runtimeDir: string):
     stopProcess(p)
   raise newException(OSError, why)
 
+proc startWayvncSocket(env: OrderedTable[string, string], runtimeDir: string): Process =
+  ## wayvnc on the session's owner-only Unix socket (module doc). Raises
+  ## naming what failed.
+  let exe = findExe("wayvnc")
+  if exe.len == 0: raise newException(OSError, "wayvnc is not on the PATH")
+  let config = runtimeDir / "wayvnc.config"
+  writeFile(config, "")
+  let path = vncSocketPath(runtimeDir)
+  let log = runtimeDir / "wayvnc.log"
+  result = launchLogged(childEnv(env, baseEnvUnset), exe,
+                        @["-C", config, "-o", "HEADLESS-1", "--unix-socket", path], log)
+  let p = result
+  let why = waitVncSocketListening(p.processID, proc (): bool = p.running, path,
+                                   monoNowNs() + int64(vncStartMs) * 1_000_000)
+  if why.len > 0:
+    stopProcess(p)
+    raise newException(OSError, why & ": " & logTail(log))
+
 proc swayHostStart(spec: HostSpec): ServerRun =
   ## In the session host: the target, then wayvnc when asked.
   # The host ends the session's processes by its tag (`linux_private`);
@@ -93,11 +115,15 @@ proc swayHostStart(spec: HostSpec): ServerRun =
   result.env = env
   result.runtimeDir = env.getOrDefault("XDG_RUNTIME_DIR", "")
   var vnc: Process = nil
-  if spec.vnc:
+  if spec.vnc or spec.vncSocket:
     try:
-      let (p, port) = startWayvnc(env, result.runtimeDir)
-      vnc = p
-      result.vnc = some(VncEndpoint(host: "127.0.0.1", port: port))
+      if spec.vncSocket:
+        vnc = startWayvncSocket(env, result.runtimeDir)
+        result.vncSocket = some(vncSocketPath(result.runtimeDir))
+      else:
+        let (p, port) = startWayvnc(env, result.runtimeDir)
+        vnc = p
+        result.vnc = some(VncEndpoint(host: "127.0.0.1", port: port))
     except CatchableError:
       try: t.stop()
       except CatchableError: discard

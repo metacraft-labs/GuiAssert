@@ -197,6 +197,7 @@ type
     displays*: int
     lifetime*: SessionLifetime
     vnc*: bool
+    vncSocket*: bool   ## `--vnc-socket` (contract 1.1, spec §6.5)
     account*: Option[string]
 
   LaunchKind* = enum

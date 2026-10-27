@@ -4,4 +4,5 @@ tcore_types
 tcore_contract
 tcore_png
 tcore_mp4
+tcore_secret_guard
 tcore_purity

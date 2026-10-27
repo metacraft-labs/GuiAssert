@@ -35,7 +35,17 @@
 ## rc file (`-norc`) and no password: the contract's `Session.vnc` is
 ## `{host, port}` and carries no credential, so the endpoint is reachable by
 ## any local user, never from another host; `linux_private.waitVncListening`
-## checks that x11vnc itself listens there and only there.
+## checks that x11vnc itself listens there and only there. `-rfbportv6 -1`
+## keeps x11vnc from also listening on its default IPv6 port: without it
+## x11vnc 0.9.17 listened on [::1]:5900 beside the requested port, whatever
+## `-noipv6` says (measured 2026-10-27, GS17).
+##
+## **Owner-only VNC** (`--vnc-socket`, contract 1.1, spec §6.5): x11vnc
+## `-unixsock` on `vnc.sock` in the session's 0700 runtime directory, with
+## `-rfbport 0 -rfbportv6 -1` so that it listens on no TCP port at all, and
+## without `-localhost`, whose host check refuses every Unix-socket client
+## ("localhost does not match 127.0.0.1", measured 2026-10-27);
+## `linux_private.waitVncSocketListening` checks it.
 
 import std/[json, options, os, osproc, sequtils, streams, strutils, sysrand, tables,
             tempfiles]
@@ -183,13 +193,28 @@ proc xvfbHostStart(spec: HostSpec): ServerRun =
       sleep(20)
     # The VNC endpoint.
     var vnc: Process = nil
-    if spec.vnc:
+    if spec.vncSocket:
+      let path = vncSocketPath(rt)
+      let p = launchLogged(childEnv(env, baseEnvUnset), findExe("x11vnc"),
+        @["-display", ":" & $n, "-auth", auth, "-unixsock", path, "-rfbport", "0",
+          "-rfbportv6", "-1", "-noipv6", "-forever", "-shared", "-nopw",
+          "-norc", "-quiet"], rt / "x11vnc.log")
+      let why = waitVncSocketListening(p.processID, proc (): bool = p.running, path,
+                                       monoNowNs() + int64(startStepMs) * 1_000_000)
+      if why.len > 0:
+        stopProcess(p)
+        raise newException(OSError, why & ": " & logTail(rt / "x11vnc.log"))
+      vnc = p
+      procs.add p
+      result.vncSocket = some(path)
+    elif spec.vnc:
       var why = ""
       for attempt in 1 .. vncAttempts:
         let port = freeLoopbackPort()
         let p = launchLogged(childEnv(env, baseEnvUnset), findExe("x11vnc"),
           @["-display", ":" & $n, "-auth", auth, "-localhost", "-noipv6", "-rfbport", $port,
-            "-forever", "-shared", "-nopw", "-norc", "-quiet"], rt / "x11vnc.log")
+            "-rfbportv6", "-1", "-forever", "-shared", "-nopw", "-norc", "-quiet"],
+          rt / "x11vnc.log")
         why = waitVncListening(p.processID, proc (): bool = p.running, port,
                                monoNowNs() + int64(startStepMs) * 1_000_000)
         if why.len == 0:

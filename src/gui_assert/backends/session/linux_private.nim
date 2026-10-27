@@ -25,8 +25,11 @@
 ##    registers its applications only while it is true (GTK's always do).
 ##    AT-SPI: https://gitlab.gnome.org/GNOME/at-spi2-core/-/blob/main/xml/Bus.xml
 ##    and https://gitlab.gnome.org/GNOME/at-spi2-core/-/blob/main/xml/Status.xml;
-## 3. optionally a **VNC endpoint** (`--vnc`), started by the server, bound
-##    to 127.0.0.1 only (`waitVncListening`);
+## 3. optionally a **VNC endpoint**, started by the server (spec §6.5): with
+##    `--vnc` a TCP listener on 127.0.0.1 and nowhere else
+##    (`waitVncListening` checks every TCP socket the server holds), with
+##    `--vnc-socket` (contract 1.1) a Unix socket `vnc.sock` in the session's
+##    0700 runtime directory and no TCP listener (`waitVncSocketListening`);
 ## 4. the host then writes `<id>.ready` (the session's environment, its
 ##    runtime directory and VNC endpoint) for the starter, and supervises:
 ##    every 100 ms it checks that the record still names it and that the
@@ -146,6 +149,8 @@ type
     width*, height*: int
     scale*: float
     vnc*: bool
+    vncSocket*: bool
+      ## `--vnc-socket`: VNC on `vncSocketPath(runtimeDir)` (spec §6.5).
     runtimeDir*: string
       ## The session's private runtime directory, made by the host (mode
       ## 0700) before the server starts (`sessionRuntimeDir`); the server
@@ -159,6 +164,8 @@ type
     runtimeDir*: string
       ## The session's private runtime directory (removed at teardown).
     vnc*: Option[VncEndpoint]
+    vncSocket*: Option[string]
+      ## The owner-only VNC socket's path (`--vnc-socket`).
     alive*: proc (): string {.closure.}
       ## "" while the server runs, else why it does not (a `stateReason`).
     stop*: proc () {.closure.}
@@ -292,6 +299,75 @@ proc isLoopbackOnly*(v4, v6: seq[TcpSocketRow], port: int): bool =
   ## (an IPv6 wildcard socket accepts IPv4 too unless it is v6-only).
   let l4 = listenersOn(v4, port)
   l4.len > 0 and l4.allIt(it.localAddr == ipv4Loopback) and listenersOn(v6, port).len == 0
+
+proc tcpListenersOf*(v4, v6: seq[TcpSocketRow], inodes: seq[string]):
+    seq[TcpSocketRow] =
+  ## The listening TCP sockets (IPv4 and IPv6) among the socket `inodes` of
+  ## one process.
+  (v4 & v6).filterIt(it.state == tcpListen and it.inode in inodes)
+
+proc vncTcpVerdict*(v4, v6: seq[TcpSocketRow], inodes: seq[string], port: int): string =
+  ## Whether the VNC server holding socket `inodes` serves `--vnc` as spec
+  ## §6.5 says: "" when it listens on 127.0.0.1:`port`, nothing else
+  ## listens on that port, and it holds no other listening TCP socket;
+  ## otherwise why not ("not-listening" while it has not bound yet). GS17:
+  ## x11vnc also listened on [::1]:5900, which a check of `port` alone did
+  ## not see.
+  let mine = tcpListenersOf(v4, v6, inodes)
+  if not mine.anyIt(it.localPort == port and it.localAddr == ipv4Loopback):
+    return "not-listening"
+  if not isLoopbackOnly(v4, v6, port):
+    return "the VNC server listens on port " & $port & " beyond 127.0.0.1"
+  for r in mine:
+    if r.localPort != port or r.localAddr != ipv4Loopback:
+      return "the VNC server also listens on " &
+        (if r.localAddr.len > 8: "an IPv6 address" else: "another address") &
+        " at port " & $r.localPort
+  ""
+
+type
+  UnixSocketRow* = object
+    ## One row of /proc/net/unix (proc(5): `Num RefCount Protocol Flags Type
+    ## St Inode Path`).
+    flags*: int          ## __SO_ACCEPTCON (0x10000): a listening socket
+    inode*: string
+    path*: string        ## "" for an unnamed socket; "@…" for an abstract one
+
+const soAcceptCon = 0x10000
+
+proc parseProcNetUnix*(text: string): seq[UnixSocketRow] =
+  ## The rows of /proc/net/unix. Malformed rows are skipped.
+  var first = true
+  for line in text.splitLines:
+    if first:
+      first = false
+      continue
+    let f = line.splitWhitespace
+    if f.len < 7: continue
+    try:
+      result.add UnixSocketRow(flags: fromHex[int](f[3]), inode: f[6],
+                               path: (if f.len > 7: f[7 .. ^1].join(" ") else: ""))
+    except ValueError:
+      discard
+
+proc vncSocketVerdict*(unixRows: seq[UnixSocketRow], v4, v6: seq[TcpSocketRow],
+                       inodes: seq[string], path: string): string =
+  ## Whether the VNC server holding socket `inodes` serves `--vnc-socket` as
+  ## spec §6.5 says: "" when one of its sockets listens at `path` and it
+  ## holds no listening TCP socket; otherwise why not ("not-listening" while
+  ## it has not bound yet).
+  if not unixRows.anyIt(it.path == path and it.inode in inodes and
+                        (it.flags and soAcceptCon) != 0):
+    return "not-listening"
+  let tcp = tcpListenersOf(v4, v6, inodes)
+  if tcp.len > 0:
+    return "the VNC server also listens on TCP port " & $tcp[0].localPort
+  ""
+
+proc vncSocketPath*(runtimeDir: string): string =
+  ## The owner-only VNC socket of a session (`--vnc-socket`): `vnc.sock` in
+  ## its 0700 runtime directory.
+  runtimeDir / "vnc.sock"
 
 proc isRfbBanner*(s: string): bool =
   ## Whether `s` is an RFB ProtocolVersion message, "RFB 003.008\n"
@@ -743,26 +819,55 @@ proc rfbBannerAt(port: int, timeoutMs: int): string =
   finally:
     s.close()
 
+proc unixBannerAt(path: string, timeoutMs: int): string =
+  ## The first 12 bytes a server on the Unix socket `path` sends, "" when it
+  ## sends none in time.
+  let s = newSocket(Domain.AF_UNIX, SockType.SOCK_STREAM, Protocol.IPPROTO_IP)
+  try:
+    s.connectUnix(path)
+    result = s.recv(rfbBannerLen, timeoutMs)
+  except CatchableError:
+    result = ""
+  finally:
+    s.close()
+
 proc waitVncListening*(pid: int, isRunning: proc (): bool, port: int,
                        deadlineNs: int64): string =
-  ## Wait until the VNC server `pid` listens on 127.0.0.1:`port`, only there,
-  ## and greets with an RFB banner. "" when it does, else why not (the
-  ## server exited, it listens elsewhere too, or it never got there).
+  ## Wait until the VNC server `pid` listens on 127.0.0.1:`port`, nowhere
+  ## else (`vncTcpVerdict`: no other listening TCP socket of its own, on any
+  ## port), and greets with an RFB banner. "" when it does, else why not
+  ## (the server exited, it listens elsewhere too, or it never got there).
   ## The listener is the server's own: its inode is one of `pid`'s sockets
   ## (/proc/net/tcp, proc_net_tcp(5)), so another process that took the
   ## port is never mistaken for it.
   while true:
     if not isRunning(): return "the VNC server exited"
-    let v4 = readTable("/proc/net/tcp")
-    let v6 = readTable("/proc/net/tcp6")
-    let mine = socketInodes(pid)
-    let ours = listenersOn(v4, port).filterIt(it.inode in mine)
-    if ours.len > 0:
-      if not isLoopbackOnly(v4, v6, port):
-        return "the VNC server listens on port " & $port & " beyond 127.0.0.1"
-      let banner = rfbBannerAt(port, 1000)
-      if isRfbBanner(banner): return ""
+    let verdict = vncTcpVerdict(readTable("/proc/net/tcp"), readTable("/proc/net/tcp6"),
+                                socketInodes(pid), port)
+    if verdict.len == 0:
+      if isRfbBanner(rfbBannerAt(port, 1000)): return ""
+    elif verdict != "not-listening":
+      return verdict
     if monoNowNs() >= deadlineNs: return "the VNC server did not listen on 127.0.0.1:" & $port
+    sleep(20)
+
+proc waitVncSocketListening*(pid: int, isRunning: proc (): bool, path: string,
+                             deadlineNs: int64): string =
+  ## Wait until the VNC server `pid` listens on the Unix socket `path`, holds
+  ## no listening TCP socket (`vncSocketVerdict`), and greets with an RFB
+  ## banner there. "" when it does, else why not.
+  while true:
+    if not isRunning(): return "the VNC server exited"
+    var unixRows: seq[UnixSocketRow]
+    try: unixRows = parseProcNetUnix(readFile("/proc/net/unix"))
+    except IOError, OSError: discard
+    let verdict = vncSocketVerdict(unixRows, readTable("/proc/net/tcp"),
+                                   readTable("/proc/net/tcp6"), socketInodes(pid), path)
+    if verdict.len == 0:
+      if isRfbBanner(unixBannerAt(path, 1000)): return ""
+    elif verdict != "not-listening":
+      return verdict
+    if monoNowNs() >= deadlineNs: return "the VNC server did not listen on " & path
     sleep(20)
 
 # ---------------------------------------------------------------------------
@@ -780,7 +885,8 @@ proc specOf(priv: JsonNode, id: string): HostSpec =
   let s = priv{"spec"}
   if s == nil or s.kind != JObject: raise newException(ValueError, "no spec")
   HostSpec(id: id, width: s["width"].getInt, height: s["height"].getInt,
-           scale: s["scale"].getFloat, vnc: s["vnc"].getBool)
+           scale: s["scale"].getFloat, vnc: s["vnc"].getBool,
+           vncSocket: s{"vncSocket"}.getBool(false))
 
 proc sortedEnvJson(env: OrderedTable[string, string]): JsonNode =
   result = newJObject()
@@ -846,7 +952,8 @@ proc runLinuxSessionHost*(stateDir, id: string, servers: openArray[PrivateServer
     writePrivateFile(readyPath(stateDir, id), $(%*{
       "hostPid": me, "env": sortedEnvJson(run.env), "runtimeDir": run.runtimeDir,
       "vnc": (if run.vnc.isSome: %*{"host": run.vnc.get.host, "port": run.vnc.get.port}
-              else: newJNull())}))
+              else: newJNull()),
+      "vncSocket": (if run.vncSocket.isSome: %run.vncSocket.get else: newJNull())}))
   except CatchableError as e:
     try: writePrivateFile(failedPath(stateDir, id), $(%*{"hostPid": me,
                           "message": lastLine(e.msg, 600)}))
@@ -924,17 +1031,19 @@ proc startPrivate(cfg: LinuxPrivateConfig, server: PrivateServer, spec: SessionS
   if spec.scale.isSome and spec.scale.get != 1.0 and not server.supportsScale:
     raise unsupportedOption(server.name, server.name & " sessions have scale 1; --scale " &
       $spec.scale.get & " cannot be honoured", "use --session-backend linux-sway")
-  if spec.vnc and not server.supportsVnc:
+  let flag = if spec.vncSocket: "--vnc-socket" else: "--vnc"
+  if (spec.vnc or spec.vncSocket) and not server.supportsVnc:
     raise unsupportedOption(server.name, server.name & " offers no VNC endpoint",
-      "use --session-backend linux-sway or linux-xvfb for --vnc")
-  server.preflight(cfg.env, spec.vnc)
+      "use --session-backend linux-sway or linux-xvfb for " & flag)
+  server.preflight(cfg.env, spec.vnc or spec.vncSocket)
   let size = spec.size.get(Size(width: defaultWidth, height: defaultHeight))
   let tag = newTag()
   ensurePrivateDir(sessionsDir(cfg.stateDir))
   var s: Session
   var priv = %*{"backend": server.name, "tag": tag,
                 "spec": {"width": size.width, "height": size.height,
-                         "scale": spec.scale.get(1.0), "vnc": spec.vnc},
+                         "scale": spec.scale.get(1.0), "vnc": spec.vnc,
+                         "vncSocket": spec.vncSocket},
                 "hostStartTime": "", "runtimeDir": "",
                 "callerRuntimeDir": cfg.env.getOrDefault("XDG_RUNTIME_DIR", "")}
   withLock(startLockDir(cfg.stateDir), cfg.token):
@@ -1016,6 +1125,8 @@ proc startPrivate(cfg: LinuxPrivateConfig, server: PrivateServer, spec: SessionS
       let v = ready{"vnc"}
       if v != nil and v.kind == JObject:
         s.vnc = some(VncEndpoint(host: v["host"].getStr, port: v["port"].getInt))
+      let vs = ready{"vncSocket"}
+      if vs != nil and vs.kind == JString: s.vncSocket = some(vs.getStr)
       s.envUnset = envUnsetFor(server.envUnset, s.env)
       # The caller's own read of the session through its capture backend:
       # its display server answers from here, too.
@@ -1025,6 +1136,8 @@ proc startPrivate(cfg: LinuxPrivateConfig, server: PrivateServer, spec: SessionS
       why = "the session's displays cannot be read: " & e.msg
   if why.len == 0 and spec.vnc and s.vnc.isNone:
     why = "the session host started no VNC endpoint"
+  if why.len == 0 and spec.vncSocket and s.vncSocket.isNone:
+    why = "the session host started no VNC socket"
   if why.len > 0:
     abandon(cfg, server, s.id, started.pid, started.startTime, tag, runtimeDir)
     if cfg.token.reason != crNone: raise cancelledError(cfg.token.reason)

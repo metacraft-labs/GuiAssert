@@ -30,7 +30,7 @@ import ./[geometry, desktop_types, ocr_types, tree_types]
 const
   contractName* = "guiassert-desktop"
   contractMajor* = 1
-  contractMinor* = 0
+  contractMinor* = 1
     ## Contract 1.0 is frozen (spec §7.7): every later change is an additive
     ## 1.x minor (a new verb, flag, key, reason, feature, event or backend
     ## name); changing a shape or a meaning needs a new major.
@@ -77,12 +77,13 @@ const
       "display-server-unsupported", "unsupported-option", "not-implemented",
       "no-isolated-session", "session-not-running"],
     @["capture-failed", "ocr-failed", "tree-failed", "input-failed",
-      "session-failed", "busy", "stale-path"],
+      "session-failed", "busy", "stale-path", "secret-visible"],
     @["tcc-screen-recording", "tcc-accessibility", "uinput-access",
       "atspi-disabled", "desktop-access"],
     @["deadline", "condition-not-met"],
     @["request", "signal", "shutdown"]]
-    ## The closed reason set of each kind (spec §7.3, contract 1.0).
+    ## The closed reason set of each kind (spec §7.3, contract 1.0;
+    ## `secret-visible` is 1.1).
 
   featureVocabulary*: seq[tuple[feature, module: string]] = @[
     ("window-enumeration", "capture"), ("display-capture", "capture"),
@@ -507,6 +508,7 @@ proc toJson*(s: Session): JsonNode =
               "displays": displays, "env": env, "envUnset": envUnset,
               "vnc": (if s.vnc.isNone: newJNull()
                       else: %*{"host": s.vnc.get.host, "port": s.vnc.get.port}),
+              "vncSocket": optToJson(s.vncSocket),
               "backends": {"capture": s.backends.capture, "tree": s.backends.tree,
                            "input": s.backends.input},
               "createdAt": s.createdAt, "hostPid": optToJson(s.hostPid)}
@@ -516,7 +518,9 @@ proc fromJson*(_: typedesc[Session], n: JsonNode, path = "session"): Session =
   const keys = ["id", "name", "kind", "backend", "platform", "state",
                 "stateReason", "lifetime", "isolation", "displays", "env",
                 "envUnset", "vnc", "backends", "createdAt", "hostPid"]
-  expectObject(n, path, keys)
+  # `vncSocket` is 1.1: a record a 1.0 binary wrote has none, and reads as
+  # null.
+  expectObject(n, path, keys, optional = ["vncSocket"])
   result.id = readStr(n, "id", path)
   result.name = readOptStr(n, "name", path)
   result.kind = readEnum[SessionKind](n, "kind", path)
@@ -540,6 +544,7 @@ proc fromJson*(_: typedesc[Session], n: JsonNode, path = "session"): Session =
     expectObject(v, path & ".vnc", ["host", "port"])
     result.vnc = some(VncEndpoint(host: readStr(v, "host", path & ".vnc"),
                                   port: readInt(v, "port", path & ".vnc")))
+  if n.hasKey("vncSocket"): result.vncSocket = readOptStr(n, "vncSocket", path)
   let b = n["backends"]
   expectObject(b, path & ".backends", ["capture", "tree", "input"])
   result.backends = SessionBackends(capture: readStr(b, "capture", path & ".backends"),
@@ -776,7 +781,7 @@ proc fromJson*(_: typedesc[Feature], n: JsonNode, path = "feature"): Feature =
   if problem.len > 0: raise shapeError(path, problem)
 
 proc contractJson*(): JsonNode =
-  ## `{"name": "guiassert-desktop", "major": 1, "minor": 0}`.
+  ## `{"name": "guiassert-desktop", "major": 1, "minor": 1}`.
   %*{"name": contractName, "major": contractMajor, "minor": contractMinor}
 
 # ---------------------------------------------------------------------------

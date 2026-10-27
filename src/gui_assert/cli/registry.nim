@@ -332,7 +332,7 @@ const
     VerbSpec(name: "session-start", flags: @[("kind", fkValue), ("name", fkValue),
       ("width", fkValue), ("height", fkValue), ("scale", fkValue),
       ("displays", fkValue), ("lifetime", fkValue), ("vnc", fkSwitch),
-      ("account", fkValue)]),
+      ("vnc-socket", fkSwitch), ("account", fkValue)]),
     VerbSpec(name: "session-list"),
     VerbSpec(name: "session-info", positionals: @["id"]),
     VerbSpec(name: "session-stop", positionals: @["id"], flags: @[("force", fkSwitch)]),
@@ -348,7 +348,7 @@ const
     VerbSpec(name: "window-set-bounds", positionals: @["window-id"],
       flags: @[("bounds", fkValue)]),
     VerbSpec(name: "screenshot", flags: @[("out", fkValue)] & targetFlags &
-      @[("own-pixels", fkSwitch), ("no-cursor", fkSwitch)]),
+      @[("own-pixels", fkSwitch), ("no-cursor", fkSwitch), ("secret-stdin", fkSwitch)]),
     VerbSpec(name: "record", flags: @[("out", fkValue), ("duration-ms", fkValue)] &
       targetFlags & @[("fps", fkValue)]),
     VerbSpec(name: "record-start", flags: @[("out", fkValue)] & targetFlags &
@@ -357,7 +357,7 @@ const
     VerbSpec(name: "recordings"),
     VerbSpec(name: "ocr", flags: @[("image", fkValue), ("out", fkValue)] & targetFlags &
       @[("lang", fkRepeated), ("psm", fkValue), ("upscale", fkValue),
-        ("invert", fkValue), ("min-confidence", fkValue)]),
+        ("invert", fkValue), ("min-confidence", fkValue), ("secret-stdin", fkSwitch)]),
     VerbSpec(name: "tree", flags: @[("pid", fkValue), ("app", fkValue),
       ("window", fkValue), ("focused", fkSwitch), ("depth", fkValue),
       ("max-nodes", fkValue)]),

@@ -10,7 +10,7 @@
 ## own fixture desktop, seeded from the scenario.
 ##
 ## The reserved session `host` always exists and is never started or
-## stopped. `--vnc` is refused (`unsupported-option`): the fixture has no
+## stopped. `--vnc` and `--vnc-socket` are refused (`unsupported-option`): the fixture has no
 ## remote-view endpoint to offer, and inventing one would be a lie.
 ##
 ## **Readiness** (spec §6.1): `session-start` returns only once the session
@@ -187,8 +187,9 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
   result.start = proc (spec: SessionSpec): Session =
     if spec.kind == skHost:
       raise badArgs("invalid-value", "the host session always exists; it is never started")
-    if spec.vnc:
-      raise unsupported("the fixture has no remote-view endpoint; --vnc cannot be honoured")
+    if spec.vnc or spec.vncSocket:
+      raise unsupported("the fixture has no remote-view endpoint; " &
+        (if spec.vnc: "--vnc" else: "--vnc-socket") & " cannot be honoured")
     let scen = loadScenario(cfg.scenarioPath)
     var displays = scen.displays
     if spec.size.isSome or spec.scale.isSome or spec.displays != 1:

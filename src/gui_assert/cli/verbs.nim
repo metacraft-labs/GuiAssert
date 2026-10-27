@@ -21,7 +21,7 @@ import std/[json, options, os, strutils, tables, math, times]
 
 import ../core/[contract, geometry, image, png, ssim, hashing, segmentation,
                 vision_windows, ocr_types, tree_types, desktop_types, interfaces,
-                keys, sha256]
+                keys, sha256, secret_guard]
 import ../[cancel, state_store]
 import ../backends/fixture_desktop
 import ../backends/capture/fixture as capture_fixture
@@ -229,10 +229,11 @@ proc prepare*(inv: Invocation, ctx: RunContext): VerbEnv =
         remedy = "stop it with session-stop and start a new one",
         details = %*{"feature": nil, "session": result.session,
                      "state": $result.sessionRecord.get.state})
-  if ctx.stdinOffered and not (inv.has("stdin") or inv.has("value-stdin")):
+  if ctx.stdinOffered and not (inv.has("stdin") or inv.has("value-stdin") or
+                               inv.has("secret-stdin")):
     raise badArgs("conflicting-arguments", "the request carries stdin, but '" &
-      inv.verb & "' reads none (only type --stdin and element-action " &
-      "--value-stdin do)")
+      inv.verb & "' reads none (only type --stdin, element-action " &
+      "--value-stdin, and screenshot and ocr --secret-stdin do)")
   selectBackends(result)
   for m in Module:
     if result.selection[m].name == fixtureBackendName:
@@ -284,7 +285,8 @@ proc verbFeature*(inv: Invocation): string =
   result = case inv.verb
     of "permissions", "session-list", "session-info", "session-stop": "session-management"
     of "session-start":
-      if inv.has("vnc"): "session-vnc" else: "session-" & inv.value("kind").get("")
+      if inv.has("vnc") or inv.has("vnc-socket"): "session-vnc"
+      else: "session-" & inv.value("kind").get("")
     of "apps", "app-launch", "app-quit": "app-management"
     of "displays", "windows": "window-enumeration"
     of "window-focus", "window-set-bounds": "window-management"
@@ -698,7 +700,10 @@ proc verbSessionStart(e: VerbEnv): JsonNode =
       "--lifetime owner needs an owner that outlives the call; it is honoured " &
       "only under `guiassert serve`", remedy = "use --lifetime detached, or serve",
       details = %*{"feature": nil})
+  if e.inv.has("vnc") and e.inv.has("vnc-socket"):
+    raise badArgs("conflicting-arguments", "give --vnc or --vnc-socket, not both")
   spec.vnc = e.inv.has("vnc")
+  spec.vncSocket = e.inv.has("vnc-socket")
   if e.inv.has("account"):
     if spec.kind != skIsolated:
       raise badArgs("conflicting-arguments", "--account applies only to --kind isolated")
@@ -813,6 +818,33 @@ proc verbWindowSetBounds(e: VerbEnv): JsonNode =
 # Capture
 # ---------------------------------------------------------------------------
 
+proc readSecret(e: VerbEnv): string =
+  ## The secret of `--secret-stdin` (spec §7.5, "Secret-guarded frames"),
+  ## read and checked before anything is captured or recognized. Its
+  ## characters never reach a message.
+  result = e.readInput("--secret-stdin")
+  if not isValidUtf8(result):
+    raise badArgs("invalid-value", "the --secret-stdin secret is not valid UTF-8")
+  if secretRunes(result) < minSecretRunes:
+    raise badArgs("invalid-value", "the --secret-stdin secret has fewer than " &
+      $minSecretRunes & " characters besides white space")
+
+proc secretVisibleIn(r: OcrResult, secret: string): bool =
+  ## Whether `secret` is legible in what the engine read, in reading order
+  ## or in the engine's own word order.
+  secretVisible(r.text, secret) or secretVisible(concatenatedText(r.words), secret)
+
+proc secretVisibleError(): ref ContractError =
+  newContractError(ekBackendError, "secret-visible",
+    "the secret given on --secret-stdin is legible in the frame; no frame, " &
+    "word or text of it is reported",
+    remedy = "bring the screen to a state that does not show the secret " &
+      "(a masked field) and capture again")
+
+proc removeQuietly(path: string) =
+  try: removeFile(path)
+  except OSError: discard
+
 proc verbScreenshot(e: VerbEnv): JsonNode =
   let req = CaptureRequest(session: e.session, target: e.captureTarget(),
                            outPath: e.resolvePath(e.inv.require("out")),
@@ -820,7 +852,24 @@ proc verbScreenshot(e: VerbEnv): JsonNode =
                            cursor: not e.inv.has("no-cursor"))
   if req.ownPixels and req.target.kind != ctkWindow:
     raise badArgs("conflicting-arguments", "--own-pixels applies to --window captures")
-  %*{"image": e.captureBackend().capture(req).toJson}
+  if not e.inv.has("secret-stdin"):
+    return %*{"image": e.captureBackend().capture(req).toJson}
+  # Secret-guarded: the secret and the OCR engine first, so a refusal
+  # leaves no frame; then the frame, read and judged before it is reported.
+  let secret = e.readSecret()
+  let ocr = featured("ocr"): e.ocrBackend()
+  let img = e.captureBackend().capture(req)
+  var visible = false
+  try:
+    visible = featured("ocr"):
+      secretVisibleIn(ocr.recognize(OcrRequest(imagePath: req.outPath)), secret)
+  except CatchableError:
+    removeQuietly(req.outPath)
+    raise
+  if visible:
+    removeQuietly(req.outPath)
+    raise secretVisibleError()
+  %*{"image": img.toJson}
 
 proc recordRequest(e: VerbEnv, blocking: bool): RecordRequest =
   result = RecordRequest(session: e.session, target: e.captureTarget(),
@@ -858,6 +907,22 @@ proc verbOcr(e: VerbEnv): JsonNode =
   ## engine's option checks run before the capture, so a refused option
   ## leaves no frame behind; a frame whose recognition then fails is removed
   ## too, because a failure reports no image (spec §7.5, "Captured content").
+  let guarded = e.inv.has("secret-stdin")
+  let secret = if guarded: e.readSecret() else: ""
+  proc judged(ocr: OcrEngine, req: OcrRequest): OcrResult =
+    ## The engine's reading of `req`; guarded, the secret is judged against
+    ## every word it read, before `--min-confidence` drops any, and a
+    ## visible secret raises `secret-visible`.
+    if not guarded: return ocr.recognize(req)
+    var whole = req
+    whole.minConfidence = none(float)
+    let r = ocr.recognize(whole)
+    if secretVisibleIn(r, secret): raise secretVisibleError()
+    if req.minConfidence.isNone: return r
+    var kept: seq[OcrWord]
+    for w in r.words:
+      if w.confidence >= req.minConfidence.get: kept.add w
+    initOcrResult(kept, r.backend, r.languages)
   if e.inv.has("image"):
     e.inv.refuse(["out", "display", "window", "region"],
                  "with --image (it reads an existing file)")
@@ -866,7 +931,7 @@ proc verbOcr(e: VerbEnv): JsonNode =
     let ocr = e.ocrBackend()
     if ocr.validate != nil: ocr.validate(req)
     let img = fileImageRef(path)
-    return ocrDataJson(img, ocr.recognize(req))
+    return ocrDataJson(img, judged(ocr, req))
   if not (e.inv.has("display") or e.inv.has("window") or e.inv.has("region")):
     raise badArgs("missing-argument", "ocr needs --image, or --display, --window " &
       "or --region with --out")
@@ -878,10 +943,9 @@ proc verbOcr(e: VerbEnv): JsonNode =
     e.captureBackend().capture(CaptureRequest(session: e.session,
       target: e.captureTarget(), outPath: outPath, cursor: false))
   try:
-    result = ocrDataJson(img, ocr.recognize(req))
+    result = ocrDataJson(img, judged(ocr, req))
   except CatchableError:
-    try: removeFile(outPath)
-    except OSError: discard
+    removeQuietly(outPath)
     raise
 
 # ---------------------------------------------------------------------------
