@@ -27,7 +27,7 @@ when defined(windows):
 else:
   from std/posix import nil
 
-import ../../media
+import ../../ffmpeg_tools
 import ../../core/[image, desktop_types, segmentation]
 
 type

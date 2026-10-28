@@ -37,7 +37,7 @@ import std/[options, os, osproc, streams, strformat, strtabs, strutils]
 when defined(posix):
   import std/posix
 
-import ./media
+import ./ffmpeg_tools
 import ./core/geometry
 
 # This module stays at its path. Its pure code (the per-backend ffmpeg and

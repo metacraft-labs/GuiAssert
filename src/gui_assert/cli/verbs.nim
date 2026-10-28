@@ -32,7 +32,7 @@ import ../backends/session/fixture as session_fixture
 import ./[args, context, registry, state]
 
 when mediaCompiledIn:
-  import ../media
+  import ../ffmpeg_tools
   import ../backends/media/ffmpeg as media_ffmpeg
 
 when macosCaptureCompiledIn:

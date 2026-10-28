@@ -30,7 +30,7 @@
 import std/[json, os, osproc, streams, strtabs, strutils, algorithm,
             tempfiles, re, sets]
 
-import ./media
+import ./ffmpeg_tools
 import ./image_math
 import ./ocr
 import ./core/segmentation

@@ -18,7 +18,7 @@
 
 import std/[os, osproc, strtabs, strutils, streams, math, tempfiles]
 
-import ./media
+import ./ffmpeg_tools
 import ./image_math
 import ./core/[ocr_types, interfaces]
 import ./backends/ocr/apple_vision
