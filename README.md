@@ -4,26 +4,18 @@ Visual and scripting assertion library for CodeTracer GUI sessions. Companion to
 `TermAssert` for character-cell terminal assertions, translated into pixel-space
 visual-semantic assertions for graphical applications.
 
-This repository currently implements **Milestone M2** of the Video Session
-Capture initiative: the precise action-driver scripting protocol.
+It captures the screen and windows, reads them (OCR, layout detection, image
+math, accessibility trees), and delivers OS-level input, through one JSON contract
+(the `guiassert` program below) and a Nim library.
 
-## Layout
-
-```
-GuiAssert/
-├── gui_assert.nimble            # Nimble package manifest
-├── src/
-│   ├── gui_assert.nim           # Public umbrella module
-│   └── gui_assert/
-│       ├── parser.nim           # JSON/YAML keyframe script parser
-│       ├── driver.nim           # Browser / PTY / VS Code drivers
-│       └── pty_unix.nim         # Unix PTY primitives (posix_openpt, etc.)
-└── tests/
-    ├── tparser.nim              # Script interpreter parser tests
-    ├── tdriver_browser.nim      # Browser driver emit-JSON test
-    ├── tdriver_vscode.nim       # VS Code TCP client test
-    └── tgui_assert.nim          # e2e_terminal_action_injection test
-```
+**Video production lives in [DemoVideoStudio](https://github.com/metacraft-labs/DemoVideoStudio).**
+The timeline editor and its web UI, composition (`media`), narration
+(`speech_synthesis`), the presenter overlay (`talking_head`, `avatar_track`,
+`emotive`), the per-stage artifact project, the storyboard and the keyframe-script
+parser and driver moved there with their history. The talking-head and speech
+provider plugins (`GuiAssert-*`) build against DemoVideoStudio's plugin contract.
+What every module that runs ffmpeg shares — finding the binary and naming files to
+it — stays here, in `gui_assert/ffmpeg_tools`.
 
 ## Running tests
 
@@ -53,9 +45,6 @@ The `just analyze VIDEO` recipe is meant to be run inside this shell too, e.g.
 From inside any Nim development shell with `ffmpeg`/`tesseract` on `PATH`:
 
 ```sh
-nim c -r --hints:off tests/tparser.nim
-nim c -r --hints:off tests/tdriver_browser.nim
-nim c -r --hints:off tests/tdriver_vscode.nim
 nim c -r --hints:off tests/tgui_assert.nim
 ```
 
@@ -166,49 +155,6 @@ tools):
 ```sh
 nix develop -c just test-desktop-env
 ```
-
-## Talking-head plugins
-
-GuiAssert ships a small built-in talking-head provider called
-`stock_avatar` (the `testsrc2` placeholder used in CI dry runs) and
-exposes a **plugin contract** so heavyweight providers can live in
-sibling repos. Each plugin builds a `TalkingHeadProvider` value with
-a `name`, an `isAvailable` probe, and a `generate` proc, then
-registers itself with a `TalkingHeadRegistry`:
-
-```nim
-import gui_assert/talking_head
-
-let reg = newRegistry()   # `stock_avatar` is pre-registered
-
-# Plugin registration (one-liner exposed by each plugin):
-import gui_assert_sadtalker
-registerSadTalker(reg)
-
-# Dispatch by provider name — the YAML facing identifier.  The
-# registry handles aliases (`""`, `"stock"`, `"placeholder"` all map
-# to `stock_avatar`; `"d-id"` maps to `"did"`; everything else is a
-# direct lookup).
-let opts = TalkingHeadOpts(
-  avatarImagePath: some("/path/to/portrait.png"),
-  device: "mps",
-)
-generateTalkingHead(reg, "sadtalker", "/path/to/narration.wav",
-                    "/path/to/output.mp4", opts)
-```
-
-Available plugins (sibling repos):
-
-- [`GuiAssert-SadTalker`](../GuiAssert-SadTalker/) — local SadTalker
-  invocation via a Python 3.10 venv. Apple Silicon MPS supported.
-- Reserved names: `did`, `heygen`, `hedra`, `musetalk` — each
-  belongs to its own future sibling repo (not yet implemented).
-
-Plugin authors: see
-`src/gui_assert/talking_head/stock_avatar.nim` and
-`../GuiAssert-SadTalker/src/gui_assert_sadtalker.nim` for the
-canonical shape.  Use `cacheKeyFor` + `applyCache` from
-`gui_assert/talking_head/core` to avoid re-implementing the cache.
 
 ## macOS still-frame and window-targeted capture
 

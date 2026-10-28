@@ -1,7 +1,11 @@
 ## GuiAssert public API
 ##
-## Re-exports the M2/M3 modules (parser, driver, media, speech_synth) and
-## promotes the package root to host the M4 visual-assertion harness:
+## Re-exports GuiAssert's modules (OCR, image math, capture, input, window
+## layout) and hosts the visual-assertion harness. The video-production
+## modules (the editor, composition, narration, the presenter overlay, the
+## keyframe-script parser and driver) live in DemoVideoStudio now
+## (https://github.com/metacraft-labs/DemoVideoStudio).
+##
 ##
 ##   * `GuiAssertHarness` — owns the latest-frame source and OCR/SSIM
 ##     dispatcher.
@@ -35,34 +39,20 @@
 
 import std/[os, options, strutils, times]
 
-import ./gui_assert/parser
-import ./gui_assert/driver
-import ./gui_assert/media
-import ./gui_assert/speech_synth
-import ./gui_assert/speech_synthesis
+import ./gui_assert/ffmpeg_tools
 import ./gui_assert/ocr
 import ./gui_assert/image_math
-import ./gui_assert/storyboard
 import ./gui_assert/capture
 import ./gui_assert/screen_capture
-import ./gui_assert/talking_head
-import ./gui_assert/emotive
 import ./gui_assert/window_layout
 import ./gui_assert/input
 import ./gui_assert/pacing
 
-export parser
-export driver
-export media
-export speech_synth
-export speech_synthesis
+export ffmpeg_tools
 export ocr
 export image_math
-export storyboard
 export capture
 export screen_capture
-export talking_head
-export emotive
 export window_layout
 export input
 export pacing

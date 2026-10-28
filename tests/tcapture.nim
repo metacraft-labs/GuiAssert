@@ -23,7 +23,7 @@ when defined(linux):
 
 when defined(macosx) and defined(captureLive):
   import std/[json, os, osproc, streams, strtabs]
-  import ../src/gui_assert/media
+  import ../src/gui_assert/ffmpeg_tools
 
 # ---------------------------------------------------------------------------
 # Sample stderr output from `ffmpeg -f avfoundation -list_devices true -i ""`.

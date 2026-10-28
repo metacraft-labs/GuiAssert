@@ -3,12 +3,7 @@ nimcache/
 # keeps its intermediate files here, never in the shared ~/.cache/nim.
 .nimcache/
 nimblecache/
-tests/tparser
-tests/tdriver_browser
-tests/tdriver_vscode
 tests/tgui_assert
-tests/tmedia
-tests/teditor
 tests/tcapture
 tests/tappium
 tests/twindow_layout
@@ -24,15 +19,8 @@ tests/tocr_vision
 tests/tocr_backends
 src/gui_assert_vision
 vision-out/
-tests/ttalking_head
-tests/tspeech_synthesis
-src/gui_assert/media
-src/gui_assert/speech_synth
 *.dSYM
-tests/temotive
 tests/tdiscovery
-tests/tartifact_project
-tests/tartifact_pipeline
 tests/tnimcache_is_worktree_local
 tests/tscreen_capture
 

@@ -38,7 +38,7 @@
 
 import std/[os, osproc, streams, strtabs, strutils, tempfiles]
 
-import ./media
+import ./ffmpeg_tools
 import ./image_math
 import ./ocr
 import ./core/vision_windows as core_vision_windows
@@ -57,7 +57,7 @@ proc buildCropArgv*(framePath: string, x, y, w, h: int,
                     outPng: string): seq[string] =
   ## Pure builder for the ffmpeg argv (no leading binary token) that crops the
   ## rectangle `(x, y, w, h)` out of `framePath` to a single PNG at `outPng`.
-  ## The input is `media.ffmpegInputUrl(framePath)`, so a name starting with
+  ## The input is `ffmpeg_tools.ffmpegInputUrl(framePath)`, so a name starting with
   ## `-` or naming a protocol is read as a file.
   @[
     "-hide_banner",
@@ -81,7 +81,7 @@ proc sanitizedEnv(binPath: string): StringTableRef =
 
 proc resolveFfmpeg(): string =
   ## Locate ffmpeg. Honors `FFMPEG`, then delegates to
-  ## `media.resolveFfmpegBinary` (which honors `FFMPEG_BIN`, then `$PATH`).
+  ## `ffmpeg_tools.resolveFfmpegBinary` (which honors `FFMPEG_BIN`, then `$PATH`).
   let envBin = getEnv("FFMPEG")
   if envBin.len > 0:
     if not fileExists(envBin):

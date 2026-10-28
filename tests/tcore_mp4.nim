@@ -11,7 +11,7 @@
 import std/[os, osproc, strutils, unittest]
 
 import ../src/gui_assert/core/mp4
-import ../src/gui_assert/media
+import ../src/gui_assert/ffmpeg_tools
 
 proc tool(name: string): string =
   ## ffmpeg, or the ffprobe beside it.

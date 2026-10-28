@@ -3,7 +3,7 @@
 Status: **planned** · Owner: campaign extension of "The Flame" home-demo work ·
 Related: [[Home-Demo-Screencast.milestones.org]] (codetracer-specs/Marketing),
 [[../src/gui_assert/ocr.nim]], [[../src/gui_assert/image_math.nim]],
-[[../src/gui_assert/media.nim]], [[../src/gui_assert/window_layout.nim]].
+[[../src/gui_assert/ffmpeg_tools.nim]], [[../src/gui_assert/window_layout.nim]].
 
 ## Two distinct capability sets (this initiative is the second)
 

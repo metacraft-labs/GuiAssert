@@ -23,7 +23,7 @@ import std/[os, osproc, random, streams, strutils, unittest]
 
 import ../src/gui_assert/core/[image, png]
 import ../src/gui_assert/backends/media/ffmpeg
-import ../src/gui_assert/media
+import ../src/gui_assert/ffmpeg_tools
 
 proc randomImage[T: AnyImage](rng: var Rand, width, height: int): T =
   ## Mixed content: smooth gradients (which the predictive filters compress)

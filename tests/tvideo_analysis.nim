@@ -12,7 +12,7 @@ import std/[unittest, os, osproc, streams, strtabs, strutils, tempfiles, json]
 import ../src/gui_assert/video_analysis
 import ../src/gui_assert/ocr
 import ../src/gui_assert/image_math
-from ../src/gui_assert/media import ffmpegInputUrl
+from ../src/gui_assert/ffmpeg_tools import ffmpegInputUrl
 
 # ---------------------------------------------------------------------------
 # Helpers for the e2e fixture

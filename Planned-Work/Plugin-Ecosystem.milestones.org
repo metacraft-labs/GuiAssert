@@ -8,6 +8,16 @@
   :executive_summary: Plan to develop talking-head + speech-synthesis provider plugins for GuiAssert. Each plugin is a sibling sub-repository (PascalCase `GuiAssert-<Provider>`) with its own Nix flake, implementing one of the GuiAssert plugin contracts: `TalkingHeadProvider` (M0-M6, defined in `GuiAssert/src/gui_assert/talking_head/core.nim`) or `SpeechSynthesisProvider` (M7, defined in `GuiAssert/src/gui_assert/speech_synthesis/core.nim`).
   :END:
 
+* Where the contracts live now
+
+  The video-production modules, the plugin contracts among them
+  (=TalkingHeadProvider=, =SpeechSynthesisProvider=), moved to
+  [[https://github.com/metacraft-labs/DemoVideoStudio][DemoVideoStudio]]
+  with their history: =src/demo_video_studio/talking_head/core.nim= and
+  =src/demo_video_studio/speech_synthesis/core.nim=. The plugins keep their
+  =GuiAssert-*= names and build against DemoVideoStudio's contract. The
+  paths below are the ones the work was done on.
+
 * Introduction
   :PROPERTIES:
   :initiative_goals: Provide a pluggable contract so consumers can swap among open-source and commercial talking-head/lip-sync providers without changing GuiAssert itself, validated by strong integration tests per plugin (real subprocess invocations or HTTP mock-server tests with exact request-body assertions; live tests gated for credentialed runs).
