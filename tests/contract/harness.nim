@@ -432,6 +432,7 @@ proc everyVerbScenario*(work: string): seq[seq[string]] =
     @["move", "--to", "10,10"],
     @["click", "--at", "190,278"],
     @["drag", "--from", "1,1", "--to", "5,5"],
+    @["gesture", "--steps", "key-down shift; press 1,1; move 3,3; release 5,5; key-up shift"],
     @["scroll", "--at", "10,10", "--dx", "0", "--dy", "3"],
     @["type", "hello"],
     @["key", "cmd+s"],

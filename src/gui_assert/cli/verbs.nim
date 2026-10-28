@@ -299,7 +299,7 @@ proc verbFeature*(inv: Invocation): string =
       if inv.has("element"): "tree-read"
       elif inv.has("text"): "ocr"
       else: "window-enumeration"
-    of "move", "click", "drag", "scroll": "pointer-input"
+    of "move", "click", "drag", "scroll", "gesture": "pointer-input"
     of "type", "key": "keyboard-input"
     of "vision-segment": "video-decode"
     of "watch": (if inv.has("frames"): "display-capture" else: "window-enumeration")
@@ -1147,18 +1147,20 @@ proc verbMove(e: VerbEnv): JsonNode =
   let to = parsePointValue("--to", e.inv.require("to"))
   e.inputVerb(ib.move(e.session, to))
 
-proc verbClick(e: VerbEnv): JsonNode =
-  let at = parsePointValue("--at", e.inv.require("at"))
-  let btn = e.button()
-  let count = e.inv.intFlag("count", 1, 10).get(1)
-  var mods: seq[string]
+proc modifierList(e: VerbEnv): seq[string] =
+  ## `--modifiers`, in canonical spellings and the table's order.
   if e.inv.has("modifiers"):
     try:
       let s = parseModifiers(e.inv.value("modifiers").get)
       for m in Modifier:
-        if m in s: mods.add $m
+        if m in s: result.add $m
     except KeyComboError as x: raise badArgs("invalid-value", "--modifiers: " & x.msg)
-  e.inputVerb(ib.click(e.session, at, btn, count, mods))
+
+proc verbClick(e: VerbEnv): JsonNode =
+  let at = parsePointValue("--at", e.inv.require("at"))
+  let btn = e.button()
+  let count = e.inv.intFlag("count", 1, 10).get(1)
+  e.inputVerb(ib.click(e.session, at, btn, count, e.modifierList()))
 
 const maxDragWaypoints = 1000
   ## The most `drag --path` waypoints one drag takes.
@@ -1181,7 +1183,57 @@ proc verbDrag(e: VerbEnv): JsonNode =
   let btn = e.button()
   let steps = e.inv.intFlag("steps", 1, 1000).get(10)
   let dur = e.inv.intFlag("duration-ms", 0, 600_000).get(0)
-  e.inputVerb(ib.drag(e.session, path, btn, steps, dur))
+  e.inputVerb(ib.drag(e.session, path, btn, steps, dur, e.modifierList()))
+
+const maxGestureSteps = 10_000
+
+proc parseGestureStep(spec: string): GestureStep =
+  ## `move X,Y` | `press X,Y [BUTTON]` | `release X,Y [BUTTON]` |
+  ## `key-down COMBO` | `key-up COMBO` | `wait MS`
+  let w = spec.strip.splitWhitespace
+  if w.len == 0: raise badArgs("invalid-value", "--steps has an empty step")
+  proc btnOf(i: int): MouseButton =
+    if w.len <= i: return mbLeft
+    case w[i]
+    of "left": mbLeft
+    of "right": mbRight
+    of "middle": mbMiddle
+    else: raise badArgs("invalid-value", "--steps: unknown button '" & w[i] & "'")
+  case w[0]
+  of "move":
+    if w.len != 2: raise badArgs("invalid-value", "--steps: move X,Y")
+    GestureStep(kind: gsMove, to: parsePointValue("--steps", w[1]))
+  of "press", "release":
+    if w.len notin 2 .. 3: raise badArgs("invalid-value", "--steps: " & w[0] & " X,Y [BUTTON]")
+    let at = parsePointValue("--steps", w[1])
+    if w[0] == "press": GestureStep(kind: gsPress, at: at, button: btnOf(2))
+    else: GestureStep(kind: gsRelease, at: at, button: btnOf(2))
+  of "key-down", "key-up":
+    if w.len != 2: raise badArgs("invalid-value", "--steps: " & w[0] & " COMBO")
+    var combo = w[1]
+    try:
+      let mods = parseModifiers(combo)
+      var names: seq[string]
+      for m in Modifier:
+        if m in mods: names.add $m
+      combo = names.join("+")
+    except KeyComboError:
+      try: combo = normalizeCombo(combo)
+      except KeyComboError as x: raise badArgs("invalid-value", "--steps: " & x.msg)
+    if w[0] == "key-down": GestureStep(kind: gsKeyDown, combo: combo)
+    else: GestureStep(kind: gsKeyUp, combo: combo)
+  of "wait":
+    if w.len != 2: raise badArgs("invalid-value", "--steps: wait MS")
+    GestureStep(kind: gsWait, ms: parseIntValue("--steps", w[1], 0, 600_000))
+  else: raise badArgs("invalid-value", "--steps: unknown step '" & w[0] & "'")
+
+proc verbGesture(e: VerbEnv): JsonNode =
+  let parts = e.inv.require("steps").split(';')
+  if parts.len > maxGestureSteps:
+    raise badArgs("invalid-value", "--steps takes at most " & $maxGestureSteps & " steps")
+  var steps: seq[GestureStep]
+  for p in parts: steps.add parseGestureStep(p)
+  e.inputVerb(ib.gesture(e.session, steps))
 
 proc verbScroll(e: VerbEnv): JsonNode =
   let at = parsePointValue("--at", e.inv.require("at"))
@@ -1483,6 +1535,7 @@ proc dispatchVerb(e: VerbEnv): JsonNode =
   of "move": verbMove(e)
   of "click": verbClick(e)
   of "drag": verbDrag(e)
+  of "gesture": verbGesture(e)
   of "scroll": verbScroll(e)
   of "type": verbType(e)
   of "key": verbKey(e)

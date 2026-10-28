@@ -35,6 +35,9 @@
 ##   on every backend;
 ## * C17: `drag --path` waypoints reach the canvas in order with the button
 ##   held, and the report's path is the requested vertices;
+## * GADV-1: a `gesture`'s presses, moves, releases and held keys arrive in
+##   order, what it leaves held is released when it ends, and `drag
+##   --modifiers` holds them for the whole drag;
 ## * C7: each backend's pointer-input, keyboard-input and window-management
 ##   with probed states; exit 4 / 6 envelopes name their feature; the input
 ##   default follows the session;
@@ -472,6 +475,61 @@ template checkDragPath(env: StringTableRef, f: Lab) =
         inc i
       for l in lines[1 .. ^2]: check l.startsWith("trail ")
 
+template checkGestureAndModifiedDrag(env: StringTableRef, f: Lab) =
+  ## GADV-1: a gesture's presses, moves, releases and held keys reach the
+  ## application in order; what a gesture leaves held is released when it
+  ## ends; a drag holds its modifiers for the whole gesture.
+  block:
+    let pad = boundsOf(env, f.pid, "Sketch pad")
+    let a = (pad.x + 30, pad.y + 30)
+    let b = (pad.x + 120, pad.y + 70)
+    proc local(p: (int, int)): string = $(p[0] - pad.x) & " " & $(p[1] - pad.y)
+    proc pointerLines(from0: int): seq[string] =
+      settle(f.log)[from0 .. ^1].filterIt(it.startsWith("press") or it.startsWith("release"))
+    # a press here and a release there, the pointer moving with the button down
+    var before = logLines(f.log).len
+    let c = (pad.x + 200, pad.y + 20)   # off the line from a to b
+    # a pause after each move: back-to-back motion is coalesced by the toolkit,
+    # as it is for a real pointer
+    let g = mustRun(@["gesture", "--steps", "press " & at(a) & "; wait 60; move " & at(c) &
+                      "; wait 60; release " & at(b)], env)["input"]
+    check g["kind"].getStr == "gesture"
+    check g["path"] == %*[[a[0], a[1]], [c[0], c[1]], [b[0], b[1]]]
+    var lines = settle(f.log)[before .. ^1]
+    checkpoint "gesture: " & $lines
+    check lines.len >= 3
+    if lines.len >= 3:
+      check lines[0] == "press 1 1 " & local(a) & " -"
+      check ("trail " & local(c)) in lines
+      check ("trail " & local(b)) in lines
+      check lines[^1] == "release 1 " & local(b)
+    # a key held between steps modifies the presses inside it, and only those
+    before = logLines(f.log).len
+    discard mustRun(@["gesture", "--steps", "key-down shift; press " & at(a) & " right; release " &
+                      at(a) & " right; key-up shift; wait 50; press " & at(b) & "; release " & at(b)], env)
+    lines = pointerLines(before)
+    checkpoint "held key: " & $lines
+    check lines == @["press 3 1 " & local(a) & " s", "release 3 " & local(a),
+                     "press 1 1 " & local(b) & " -", "release 1 " & local(b)]
+    # what a gesture leaves held is released when it ends
+    before = logLines(f.log).len
+    discard mustRun(@["gesture", "--steps", "key-down ctrl; press " & at(a)], env)
+    lines = pointerLines(before)
+    check lines == @["press 1 1 " & local(a) & " c", "release 1 " & local(a)]
+    discard mustRun(@["click", "--at", at(b)], env)
+    check pointerLines(before)[^2] == "press 1 1 " & local(b) & " -"
+    # a drag with modifiers: they are down from the press to the release
+    before = logLines(f.log).len
+    let d = mustRun(@["drag", "--from", at(a), "--to", at(b), "--modifiers", "shift",
+                      "--steps", "3"], env)["input"]
+    check d["keys"].getStr == "shift"
+    lines = pointerLines(before)
+    check lines == @["press 1 1 " & local(a) & " s", "release 1 " & local(b)]
+    discard failsWith(@["gesture", "--steps", "press " & at(a) & " thumb"], env, 2, "invalid-value")
+    discard failsWith(@["gesture", "--steps", "hover " & at(a)], env, 2, "invalid-value")
+    discard failsWith(@["drag", "--from", at(a), "--to", at(b), "--modifiers", "hyper"], env, 2,
+                      "invalid-value")
+
 template checkClickDetails(env: StringTableRef, f: Lab) =
   ## Buttons, click counts and modifiers held around a click reach the canvas.
   block:
@@ -708,6 +766,9 @@ suite "linux-wlr-virtual in a private headless sway":
 
   test "test_every_key_of_the_table_is_delivered [linux-wlr-virtual, gtk4]":
     live problem: checkEveryKey(env, f4, nonLayout = true)
+
+  test "test_gesture_held_keys_and_modified_drag [linux-wlr-virtual, gtk3]":
+    live problem: checkGestureAndModifiedDrag(env, f3)
 
   test "test_drag_path_waypoints_reach_the_fixture_in_order [linux-wlr-virtual, gtk3]":
     live problem:
@@ -955,6 +1016,11 @@ suite "linux-xtest in a private Xvfb":
     live problem:
       focus(f3)
       checkEveryKey(env, f3, nonLayout = true)
+
+  test "test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]":
+    live problem:
+      focus(f3)
+      checkGestureAndModifiedDrag(env, f3)
 
   test "test_drag_path_waypoints_reach_the_fixture_in_order [linux-xtest, gtk3]":
     live problem:

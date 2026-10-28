@@ -174,11 +174,14 @@ proc planClick*(at: Point, button: MouseButton, count: int,
   result.releaseModifiers(mods)
 
 proc planDrag*(path: seq[Point], button: MouseButton, steps,
-               durationMs: int): seq[InputOp] =
-  ## Press at `path[0]`, move through every later vertex (`steps` motion
-  ## events per segment, interpolated linearly, the last exactly on the
-  ## vertex), release at the last vertex.
+               durationMs: int, modifiers: seq[string] = @[]): seq[InputOp] =
+  ## Hold `modifiers`, press at `path[0]`, move through every later vertex
+  ## (`steps` motion events per segment, interpolated linearly, the last
+  ## exactly on the vertex), release at the last vertex, release the
+  ## modifiers.
   if path.len < 2: raise newException(InputPlanError, "a drag needs a start and an end point")
+  let mods = modifierSet(modifiers)
+  result.pressModifiers(mods)
   let steps = max(1, steps)
   let events = steps * (path.len - 1)
   let per = if events > 0: durationMs div events else: 0
@@ -195,6 +198,7 @@ proc planDrag*(path: seq[Point], button: MouseButton, steps,
       result.add move(p)
       if per > 0: result.add wait(per)
   result.add btn(button, false)
+  result.releaseModifiers(mods)
 
 proc planScroll*(at: Point, dx, dy: int, unit: ScrollUnit): seq[InputOp] =
   result.add move(at)
@@ -241,6 +245,38 @@ proc planKey*(combo: string): seq[InputOp] =
   result.add key(ks, true)
   result.add key(ks, false)
   result.releaseModifiers(c.modifiers)
+
+proc keysOfCombo(combo: string): seq[uint32] =
+  ## The keys of a combo in press order: its modifiers in the table's order,
+  ## then its key; a combo of modifiers only is allowed.
+  let mods = (try: parseModifiers(combo) except KeyComboError: {})
+  if mods != {}:
+    for m in Modifier:
+      if m in mods: result.add modifierKeysyms[m]
+    return
+  let c = parseCombo(combo)
+  for m in Modifier:
+    if m in c.modifiers: result.add modifierKeysyms[m]
+  result.add keysymOfKey(c.key)
+
+proc planGesture*(steps: seq[GestureStep]): seq[InputOp] =
+  ## The steps as primitive events, in order. What they leave held, the
+  ## helper releases at the end of the script.
+  for st in steps:
+    case st.kind
+    of gsMove: result.add move(st.to)
+    of gsPress:
+      result.add move(st.at)
+      result.add btn(st.button, true)
+    of gsRelease:
+      result.add move(st.at)
+      result.add btn(st.button, false)
+    of gsKeyDown:
+      for ks in keysOfCombo(st.combo): result.add key(ks, true)
+    of gsKeyUp:
+      let ks = keysOfCombo(st.combo)
+      for i in countdown(ks.high, 0): result.add key(ks[i], false)
+    of gsWait: result.add wait(st.ms)
 
 proc plannedMs*(ops: seq[InputOp]): int =
   ## The time the waits of a plan add up to.
@@ -344,12 +380,28 @@ proc clickReport*(session: string, at: Point, button: MouseButton, count: int,
   result.count = some(count)
   if modifiers.len > 0: result.keys = some(modifiers.join("+"))
 
-proc dragReport*(session: string, path: seq[Point], button: MouseButton): InputReport =
+proc dragReport*(session: string, path: seq[Point], button: MouseButton,
+                 modifiers: seq[string] = @[]): InputReport =
   result = newReport("drag", session)
   result.at = some(path[0])
   result.to = some(path[^1])
   result.button = some($button)
   result.path = some(path)
+  if modifiers.len > 0: result.keys = some(modifiers.join("+"))
+
+proc gestureReport*(session: string, steps: seq[GestureStep]): InputReport =
+  ## A gesture: where it started and ended, and the points it visited.
+  result = newReport("gesture", session)
+  var pts: seq[Point]
+  for st in steps:
+    case st.kind
+    of gsMove: pts.add st.to
+    of gsPress, gsRelease: pts.add st.at
+    else: discard
+  if pts.len > 0:
+    result.at = some(pts[0])
+    result.to = some(pts[^1])
+    result.path = some(pts)
 
 proc scrollReport*(session: string, at: Point): InputReport =
   result = newReport("scroll", session)

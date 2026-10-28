@@ -162,6 +162,20 @@ type
     suLine = "line"
     suPixel = "pixel"
 
+  GestureStepKind* = enum
+    gsMove = "move", gsPress = "press", gsRelease = "release",
+    gsKeyDown = "key-down", gsKeyUp = "key-up", gsWait = "wait"
+
+  GestureStep* = object
+    ## One step of a `gesture`.
+    case kind*: GestureStepKind
+    of gsMove: to*: Point
+    of gsPress, gsRelease:
+      at*: Point
+      button*: MouseButton
+    of gsKeyDown, gsKeyUp: combo*: string   ## normalized; a bare modifier is allowed
+    of gsWait: ms*: int
+
   InputBackend* = object
     ## Synthesized input at desktop coordinates. Each operation reports what
     ## it delivered.
@@ -170,11 +184,17 @@ type
     click*: proc (session: string, at: Point, button: MouseButton, count: int,
                   modifiers: seq[string]): InputReport {.closure.}
     drag*: proc (session: string, path: seq[Point], button: MouseButton,
-                 steps: int, durationMs: int): InputReport {.closure.}
+                 steps: int, durationMs: int, modifiers: seq[string]): InputReport {.closure.}
       ## Press at `path[0]`, move through every later point in order with the
       ## button held (`steps` pointer events per segment, `durationMs` over
       ## the whole drag), release at the last point. `path` has at least two
-      ## points: `--from`, the `--path` waypoints, `--to`.
+      ## points: `--from`, the `--path` waypoints, `--to`. `modifiers`
+      ## (canonical spellings) are held for the whole gesture.
+    gesture*: proc (session: string, steps: seq[GestureStep]): InputReport {.closure.}
+      ## A sequence of primitive events delivered as one script: presses and
+      ## releases of buttons and keys, moves and waits. A button or key the
+      ## steps leave down is released when the gesture ends, as at the end of
+      ## every request, so a failed or cancelled client never leaves one held.
     scroll*: proc (session: string, at: Point, dx, dy: int,
                    unit: ScrollUnit): InputReport {.closure.}
     typeText*: proc (session: string, text: string,

@@ -1,0 +1,21 @@
+# gadv1 mutation results — 2026-10-28 01:14:01 +0200
+# kill command: bash -euo pipefail -c nim c --hints:off -d:release --nimcache:${BUILD_DIR}/nc-cli -o:${BUILD_DIR}/guiassert src/guiassert.nim && GUIASSERT_CONTRACT_BIN=${BUILD_DIR}/guiassert nim c -r --hints:off --nimcache:${BUILD_DIR}/nc-live -o:${BUILD_DIR}/tinput tests/live/tinput_linux.nim 'test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]'
+
+KILLED   G1      550.0s  a release planned as a press
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 38) Warning: imported and not used: 'tables' [UnusedImport]
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 19) Warning: imported and not used: 'options' [UnusedImport]
+           | Error: execution of an external program failed: '$BUILD_DIR/tinput 'test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]''
+KILLED   G2       57.6s  a key-up omitted
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 38) Warning: imported and not used: 'tables' [UnusedImport]
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 19) Warning: imported and not used: 'options' [UnusedImport]
+           | Error: execution of an external program failed: '$BUILD_DIR/tinput 'test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]''
+KILLED   G3       66.9s  a drag's modifiers never held
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 38) Warning: imported and not used: 'tables' [UnusedImport]
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 19) Warning: imported and not used: 'options' [UnusedImport]
+           | Error: execution of an external program failed: '$BUILD_DIR/tinput 'test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]''
+KILLED   G4       68.1s  a gesture's move dropped
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 38) Warning: imported and not used: 'tables' [UnusedImport]
+           | ../dvs-guiassert/src/gui_assert/avatar_track.nim(17, 19) Warning: imported and not used: 'options' [UnusedImport]
+           | Error: execution of an external program failed: '$BUILD_DIR/tinput 'test_gesture_held_keys_and_modified_drag [linux-xtest, gtk3]''
+
+4/4 killed, 0 survived

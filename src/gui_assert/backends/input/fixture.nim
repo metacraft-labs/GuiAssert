@@ -62,7 +62,7 @@ proc newFixtureInput*(cfg: FixtureConfig): InputBackend =
     if modifiers.len > 0: result.keys = some(modifiers.join("+"))
 
   result.drag = proc (session: string, path: seq[Point], button: MouseButton,
-                      steps: int, durationMs: int): InputReport =
+                      steps: int, durationMs: int, modifiers: seq[string]): InputReport =
     cfg.checkAccessibility()
     if path.len < 2:
       raise newBackendError(BackendError, fixtureBackendName, "input-failed",
@@ -83,6 +83,26 @@ proc newFixtureInput*(cfg: FixtureConfig): InputBackend =
     result.to = some(path[^1])
     result.button = some($button)
     result.path = some(path)
+    if modifiers.len > 0: result.keys = some(modifiers.join("+"))
+
+  # the fixture desktop models no held buttons or keys: a gesture moves its
+  # pointer to where the gesture ends and reports what was delivered
+  result.gesture = proc (session: string, steps: seq[GestureStep]): InputReport =
+    cfg.checkAccessibility()
+    var last = none(Point)
+    for st in steps:
+      case st.kind
+      of gsMove: last = some(st.to)
+      of gsPress, gsRelease: last = some(st.at)
+      of gsWait: cfg.token.sleepCancellable(st.ms)
+      else: discard
+    if last.isSome:
+      cfg.transact(t):
+        var d = cfg.loadDesktop(t, session)
+        d.pointer = last.get
+        cfg.saveDesktop(session, d)
+    result = report("gesture", session)
+    if last.isSome: result.to = last
 
   result.scroll = proc (session: string, at: Point, dx, dy: int,
                         unit: ScrollUnit): InputReport =

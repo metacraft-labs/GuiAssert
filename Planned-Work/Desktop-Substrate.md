@@ -619,9 +619,10 @@ What the newer keys mean:
   a label's string, a text field's or document's content. It is distinct from
   `name` (the accessible label) and `value` (the value interface), and `null`
   for a node with no text interface.
-- `InputReport.path`: `drag` only, the vertices delivered with the button
-  held, in order (`--from`, every `--path` waypoint, `--to`); `null` for every
-  other verb.
+- `InputReport.path`: for `drag`, the vertices delivered with the button
+  held, in order (`--from`, every `--path` waypoint, `--to`); for `gesture`,
+  every point a step moved to, pressed or released at, in order; `null` for
+  every other verb.
 
 The accessibility `role` is a normalized vocabulary (`application`, `window`,
 `dialog`, `button`, `checkbox`, `radio`, `text-field`, `text-area`, `label`,
@@ -701,7 +702,7 @@ contract change.
 | `ocr` | ocr | `ocr`, `wait --text`, `vision-windows --ocr` |
 | `tree-read` | tree | `tree`, `find`, `element`, `wait --element` |
 | `element-actions` | tree | `element-action` |
-| `pointer-input` | input | `move`, `click`, `drag`, `scroll` |
+| `pointer-input` | input | `move`, `click`, `drag`, `scroll`, `gesture` |
 | `keyboard-input` | input | `type`, `key` |
 | `window-management` | input | `window-focus`, `window-set-bounds` |
 | `session-management` | session | `session-list`, `session-info`, `session-stop`, `permissions` |
@@ -888,7 +889,8 @@ never depends on a race between the two clocks.
 | --- | --- | --- |
 | `move` | `--to x,y` | `{"input": InputReport}` |
 | `click` | `--at x,y [--button left\|right\|middle] [--count N] [--modifiers cmd,shift,…]` | `{"input": InputReport}` |
-| `drag` | `--from x,y --to x,y [--path x,y;x,y;…] [--button b] [--steps N] [--duration-ms N]` | `{"input": InputReport}` (`path` set) |
+| `drag` | `--from x,y --to x,y [--path x,y;x,y;…] [--button b] [--steps N] [--duration-ms N] [--modifiers cmd,shift,…]` | `{"input": InputReport}` (`path` set; `keys` set when modifiers were held) |
+| `gesture` | `--steps "<step>; <step>; …"`, each step `move x,y`, `press x,y [button]`, `release x,y [button]`, `key-down <combo or modifier>`, `key-up <combo or modifier>` or `wait <ms>`; delivered as one script, and whatever the steps leave held is released when the gesture ends | `{"input": InputReport}` (`path` set: the points the gesture pressed, released or moved to) |
 | `scroll` | `--at x,y --dx N --dy N [--unit line\|pixel]` | `{"input": InputReport}` |
 | `type` | `(<text> \| --text-file <path> \| --stdin)` `[--interval-ms N]` | `{"input": InputReport}` (`length` set, text not echoed) |
 | `key` | `<combo>` e.g. `cmd+s`, `ctrl+shift+Tab`, `Return` (names from the key table above; unknown names are `bad-args`) | `{"input": InputReport}` (`keys` normalized) |

@@ -420,9 +420,12 @@ proc newLinuxMutterInput*(cfg: LinuxInputConfig): InputBackend =
       cfg.runPlan(planClick(at, button, count, modifiers, modifierSettleMs))
       clickReport(session, at, button, count, modifiers)
     result.drag = proc (session: string, path: seq[Point], button: MouseButton,
-                        steps, durationMs: int): InputReport =
-      cfg.runPlan(planDrag(path, button, steps, durationMs))
-      dragReport(session, path, button)
+                        steps, durationMs: int, modifiers: seq[string]): InputReport =
+      cfg.runPlan(planDrag(path, button, steps, durationMs, modifiers))
+      dragReport(session, path, button, modifiers)
+    result.gesture = proc (session: string, steps: seq[GestureStep]): InputReport =
+      cfg.runPlan(planGesture(steps))
+      gestureReport(session, steps)
     result.scroll = proc (session: string, at: Point, dx, dy: int,
                           unit: ScrollUnit): InputReport =
       cfg.runPlan(planScroll(at, dx, dy, unit))

@@ -264,8 +264,9 @@ proc wrongPlatformInput*(backend: string): InputBackend =
   result.move = proc (s: string, p: Point): InputReport = raise no()
   result.click = proc (s: string, p: Point, b: MouseButton, c: int,
                        m: seq[string]): InputReport = raise no()
-  result.drag = proc (s: string, p: seq[Point], b: MouseButton, st, d: int): InputReport =
-    raise no()
+  result.drag = proc (s: string, p: seq[Point], b: MouseButton, st, d: int,
+                      m: seq[string]): InputReport = raise no()
+  result.gesture = proc (s: string, g: seq[GestureStep]): InputReport = raise no()
   result.scroll = proc (s: string, p: Point, dx, dy: int, u: ScrollUnit): InputReport =
     raise no()
   result.typeText = proc (s, t: string, i: int): InputReport = raise no()
