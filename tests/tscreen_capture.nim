@@ -271,6 +271,15 @@ suite "screen capture: argv builder":
     check not hasFlag(argv, "--owner")
     check not hasFlag(argv, "--title")
 
+  test "enumerate carries every query selector to the helper":
+    let argv = buildHelperArgv("enumerate", q = initWindowQuery(
+      windowId = 105, owner = "iTerm", title = "fixture", titleContains = "fix"))
+    check valueAfter(argv, "--window-id") == "105"
+    check valueAfter(argv, "--owner") == "iTerm"
+    check valueAfter(argv, "--title") == "fixture"
+    check valueAfter(argv, "--title-contains") == "fix"
+    check not hasFlag(argv, "--timeout")
+
   test "layer and offscreen switches are passed through":
     let argv = buildHelperArgv("enumerate",
                                q = initWindowQuery(anyLayer = true,

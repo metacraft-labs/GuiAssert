@@ -93,6 +93,11 @@ test-live-macos: build-cli
       nim c -d:tccLive -r --hints:off tests/live/$f.nim || status=1; \
     done; exit $status
 
+# The real macOS helper's query filtering and temporary report transport.
+# Needs a live window server and signed helper app, but no capture grant.
+test-capture-reports-macos:
+    nim c -r --hints:off tests/tscreen_capture_reports.nim
+
 # The Linux live capture suite (GS5): the real `guiassert` with the four
 # Linux capture backends against display servers the suite starts for itself
 # (a private Xvfb, a private headless sway with PipeWire and the wlroots

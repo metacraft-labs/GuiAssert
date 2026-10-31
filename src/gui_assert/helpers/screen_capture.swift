@@ -292,6 +292,26 @@ func cgWindowList() -> [CGWindowRecord] {
     return out
 }
 
+// Apply the caller's query before serializing any window, on both output
+// channels. Window capture uses the same predicate so enumeration cannot expose
+// unrelated titles while answering the very same query.
+func matchingWindows(_ windows: [CGWindowRecord]) -> [CGWindowRecord] {
+    var candidates = windows
+    if let wid = windowId {
+        candidates = candidates.filter { $0.windowId == wid }
+    }
+    if let owner = wantOwner {
+        candidates = candidates.filter { $0.ownerName.caseInsensitiveCompare(owner) == .orderedSame }
+    }
+    if let t = wantTitleExact {
+        candidates = candidates.filter { $0.title == t }
+    }
+    if let t = wantTitleContains {
+        candidates = candidates.filter { $0.title.localizedCaseInsensitiveContains(t) }
+    }
+    return candidates
+}
+
 func tsvRow(_ r: CGWindowRecord) -> String {
     return "\(r.windowId)\t\(r.ownerPid)\t\(r.ownerName)\t\(r.title)" +
            "\t\(r.x)\t\(r.y)\t\(r.w)\t\(r.h)\t\(r.layer)\t\(r.onScreen ? 1 : 0)"
@@ -689,7 +709,7 @@ switch mode {
 
 case "enumerate":
     var text = ""
-    for r in windows { text += tsvRow(r) + "\n" }
+    for r in matchingWindows(windows) { text += tsvRow(r) + "\n" }
     FileHandle.standardOutput.write(text.data(using: .utf8)!)
     if let p = reportPath {
         // The TSV goes to a sibling file so the report stays key=value.
@@ -766,19 +786,7 @@ case "window":
     }
 
     // Attest the target against the unprivileged window list FIRST.
-    var candidates = windows
-    if let wid = windowId {
-        candidates = candidates.filter { $0.windowId == wid }
-    }
-    if let owner = wantOwner {
-        candidates = candidates.filter { $0.ownerName.caseInsensitiveCompare(owner) == .orderedSame }
-    }
-    if let t = wantTitleExact {
-        candidates = candidates.filter { $0.title == t }
-    }
-    if let t = wantTitleContains {
-        candidates = candidates.filter { $0.title.localizedCaseInsensitiveContains(t) }
-    }
+    var candidates = matchingWindows(windows)
     // Largest area wins; among equal areas prefer an on-screen window.
     candidates.sort { a, b in
         let aa = a.w * a.h, ba = b.w * b.h

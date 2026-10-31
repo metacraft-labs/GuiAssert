@@ -368,7 +368,7 @@ proc buildHelperArgv*(mode: string, outPath = "", q = initWindowQuery(),
   if mode == "display":
     result.add "--display"
     result.add $displayIndex
-  if mode == "window":
+  if mode in ["window", "enumerate"]:
     if q.windowId != 0:
       result.add "--window-id"
       result.add $q.windowId
@@ -736,6 +736,10 @@ proc runHelperViaApp*(args: seq[string], timeoutMs: int,
   ## `open`, so the bundle is its own TCC-responsible process rather than
   ## inheriting the terminal's (denied) identity.
   ##
+  ## The caller owns `reportPath` and its siblings, including the enumerate
+  ## TSV, and must remove them after consuming the result. Public operations
+  ## below give these files invocation-scoped lifetimes.
+  ##
   ## `open` gives us no exit status and no stdout from the app, which is why
   ## the report file is the authoritative channel. `-g` keeps the capture from
   ## stealing focus; `-n` forces a fresh instance; `-W` waits for it to exit.
@@ -767,17 +771,12 @@ proc launchHelperDetached*(args: seq[string], timeoutMs = 30_000):
   for a in args: openArgs.add a
   result = runCmd("/usr/bin/open", openArgs, timeoutMs)
 
-var reportDirCache: string = ""
-var reportSeq = 0
-
 proc tempReportPath(tag: string): string =
-  ## One temp directory per process, one report file per invocation. A fresh
-  ## directory per call would leak thousands of them under a polling frame
-  ## source, which is the normal way `waitForText` drives this module.
-  if reportDirCache.len == 0:
-    reportDirCache = createTempDir("gui_assert_capture_", "")
-  inc reportSeq
-  result = reportDirCache / ("report_" & tag & "_" & $reportSeq & ".txt")
+  ## The report is an invocation's private transport, never a persistent log.
+  ## Its caller removes the whole directory after consuming the report/TSV,
+  ## including on failures, so partial writes cannot leave title-bearing files.
+  let dir = createTempDir("gui_assert_capture_", "")
+  result = dir / ("report_" & tag & ".txt")
 
 # --- public capture API ----------------------------------------------------
 
@@ -797,6 +796,7 @@ proc listWindows*(q = initWindowQuery(), viaApp = false,
   requireMacos("listWindows")
   if viaApp:
     let reportPath = tempReportPath("enumerate")
+    defer: removeDir(reportPath.parentDir)
     let args = buildHelperArgv("enumerate", q = q, reportPath = reportPath)
     let rep = runHelperViaApp(args, timeoutMs, reportPath)
     let tsv = reportPath & ".tsv"
@@ -827,6 +827,7 @@ proc screenCapturePreflight*(viaApp = true, timeoutMs = 30_000):
   requireMacos("screenCapturePreflight")
   if viaApp:
     let reportPath = tempReportPath("preflight")
+    defer: removeDir(reportPath.parentDir)
     let args = buildHelperArgv("preflight", reportPath = reportPath)
     return runHelperViaApp(args, timeoutMs, reportPath)
   let args = buildHelperArgv("preflight")
@@ -841,6 +842,7 @@ proc requestScreenCaptureAccess*(timeoutMs = 120_000): StillCaptureReport =
   ## report then says so, and `grantInstructions` is the only way forward.
   requireMacos("requestScreenCaptureAccess")
   let reportPath = tempReportPath("request")
+  defer: removeDir(reportPath.parentDir)
   let args = buildHelperArgv("request", reportPath = reportPath)
   return runHelperViaApp(args, timeoutMs, reportPath)
 
@@ -854,6 +856,7 @@ proc captureDisplayStill*(outPath: string, displayIndex = 0,
   let abs = absolutePath(outPath)
   createDir(abs.parentDir)
   let reportPath = tempReportPath("display")
+  defer: removeDir(reportPath.parentDir)
   let args = buildHelperArgv("display", outPath = abs,
                              displayIndex = displayIndex,
                              timeoutMs = timeoutMs, reportPath = reportPath)
@@ -884,6 +887,7 @@ proc captureWindowStill*(outPath: string, q: WindowQuery,
   let abs = absolutePath(outPath)
   createDir(abs.parentDir)
   let reportPath = tempReportPath("window")
+  defer: removeDir(reportPath.parentDir)
   let args = buildHelperArgv("window", outPath = abs, q = q,
                              timeoutMs = timeoutMs, reportPath = reportPath)
   let rep = runHelperViaApp(args, timeoutMs + 15_000, reportPath)
