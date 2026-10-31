@@ -34,13 +34,10 @@
 
 default: test
 
-# Run every default unit test against the local nim toolchain, then the
-# contract suite against the built binaries.
-test: && test-contract
-    @for f in tnimcache_is_worktree_local tcapture tappium twindow_layout tinput tpacing tcancel tdesktop_env tcore_types tcore_contract tcore_secret_guard tcore_png tcore_mp4 tcore_shims tmacos_capture tlinux_capture tlinux_tree tlinux_input tlinux_session tswift_helper_cache; do \
-      echo "===== $f ====="; \
-      nim c -r --hints:off tests/$f.nim || exit 1; \
-    done
+# Run the complete counted population through the same strict runner used by
+# `nimble test`.
+test:
+    bash scripts/run-default-tests.sh
 
 # The pure core: unit tests plus the purity rule of the desktop-substrate
 # spec (§3.2). Runs on every host; no TCC grant, display or network needed.
@@ -53,9 +50,7 @@ test-core:
 # The `guiassert` program, built twice from one main (spec §3.4, §9.2). Each
 # build keeps its own nimcache so the two defines do not invalidate each other.
 build-cli:
-    @mkdir -p build/bin
-    nim c --hints:off -d:release --nimcache:.nimcache/build-cli/guiassert -o:build/bin/guiassert src/guiassert.nim
-    nim c --hints:off -d:release -d:guiassertMinimal --nimcache:.nimcache/build-cli/guiassert-fixture -o:build/bin/guiassert-fixture src/guiassert.nim
+    bash scripts/run-default-tests.sh --build-only
 
 # The contract suite: the real `guiassert` and `guiassert serve` with the
 # fixture backend selected below them (spec §9.1). It runs once against each
@@ -63,12 +58,7 @@ build-cli:
 # consumers' own contract tests use -- is held to the same contract. The list
 # lives in tests/contract_suite.txt so the Windows CI job runs the same one.
 test-contract: build-cli
-    @for bin in guiassert guiassert-fixture; do \
-      for f in $(grep -v '^#' tests/contract_suite.txt); do \
-        echo "===== $f ($bin) ====="; \
-        GUIASSERT_CONTRACT_BIN="$PWD/build/bin/$bin" nim c -r --hints:off tests/contract/$f.nim || exit 1; \
-      done; \
-    done
+    bash scripts/run-default-tests.sh --contract-only
 
 # The desktop-environment targets against REAL compositors (Linux, inside
 # `nix develop`): a private headless sway, its session bus and settings

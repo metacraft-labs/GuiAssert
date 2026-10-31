@@ -11,8 +11,9 @@
 ##   core module or part of the Nim standard library, and every stdlib module
 ##   a core module imports *directly* must be on the allowlist. A control
 ##   runs the same analysis on `gui_assert/image_math` (which reaches
-##   `std/osproc` and the effectful `media` module) and requires both
-##   violations to be reported, so an analysis that sees no edges cannot pass.
+##   `std/osproc` and the effectful `backends/media/ffmpeg` module) and
+##   requires both violations to be reported, so an analysis that sees no
+##   edges cannot pass.
 ## * `test_core_sources_use_no_ffi_or_global_state` scans the core sources for
 ##   FFI and linking pragmas and environment access (its control is a scan of
 ##   `gui_assert/input`, which binds Core Graphics), and walks the syntax tree
@@ -367,10 +368,12 @@ suite "core purity":
     checkpoint "control (image_math) report: " & $control
     check control.edges > 0
     check "ffmpeg.nim -> std/osproc" in control.forbiddenStd
-    var sawMedia = false
+    var sawMediaBackend = false
     for f in control.nonCoreFiles:
-      if f.endsWith(DirSep & "media.nim"): sawMedia = true
-    check sawMedia
+      if f.endsWith(DirSep & "backends" & DirSep & "media" & DirSep &
+                    "ffmpeg.nim"):
+        sawMediaBackend = true
+    check sawMediaBackend
 
   test "test_core_sources_use_no_ffi_or_global_state":
     var found: seq[string] = @[]

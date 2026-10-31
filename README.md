@@ -22,7 +22,7 @@ it — stays here, in `gui_assert/ffmpeg_tools`.
 ### Reproducible toolchain (recommended)
 
 The repo ships a `flake.nix` that pins the whole vision toolchain — `nim`,
-`nimble`, `ffmpeg` (with `drawtext`/libx264), and `tesseract` 5.x (English
+`nimble` 0.24.1, `ffmpeg` (with `drawtext`/libx264), and `tesseract` 5.x (English
 traineddata included). The devShell exports `FFMPEG_BIN`/`FFPROBE`/
 `TESSERACT_BIN` (and puts them on `PATH`) so the OCR/ffmpeg modules resolve the
 **pinned** binaries with zero host setup:
@@ -30,6 +30,14 @@ traineddata included). The devShell exports `FFMPEG_BIN`/`FFPROBE`/
 ```sh
 nix develop -c nimble test
 ```
+
+`nimble test` and `just test` both enter `scripts/run-default-tests.sh`, while
+retaining their existing declared populations: 19 package-task unit files for
+Nimble; 20 default unit files plus 16 contract invocations for Just. The runner
+preserves every compiler failure and rejects an empty or partial suite before it
+starts. It also requires every `std/unittest` invocation to report at least one
+executed case (and the custom test to print its exact positive verdict), so a
+green verdict always covers a non-empty runtime population.
 
 Run just the vision suites the same way:
 
@@ -48,7 +56,8 @@ From inside any Nim development shell with `ffmpeg`/`tesseract` on `PATH`:
 nim c -r --hints:off tests/tgui_assert.nim
 ```
 
-Or via `nimble test`.
+Or run `bash scripts/run-default-tests.sh --nimble` for the same complete,
+counted package-task suite.
 
 ## The `guiassert` program
 

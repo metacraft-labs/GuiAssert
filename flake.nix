@@ -6,10 +6,16 @@
   # flake (nixos-25.11) for cache reuse across the workspace.
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    # nixos-25.11 still packages nimble 0.20.1, whose dependency resolver
+    # crashes on macOS. Pin a verified fixed release independently.
+    nimble-src = {
+      url = "git+https://github.com/nim-lang/nimble?ref=refs/tags/v0.24.1&submodules=1";
+      flake = false;
+    };
   };
 
   outputs =
-    { self, nixpkgs }:
+    { self, nixpkgs, nimble-src }:
     let
       lib = nixpkgs.lib;
       systems = [
@@ -655,6 +661,11 @@
         system:
         let
           pkgs = pkgsFor system;
+          nimbleFor = pkgs.nimble.overrideAttrs (_: {
+            version = "0.24.1";
+            src = nimble-src;
+            nimFlags = [ "--define:git_revision_override=v0.24.1" ];
+          });
           # A minimal fontconfig config exposing DejaVu so ffmpeg's `drawtext`
           # filter (used by the vision e2e fixtures to render window/label text
           # for OCR) resolves a default font with zero host setup.
@@ -734,7 +745,7 @@
               [
                 # nim ships the `nim` compiler; nimble is packaged separately.
                 nim
-                nimble
+                nimbleFor
                 just
                 # Plain `ffmpeg` (NOT ffmpeg-full): the default nixpkgs build ships
                 # libx264 + freetype/fontconfig (so `drawtext` works) which the
