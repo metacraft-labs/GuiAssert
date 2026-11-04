@@ -364,6 +364,10 @@ suite "contract 1.0 decisions":
     rec["backends"] = %*{"capture": "linux-x11", "tree": "fixture", "input": "fixture"}
     writeFile(recPath, $rec)
     let plain = baseEnv()
+    # window-capture is expected unavailable on linux-x11 below, which holds only
+    # with no X display; the private Xvfb of a headless run must not be inherited.
+    plain.del("DISPLAY")
+    plain.del("WAYLAND_DISPLAY")
     plain["GUIASSERT_STATE_DIR"] = st
     plain["GUIASSERT_TREE_BACKEND"] = "fixture"
     let sc = ok(@["--session", "caps", "capabilities"], plain)
@@ -386,6 +390,15 @@ suite "contract 1.0 decisions":
     let deadEnv = fixtureEnv(deadSt)
     let dead = ok(@["session-start", "--kind", "headless", "--name", "gone"], deadEnv)
     killHost(dead["session"]["hostPid"].getInt)
+    # The linux-x11 row below expects that backend to be unavailable. That holds
+    # only with no X display, and headless Linux runs of this suite start a
+    # private Xvfb (scripts/run-test-in-display.sh) that the caller's environment
+    # would hand down. Remove the display variables for that row, so it asserts
+    # the same precondition whether or not the suite runs under a display.
+    # StringTableRef is a reference: copy the entries rather than alias `env`.
+    let noDisplay = newStringTable(modeCaseSensitive)
+    for k, v in env.pairs:
+      if k notin ["DISPLAY", "WAYLAND_DISPLAY"]: noDisplay[k] = v
     let cases: seq[(seq[string], StringTableRef, int, string, string)] = @[
       (@["--capture-backend", foreignCaptureBackend, "displays"], baseEnv(), 4, "",
        "window-enumeration"),
@@ -394,7 +407,7 @@ suite "contract 1.0 decisions":
        "unsupported-option", "own-pixels-capture"),
       (@["ocr", "--image", shot, "--psm", "6"], env, 4, "unsupported-option", "ocr"),
       (@["--capture-backend", "linux-x11", "ocr", "--region", "0,0,10,10", "--out",
-         work / "b.png"], env, 4, "", "region-capture"),
+         work / "b.png"], noDisplay, 4, "", "region-capture"),
       (@["--ocr-backend", foreignOcrBackend, "ocr", "--region", "0,0,10,10", "--out",
          work / "c.png"], env, 4, "", "ocr"),
       (@["session-start", "--kind", "headless", "--vnc"], env, 4, "unsupported-option",
