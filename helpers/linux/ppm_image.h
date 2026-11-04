@@ -62,7 +62,7 @@ static unsigned char *read_ppm(const char *path, int *w, int *h, const char **wh
     goto done;
   }
   long width = ppm_header_number(f), height = ppm_header_number(f),
-       maxval = ppm_header_number(f);
+        maxval = ppm_header_number(f);
   if (width <= 0 || height <= 0 || width > 8192 || height > 8192) {
     *why = "the image's size is missing or out of range";
     goto done;

@@ -79,13 +79,13 @@
 * Milestones
 
 ** GS0: Specs and contract
-   :PROPERTIES:
-   :status: completed
-   :status_note: Written and independently reviewed 2026-10-20 from origin/agents at 455daa14. No code.
-   :depends_on:
-   :owner: substrate/macos
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Written and independently reviewed 2026-10-20 from origin/agents at 455daa14. No code.
+    :depends_on:
+    :owner: substrate/macos
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - [X] =Planned-Work/Desktop-Substrate.md=: module layout and the opt-in
@@ -373,15 +373,15 @@
       both read this spec's text.)
 
 ** GS1: GuiAssert CI and the core/opt-in module split
-   :PROPERTIES:
-   :status: partially_completed
-   :status_note: Implemented 2026-10-20 from origin/agents at 8e8df7ea; every GS1 test green on macOS (aarch64-darwin, nix develop). Linux and Windows have not been run on this host: the CI workflow that runs them triggers only on pull requests into dev/stable. Independently reviewed and re-run on macOS 2026-10-20 (review strengthened the global-state check and the PNG filter coverage).
-   :depends_on: GS0
-   :owner: substrate/macos
-   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
-   :platform_status: macos=completed linux=completed windows=planned
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: partially_completed
+    :status_note: Implemented 2026-10-20 from origin/agents at 8e8df7ea; every GS1 test green on macOS (aarch64-darwin, nix develop). Linux and Windows have not been run on this host: the CI workflow that runs them triggers only on pull requests into dev/stable. Independently reviewed and re-run on macOS 2026-10-20 (review strengthened the global-state check and the PNG filter coverage).
+    :depends_on: GS0
+    :owner: substrate/macos
+    :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+    :platform_status: macos=completed linux=completed windows=planned
+    :complexity: large
+    :END:
 
 *** Deliverables
     - [X] =.github/workflows/ci.yml=: triggers =push= to =[dev, stable]= and
@@ -576,15 +576,15 @@
     - =metacraft-dev-guidelines/policies/ci-workflow-standards.md= — "No CI on agents", "Choosing runs-on labels", "Nix-Based Projects".
 
 ** GS2: guiassert CLI, serve skeleton, fixture backend, contract tests
-   :PROPERTIES:
-   :status: partially_completed
-   :status_note: Implemented 2026-10-20 from origin/agents at 221249df (merged forward to 3748eb24, which changed only this file) and independently verified the same day on that base: every GS2 test green on macOS (aarch64-darwin, inside nix develop), against both build/bin/guiassert and build/bin/guiassert-fixture, the contract suite three times in a row. The review decided the session-state event in spec §8.4 and implemented it, bounded every file read, made scenario strictness and the tcore_purity exemption tested (see Deviations). Linux and Windows have not run (CI runs on the pull request into dev). Contract 1.0 is NOT frozen yet: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) arrived while GS2 was being built and are not in the spec; GS2 implements the spec as written, and a dedicated follow-up milestone takes the requests (see Outstanding Tasks for which ones the build already satisfies).
-   :depends_on: GS1
-   :owner: substrate/macos
-   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
-   :platform_status: macos=completed linux=completed windows=planned
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: partially_completed
+    :status_note: Implemented 2026-10-20 from origin/agents at 221249df (merged forward to 3748eb24, which changed only this file) and independently verified the same day on that base: every GS2 test green on macOS (aarch64-darwin, inside nix develop), against both build/bin/guiassert and build/bin/guiassert-fixture, the contract suite three times in a row. The review decided the session-state event in spec §8.4 and implemented it, bounded every file read, made scenario strictness and the tcore_purity exemption tested (see Deviations). Linux and Windows have not run (CI runs on the pull request into dev). Contract 1.0 is NOT frozen yet: the companion campaign's change requests C1–C17 (GS0 Outstanding Tasks) arrived while GS2 was being built and are not in the spec; GS2 implements the spec as written, and a dedicated follow-up milestone takes the requests (see Outstanding Tasks for which ones the build already satisfies).
+    :depends_on: GS1
+    :owner: substrate/macos
+    :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+    :platform_status: macos=completed linux=completed windows=planned
+    :complexity: large
+    :END:
 
 *** Deliverables
     - [X] =src/gui_assert/core/contract.nim=: envelope, exit codes, kinds,
@@ -886,24 +886,24 @@
     - Spec §7 and §8 are the authority; the tests above are written from them, not from the implementation.
 
 ** GS2.1: Contract 1.0 decisions (C1–C17)
-   :PROPERTIES:
-   :status: partially_completed
-   :status_note: Implemented 2026-10-20 from origin/agents at ffc66dfb (GS2; no newer commit on origin/agents) on macOS (aarch64-darwin, inside nix develop): every request C1–C17 decided (the decision is recorded under its request in GS0's Outstanding Tasks), implemented in the spec, core/contract, the CLI, serve and the fixture backend, and covered by a contract test run against both build/bin/guiassert and build/bin/guiassert-fixture. Contract guiassert-desktop/1.0 is FROZEN (spec §7.7). Independently verified on macOS the same day on the same base (see Deviations, "Review"), which hardened core/mp4 against malformed files, bounded the --stdin read by --timeout-ms and fixed one pre-existing test helper; Linux and Windows have not run (CI runs on the pull request into dev). The per-backend halves of the decisions are test obligations of GS5–GS11.
-   :depends_on: GS2
-   :owner: substrate/macos
-   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
-   :platform_status: macos=completed linux=completed windows=planned
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: partially_completed
+    :status_note: Implemented 2026-10-20 from origin/agents at ffc66dfb (GS2; no newer commit on origin/agents) on macOS (aarch64-darwin, inside nix develop): every request C1–C17 decided (the decision is recorded under its request in GS0's Outstanding Tasks), implemented in the spec, core/contract, the CLI, serve and the fixture backend, and covered by a contract test run against both build/bin/guiassert and build/bin/guiassert-fixture. Contract guiassert-desktop/1.0 is FROZEN (spec §7.7). Independently verified on macOS the same day on the same base (see Deviations, "Review"), which hardened core/mp4 against malformed files, bounded the --stdin read by --timeout-ms and fixed one pre-existing test helper; Linux and Windows have not run (CI runs on the pull request into dev). The per-backend halves of the decisions are test obligations of GS5–GS11.
+    :depends_on: GS2
+    :owner: substrate/macos
+    :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+    :platform_status: macos=completed linux=completed windows=planned
+    :complexity: medium
+    :END:
 
-   The companion campaign's review of spec §5–§8 (GS0 Outstanding Tasks,
-   2026-10-20) asked for C1–C16 before 1.0 freezes and C17 in any minor.
-   Manager decision: accept all seventeen, C17 included now. Where a request's
-   effect lands on platform backends that do not exist yet (AT-SPI, AX, UIA,
-   real recorders, real session backends), the rule is in the spec, the
-   fixture honours it, and the per-backend test is an obligation of the
-   milestone that builds that backend (GS5–GS11, entries marked "(GS2.1
-   obligation)").
+    The companion campaign's review of spec §5–§8 (GS0 Outstanding Tasks,
+    2026-10-20) asked for C1–C16 before 1.0 freezes and C17 in any minor.
+    Manager decision: accept all seventeen, C17 included now. Where a request's
+    effect lands on platform backends that do not exist yet (AT-SPI, AX, UIA,
+    real recorders, real session backends), the rule is in the spec, the
+    fixture honours it, and the per-backend test is an obligation of the
+    milestone that builds that backend (GS5–GS11, entries marked "(GS2.1
+    obligation)").
 
 *** Deliverables
     - [X] Spec (=Planned-Work/Desktop-Substrate.md=): §6.1 dead-session exit
@@ -1192,19 +1192,19 @@
     - tests/contract/tcontract_decisions.nim - the C1–C17 contract tests
 
 ** GS3: Agent Harbor consumer spec and backend crate (companion)
-   :PROPERTIES:
-   :status: completed
-   :status_note: Completed and independently reviewed 2026-10-21 by companion/linux on Linux x86_64. Part A, Agent Harbor's consumer spec, is reconciled with the frozen contract 1.0. Part B is in Agent Harbor: a thin Rust crate that runs guiassert per verb or forwards the same argv to guiassert serve, parsing only the contract (no capture, OCR, tree, input or session logic), selected opt-in with the native paths the default; a flake input pinning GuiAssert agents 85b2dc3 with guiassert and guiassert-fixture on the dev shell PATH. The crate covers every verb Agent Harbor uses, the session verbs included, and its three Verification tests pass twice against the pinned guiassert-fixture with a missing fixture failing them. The review hardened the CLI transport's process handling (bounded output, a client deadline that kills the child, no wedge on an inherited pipe). Routing the consumer's own session lifecycle onto session-start/session-stop is Agent Harbor work tracked there, not part of this milestone. One wrapper run of the consumer's gate recipe is pending on that host; the identical test selection is green.
-   :depends_on: GS2 GS2.1
-   :owner: companion/linux
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Completed and independently reviewed 2026-10-21 by companion/linux on Linux x86_64. Part A, Agent Harbor's consumer spec, is reconciled with the frozen contract 1.0. Part B is in Agent Harbor: a thin Rust crate that runs guiassert per verb or forwards the same argv to guiassert serve, parsing only the contract (no capture, OCR, tree, input or session logic), selected opt-in with the native paths the default; a flake input pinning GuiAssert agents 85b2dc3 with guiassert and guiassert-fixture on the dev shell PATH. The crate covers every verb Agent Harbor uses, the session verbs included, and its three Verification tests pass twice against the pinned guiassert-fixture with a missing fixture failing them. The review hardened the CLI transport's process handling (bounded output, a client deadline that kills the child, no wedge on an inherited pipe). Routing the consumer's own session lifecycle onto session-start/session-stop is Agent Harbor work tracked there, not part of this milestone. One wrapper run of the consumer's gate recipe is pending on that host; the identical test selection is green.
+    :depends_on: GS2 GS2.1
+    :owner: companion/linux
+    :complexity: large
+    :END:
 
-   Part B binds contract guiassert-desktop/1.0 as frozen by GS2.1 (spec §7.7):
-   the decisions on C1–C17 are recorded under GS0's Outstanding Tasks.
+    Part B binds contract guiassert-desktop/1.0 as frozen by GS2.1 (spec §7.7):
+    the decisions on C1–C17 are recorded under GS0's Outstanding Tasks.
 
-   All work in this milestone lands in Agent Harbor, not in GuiAssert. It is
-   listed here so both campaigns see one ordering.
+    All work in this milestone lands in Agent Harbor, not in GuiAssert. It is
+    listed here so both campaigns see one ordering.
 
 *** Deliverables
     - [X] Agent Harbor's consumer specification for the GuiAssert substrate,
@@ -1235,17 +1235,17 @@
       status: passing (Linux x86_64, twice, both transports; red under a mis-mapped exit 6 and under a message-reading mapping)
 
 ** GS4: Vision verbs in the CLI
-   :PROPERTIES:
-   :status: partially_completed
-   :status_note: Implemented 2026-10-20 from origin/agents at 7608f89 (no newer commit; no new request aimed at GS4 in this file) on macOS (aarch64-darwin, inside nix develop): vision-segment video input through the media backend (the library form is backends/media/ffmpeg.segmentVideo), the video-decode feature probed, and tests/contract/tvision_verbs.nim green against both build/bin/guiassert and build/bin/guiassert-fixture. No contract change: spec §7.5 gained a paragraph writing down the vision-segment defaults (see Deviations). Independently verified on macOS the same day (review fixes under Deviations); Linux and Windows run on the pull request into dev.
-   :depends_on: GS2 GS2.1
-   :owner: substrate/macos
-   :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
-   :platform_status: macos=completed linux=completed windows=planned
-   :complexity: small
-   :END:
+    :PROPERTIES:
+    :status: partially_completed
+    :status_note: Implemented 2026-10-20 from origin/agents at 7608f89 (no newer commit; no new request aimed at GS4 in this file) on macOS (aarch64-darwin, inside nix develop): vision-segment video input through the media backend (the library form is backends/media/ffmpeg.segmentVideo), the video-decode feature probed, and tests/contract/tvision_verbs.nim green against both build/bin/guiassert and build/bin/guiassert-fixture. No contract change: spec §7.5 gained a paragraph writing down the vision-segment defaults (see Deviations). Independently verified on macOS the same day (review fixes under Deviations); Linux and Windows run on the pull request into dev.
+    :depends_on: GS2 GS2.1
+    :owner: substrate/macos
+    :linux_status_note: 2026-10-21, companion/linux: Linux x86_64 completed on x86_64-linux (NixOS, kernel 6.18), inside nix develop, 2026-10-21, working tree on origin/agents 4e2c9757 plus the Linux fixes below: every Verification entry below run and passing (contract tests against both binaries). The [self-hosted, linux, arm64] leg cannot run on this host and is left to CI, which has never run (no workflow run exists; CI runs on the first pull request into dev).
+    :platform_status: macos=completed linux=completed windows=planned
+    :complexity: small
+    :END:
 
-   Agent Harbor's use of these verbs belongs to the companion campaign.
+    Agent Harbor's use of these verbs belongs to the companion campaign.
 
 *** Deliverables
     - [X] =vision-compare=, =vision-segment= (=--frames= pure; video input via
@@ -1380,42 +1380,42 @@
     - Follow-up hardening (2026-10-20, from origin/agents at 96710e5; the
       three items the GS4 review left open):
       1. Frame-size cap. One constant, =core/image.maxImagePixels= (2^28),
-         now backs the PNG decoder (=maxPngPixels= is an alias) and caps the
-         frame =segmentVideo= decodes (=FrameTooLargeError=, a =ValueError=,
-         raised after ffprobe and before ffmpeg or any buffer), the scaled
-         =--frames= frame and the legacy =decodeGray=. The CLI maps it to the
-         existing exit 2 / =invalid-value=; no reason was added, and spec
-         §7.5 states the cap as a clarification of 1.0. Before, a 16x2048
-         video at =--scale-width 16384= asked for a 34 GB frame buffer and
-         died with exit 1 / internal.
+          now backs the PNG decoder (=maxPngPixels= is an alias) and caps the
+          frame =segmentVideo= decodes (=FrameTooLargeError=, a =ValueError=,
+          raised after ffprobe and before ffmpeg or any buffer), the scaled
+          =--frames= frame and the legacy =decodeGray=. The CLI maps it to the
+          existing exit 2 / =invalid-value=; no reason was added, and spec
+          §7.5 states the cap as a clarification of 1.0. Before, a 16x2048
+          video at =--scale-width 16384= asked for a 34 GB frame buffer and
+          died with exit 1 / internal.
       2. Cancel granularity. =segmentVideo= now reads ffmpeg's stdout with
-         =readOutput=, which waits in 50 ms slices (=poll= on POSIX;
-         =PeekNamedPipe= and a 10 ms sleep on Windows, where an anonymous
-         pipe cannot be polled) and runs the checkpoint between them, so a
-         cancel or deadline is honoured within ~100 ms at any =--fps=. Spec
-         §7.5 says so. The Windows branch compiles (=nim check --os:windows=)
-         but has not run yet; it runs on the first Windows CI job.
+          =readOutput=, which waits in 50 ms slices (=poll= on POSIX;
+          =PeekNamedPipe= and a 10 ms sleep on Windows, where an anonymous
+          pipe cannot be polled) and runs the checkpoint between them, so a
+          cancel or deadline is honoured within ~100 ms at any =--fps=. Spec
+          §7.5 says so. The Windows branch compiles (=nim check --os:windows=)
+          but has not run yet; it runs on the first Windows CI job.
       3. Safe input names. The =file:= helper moved to
-         =media.ffmpegInputUrl= and every ffmpeg / ffprobe call in src/ that
-         reads a caller's file uses it: =segmentVideo=, =probeVideoSource=,
-         =probeImageSize=, =decodeGray=, the legacy =video_analysis= argv
-         builders (=buildProbeArgv=, =buildSampleFramesArgv=,
-         =buildExtractFrameArgv=, so =segmentByChange=, =probeVideo= and
-         keyframe extraction), =vision_windows.buildCropArgv=, the two
-         =media= composition argvs and the OCR preprocessing pass
-         (=ocr.preprocessToPng=, added by the review). Not changed, by
-         design: the editor backend (its =-i= inputs are TTS renders and
-         segments in its own cache), =capture= (its
-         =-i= values are device names such as =0:none= or =:0+100,50=, not
-         files), the fixture capture backend and =contactSheet= (inputs are
-         image2 patterns in GuiAssert's own temp directories). Output paths
-         are not wrapped (see Outstanding Tasks). Deviation from the brief:
-         the shared helper is =file:= & the path as given, not
-         =file:<absolute path>=. ffmpeg strips one =file:= and opens the rest
-         as a path, so a relative name is just as safe; making it absolute
-         reads the current directory, which added =OSError= and effect tags to
-         the legacy argv builders and broke their frozen API
-         (tcore_shims, =raises: []= / =tags: []=).
+          =media.ffmpegInputUrl= and every ffmpeg / ffprobe call in src/ that
+          reads a caller's file uses it: =segmentVideo=, =probeVideoSource=,
+          =probeImageSize=, =decodeGray=, the legacy =video_analysis= argv
+          builders (=buildProbeArgv=, =buildSampleFramesArgv=,
+          =buildExtractFrameArgv=, so =segmentByChange=, =probeVideo= and
+          keyframe extraction), =vision_windows.buildCropArgv=, the two
+          =media= composition argvs and the OCR preprocessing pass
+          (=ocr.preprocessToPng=, added by the review). Not changed, by
+          design: the editor backend (its =-i= inputs are TTS renders and
+          segments in its own cache), =capture= (its
+          =-i= values are device names such as =0:none= or =:0+100,50=, not
+          files), the fixture capture backend and =contactSheet= (inputs are
+          image2 patterns in GuiAssert's own temp directories). Output paths
+          are not wrapped (see Outstanding Tasks). Deviation from the brief:
+          the shared helper is =file:= & the path as given, not
+          =file:<absolute path>=. ffmpeg strips one =file:= and opens the rest
+          as a path, so a relative name is just as safe; making it absolute
+          reads the current directory, which added =OSError= and effect tags to
+          the legacy argv builders and broke their frozen API
+          (tcore_shims, =raises: []= / =tags: []=).
       Found on the way: =probeImageSize= merged ffprobe's stderr into the
       text it parsed, so any ffprobe warning (here, ffmpeg's own "Picture size
       20000x20000 is invalid") made it fail to parse; and =decodeGray= never
@@ -1450,15 +1450,15 @@
       needs its own test).
 
 ** GS5: Capture backends
-   :PROPERTIES:
-   :status: in_progress
-   :depends_on: GS2
-   :owner: split
-   :platform_status: macos=in_progress linux=completed windows=planned
-   :linux_status_note: companion/linux, 2026-10-21: linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire implemented; every Linux verification entry passed on Linux x86_64 (just test-live-linux 14/14). Independently verified 2026-10-22 (review agent, Linux x86_64): just test 374, test-core 39, test-contract 114, test-desktop-env 31, test-live-linux 14/14 on four of five runs (the fourth: one linux-wlr recording that wf-recorder delivered as two frames, an intermittent recorder stall, see Outstanding Tasks), 0 skipped; review fixes and the flake package now carries the Linux helpers and tools (see Deviations). The linux-wlr flake fixed 2026-10-22 by companion/linux (recordings through the wlr_screencopy helper; just test-live-linux 15/15 on ten consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 skipped; see Outstanding Tasks); the fix independently verified 2026-10-22 by review (just test-live-linux 15/15 on five consecutive runs, the stall mutation red with a 1-frame file, 0 of 120 short linux-wlr recordings through the packaged guiassert)
-   :requires: desktop.automation
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: in_progress
+    :depends_on: GS2
+    :owner: split
+    :platform_status: macos=in_progress linux=completed windows=planned
+    :linux_status_note: companion/linux, 2026-10-21: linux-wlr, linux-gnome, linux-x11, linux-portal-pipewire implemented; every Linux verification entry passed on Linux x86_64 (just test-live-linux 14/14). Independently verified 2026-10-22 (review agent, Linux x86_64): just test 374, test-core 39, test-contract 114, test-desktop-env 31, test-live-linux 14/14 on four of five runs (the fourth: one linux-wlr recording that wf-recorder delivered as two frames, an intermittent recorder stall, see Outstanding Tasks), 0 skipped; review fixes and the flake package now carries the Linux helpers and tools (see Deviations). The linux-wlr flake fixed 2026-10-22 by companion/linux (recordings through the wlr_screencopy helper; just test-live-linux 15/15 on ten consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 skipped; see Outstanding Tasks); the fix independently verified 2026-10-22 by review (just test-live-linux 15/15 on five consecutive runs, the stall mutation red with a 1-frame file, 0 of 120 short linux-wlr recordings through the packaged guiassert)
+    :requires: desktop.automation
+    :complexity: large
+    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
@@ -1898,16 +1898,16 @@
       recording may be shorter than =--duration-ms= on a loaded host.
 
 ** GS6: OCR backends
-   :PROPERTIES:
-   :status: in_progress
-   :status_note: macOS parts implemented 2026-10-20 from origin/agents at ece9b24 (apple-vision and tesseract engines behind the ocr verb, over files and captures). Every GS6 test that needs no screen passes; the capture-then-read test is BLOCKED on a locked GUI session (GS5's blocker). Awaiting independent verification.
-   :depends_on: GS2
-   :owner: split
-   :platform_status: macos=in_progress linux=completed windows=planned
-   :linux_status_note: companion/linux, 2026-10-22: the tesseract engine (the Linux default) run live and passing on Linux x86_64 (NixOS, kernel 6.18, inside nix develop, from origin/agents at fe86cfd): over files (tests/live/tocr_tesseract.nim 2/2) and over captures from every GS5 Linux backend (tests/live/tocr_linux.nim 7/7: linux-x11, linux-wlr at scale 1 and scale 2, linux-portal-pipewire through its screenshot, linux-gnome), boxes mapped to desktop coordinates; the packaged guiassert OCRs a capture (guiassert-packaged-linux-capture) and probes tesseract supported (guiassert-packaged-tesseract). just test-live-linux 22/22 on three consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 failed, 0 skipped. Independently verified 2026-10-22 (review agent, Linux x86_64): review fixes to the sway target's stop (no orphaned session bus), the box tolerance (1 px, measured exact) and the PPM helpers; tests/live/tocr_linux.nim 8/8 and tests/live/tcapture_linux.nim 16/16 (each with test_live_suite_leaves_no_process_running), just test-live-linux 24/24 on three consecutive runs; counts in GS6 Outstanding Tasks.
-   :platform_prereqs: GS5=macos (capture-then-OCR on macOS only)
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: in_progress
+    :status_note: macOS parts implemented 2026-10-20 from origin/agents at ece9b24 (apple-vision and tesseract engines behind the ocr verb, over files and captures). Every GS6 test that needs no screen passes; the capture-then-read test is BLOCKED on a locked GUI session (GS5's blocker). Awaiting independent verification.
+    :depends_on: GS2
+    :owner: split
+    :platform_status: macos=in_progress linux=completed windows=planned
+    :linux_status_note: companion/linux, 2026-10-22: the tesseract engine (the Linux default) run live and passing on Linux x86_64 (NixOS, kernel 6.18, inside nix develop, from origin/agents at fe86cfd): over files (tests/live/tocr_tesseract.nim 2/2) and over captures from every GS5 Linux backend (tests/live/tocr_linux.nim 7/7: linux-x11, linux-wlr at scale 1 and scale 2, linux-portal-pipewire through its screenshot, linux-gnome), boxes mapped to desktop coordinates; the packaged guiassert OCRs a capture (guiassert-packaged-linux-capture) and probes tesseract supported (guiassert-packaged-tesseract). just test-live-linux 22/22 on three consecutive runs, just test 375, test-core 39, test-contract 114, test-desktop-env 31, 0 failed, 0 skipped. Independently verified 2026-10-22 (review agent, Linux x86_64): review fixes to the sway target's stop (no orphaned session bus), the box tolerance (1 px, measured exact) and the PPM helpers; tests/live/tocr_linux.nim 8/8 and tests/live/tcapture_linux.nim 16/16 (each with test_live_suite_leaves_no_process_running), just test-live-linux 24/24 on three consecutive runs; counts in GS6 Outstanding Tasks.
+    :platform_prereqs: GS5=macos (capture-then-OCR on macOS only)
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
@@ -2184,15 +2184,15 @@
         test green).
 
 ** GS7: Accessibility tree backends
-   :PROPERTIES:
-   :status: partially_completed
-   :depends_on: GS2
-   :owner: split
-   :platform_status: macos=planned linux=completed windows=planned
-   :linux_status_note: companion/linux, 2026-10-22, from origin/agents at fba2515: linux-atspi implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): tree, find, element, element-action, wait --element over the session's own AT-SPI bus, read straight in the D-Bus wire protocol (no libatspi, nothing on the package's wrapper), against invented forms in GTK 3, GTK 4 and Qt 6 Widgets on a private headless sway (scale 1 and 2) and a private Xvfb; bounds in desktop coordinates (window extents placed through the session's window list; a real click at the centre of Submit presses it), protected password fields, text, C5 accessible through the linux-host session backend (apps, app-launch, app-quit, session-list/info, permissions), C7 features and exit 6 atspi-disabled. tests/live/ttree_linux.nim 33/33 in just test-live-linux 57/57 on three consecutive runs; tests/tlinux_tree.nim 12/12; the packaged guiassert reads, drives and probes a GTK 3 form outside nix develop (guiassert-packaged-linux-tree). Contract 1.0 unchanged. Independently verified 2026-10-22 by review (see GS7 Outstanding Tasks).
-   :requires: desktop.automation
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: partially_completed
+    :depends_on: GS2
+    :owner: split
+    :platform_status: macos=planned linux=completed windows=planned
+    :linux_status_note: companion/linux, 2026-10-22, from origin/agents at fba2515: linux-atspi implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop; companion/linux): tree, find, element, element-action, wait --element over the session's own AT-SPI bus, read straight in the D-Bus wire protocol (no libatspi, nothing on the package's wrapper), against invented forms in GTK 3, GTK 4 and Qt 6 Widgets on a private headless sway (scale 1 and 2) and a private Xvfb; bounds in desktop coordinates (window extents placed through the session's window list; a real click at the centre of Submit presses it), protected password fields, text, C5 accessible through the linux-host session backend (apps, app-launch, app-quit, session-list/info, permissions), C7 features and exit 6 atspi-disabled. tests/live/ttree_linux.nim 33/33 in just test-live-linux 57/57 on three consecutive runs; tests/tlinux_tree.nim 12/12; the packaged guiassert reads, drives and probes a GTK 3 form outside nix develop (guiassert-packaged-linux-tree). Contract 1.0 unchanged. Independently verified 2026-10-22 by review (see GS7 Outstanding Tasks).
+    :requires: desktop.automation
+    :complexity: large
+    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
@@ -2424,16 +2424,16 @@
       runs nothing with its working directory in the worktree remained.
 
 ** GS8: Input backends
-   :PROPERTIES:
-   :status: in_progress
-   :depends_on: GS2
-   :owner: split
-   :platform_status: macos=planned linux=in_progress windows=planned
-   :platform_prereqs: GS7=macos (effects are checked through the tree)
-   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at 744622d: linux-wlr-virtual, linux-mutter, linux-xtest and linux-uinput implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop), effects read back through linux-atspi (GS7=linux) and the fixture's own input log, in a private headless sway (scale 1 and 2), Xvfb and headless GNOME Shell; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three consecutive runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input in nix flake check; nine falsifying mutations red. Linux stays in_progress: GS8-LINUX BLOCKED: uinput device access needs operator (the uinput positive control). Contract 1.0 unchanged; two spec requests in Deviations. Independently verified 2026-10-23 by review (see GS8 Outstanding Tasks).
-   :requires: desktop.automation
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: in_progress
+    :depends_on: GS2
+    :owner: split
+    :platform_status: macos=planned linux=in_progress windows=planned
+    :platform_prereqs: GS7=macos (effects are checked through the tree)
+    :linux_status_note: companion/linux, 2026-10-23, from origin/agents at 744622d: linux-wlr-virtual, linux-mutter, linux-xtest and linux-uinput implemented and run live on Linux x86_64 (NixOS, kernel 6.18, inside nix develop), effects read back through linux-atspi (GS7=linux) and the fixture's own input log, in a private headless sway (scale 1 and 2), Xvfb and headless GNOME Shell; tests/live/tinput_linux.nim 28/28 in just test-live-linux 85/85 on three consecutive runs, tests/tlinux_input.nim 14/14, guiassert-packaged-linux-input in nix flake check; nine falsifying mutations red. Linux stays in_progress: GS8-LINUX BLOCKED: uinput device access needs operator (the uinput positive control). Contract 1.0 unchanged; two spec requests in Deviations. Independently verified 2026-10-23 by review (see GS8 Outstanding Tasks).
+    :requires: desktop.automation
+    :complexity: large
+    :END:
 
 *** Deliverables
     - macOS (=substrate/macos=)
@@ -2747,14 +2747,14 @@
       runs remained afterwards.
 
 ** GS9: macOS off-screen sessions
-   :PROPERTIES:
-   :status: planned
-   :depends_on: GS2
-   :owner: substrate/macos
-   :platform_prereqs: GS5=macos GS7=macos GS8=macos
-   :requires: os.macos desktop.automation
-   :complexity: large
-   :END:
+    :PROPERTIES:
+    :status: planned
+    :depends_on: GS2
+    :owner: substrate/macos
+    :platform_prereqs: GS5=macos GS7=macos GS8=macos
+    :requires: os.macos desktop.automation
+    :complexity: large
+    :END:
 
 *** Deliverables
     - [ ] =backends/session/macos_virtual_display.nim=: virtual display via
@@ -2808,16 +2808,16 @@
       status: pending
 
 ** GS10: Linux off-screen sessions (companion)
-   :PROPERTIES:
-   :status: completed
-   :progress_note: Claimed and implemented by companion/linux 2026-10-23 (from origin/agents at cc1fc31; Linux x86_64, NixOS, kernel 6.18, inside nix develop): linux-sway, linux-gnome and linux-xvfb private sessions with their session host, readiness, records, environment contract and AT-SPI bus; loopback VNC endpoints (wayvnc, x11vnc); linux-host attach checks. Independently verified 2026-10-23 by review (see Outstanding Tasks). RustDesk as a session endpoint is BLOCKED (see Outstanding Tasks); it is not a GS10 deliverable.
-   :depends_on: GS2
-   :owner: companion/linux
-   :platform_prereqs: GS5=linux GS7=linux GS8=linux
-   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at cc1fc31: session-start --kind headless with --session-backend linux-sway (headless sway through desktop_env/sway: its own runtime directory, session bus and settings portal), linux-gnome (gnome-shell --headless through desktop_env/gnome, with PipeWire for linux-mutter) and linux-xvfb (Xvfb with -displayfd and an MIT-MAGIC-COOKIE, its own dbus-daemon, Openbox), each owned by a detached session host (guiassert __linux-session-host) that starts the session's own AT-SPI bus and sets org.a11y.Status.IsEnabled; readiness C10 (exit 5 / session-failed within --timeout-ms, nothing left behind), name-in-use, generated ids; Session.env / envUnset C6 with every verb of a private session run in its environment; dead host and dead compositor reported as state error (C9: every verb exit 4 / session-not-running); --vnc on 127.0.0.1 only (wayvnc, x11vnc; checked against /proc/net/tcp and an RFB client); linux-host attach checks (no display server: state error / no-display-server, apps / app-launch / app-quit exit 4 / session-not-running). tests/live/tsession_linux.nim 11/11 in every live run below, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check. Contract 1.0 unchanged (no new reason, key or verb). Independently verified 2026-10-23 by review (four fixes, tests/tlinux_session.nim 22/22, the Linux live suites 96/96 on three runs; see GS10 Outstanding Tasks).
-   :requires: os.linux desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :progress_note: Claimed and implemented by companion/linux 2026-10-23 (from origin/agents at cc1fc31; Linux x86_64, NixOS, kernel 6.18, inside nix develop): linux-sway, linux-gnome and linux-xvfb private sessions with their session host, readiness, records, environment contract and AT-SPI bus; loopback VNC endpoints (wayvnc, x11vnc); linux-host attach checks. Independently verified 2026-10-23 by review (see Outstanding Tasks). RustDesk as a session endpoint is BLOCKED (see Outstanding Tasks); it is not a GS10 deliverable.
+    :depends_on: GS2
+    :owner: companion/linux
+    :platform_prereqs: GS5=linux GS7=linux GS8=linux
+    :linux_status_note: companion/linux, 2026-10-23, from origin/agents at cc1fc31: session-start --kind headless with --session-backend linux-sway (headless sway through desktop_env/sway: its own runtime directory, session bus and settings portal), linux-gnome (gnome-shell --headless through desktop_env/gnome, with PipeWire for linux-mutter) and linux-xvfb (Xvfb with -displayfd and an MIT-MAGIC-COOKIE, its own dbus-daemon, Openbox), each owned by a detached session host (guiassert __linux-session-host) that starts the session's own AT-SPI bus and sets org.a11y.Status.IsEnabled; readiness C10 (exit 5 / session-failed within --timeout-ms, nothing left behind), name-in-use, generated ids; Session.env / envUnset C6 with every verb of a private session run in its environment; dead host and dead compositor reported as state error (C9: every verb exit 4 / session-not-running); --vnc on 127.0.0.1 only (wayvnc, x11vnc; checked against /proc/net/tcp and an RFB client); linux-host attach checks (no display server: state error / no-display-server, apps / app-launch / app-quit exit 4 / session-not-running). tests/live/tsession_linux.nim 11/11 in every live run below, tests/tlinux_session.nim 20/20, guiassert-packaged-linux-session in nix flake check. Contract 1.0 unchanged (no new reason, key or verb). Independently verified 2026-10-23 by review (four fixes, tests/tlinux_session.nim 22/22, the Linux live suites 96/96 on three runs; see GS10 Outstanding Tasks).
+    :requires: os.linux desktop.automation
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - [X] =backends/session/linux_sway.nim= and =linux_gnome.nim= wrapping the
@@ -3137,14 +3137,14 @@
     - [X] Implementation run, companion/linux, 2026-10-23: Linux x86_64 (NixOS, kernel 6.18, inside nix develop, from origin/agents cc1fc31, host load average 20-90): just lint clean (no linters configured); just test 428 ok (incl. tlinux_session 20; contract 114 across both binaries); just test-core 39; just test-contract 114; just test-desktop-env 31; just test-live-tesseract 2; the Linux live suites 96/96 on three consecutive runs (capture 16, OCR 8, tree 33, input 28, session 11), all 0 failed and 0 skipped. The just test-live-linux recipe itself exceeded the 10-minute bound of one tool call under this load (tinput_linux alone took 274 s), so each run ran its recipe's per-file commands (nim c -r tests/live/<suite>.nim after just build-cli) in successive calls; the one attempt that hit the bound was killed and left nothing running. nix flake check (x86_64-linux) passes with the new guiassert-packaged-linux-session. nim check --os:macosx of the four new session modules, linux_host, tlinux_session and the main program: clean. Ten falsifying mutations applied one at a time, each red and reverted (above). No process started by these runs remained afterwards; runtime directories two mutation runs left behind were removed.
 
 ** GS11: Windows off-screen sessions
-   :PROPERTIES:
-   :status: planned
-   :depends_on: GS2
-   :owner: later/windows
-   :platform_prereqs: GS5=windows GS7=windows GS8=windows
-   :requires: os.windows desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: planned
+    :depends_on: GS2
+    :owner: later/windows
+    :platform_prereqs: GS5=windows GS7=windows GS8=windows
+    :requires: os.windows desktop.automation
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - [ ] =backends/session/windows_desktop.nim=: =CreateDesktop=, launch via
@@ -3168,22 +3168,22 @@
       status: pending
 
 ** GS12: macOS parity evidence
-   :PROPERTIES:
-   :status: planned
-   :depends_on: GS9
-   :owner: substrate/macos
-   :platform_prereqs: GS5=macos GS6=macos GS7=macos GS8=macos
-   :requires: os.macos desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: planned
+    :depends_on: GS9
+    :owner: substrate/macos
+    :platform_prereqs: GS5=macos GS6=macos GS7=macos GS8=macos
+    :requires: os.macos desktop.automation
+    :complexity: medium
+    :END:
 
-   Run GuiAssert's macOS backends against the scenarios of Agent Harbor's
-   macOS computer-use end-to-end suite and record the results here. The
-   scenarios are restated in GuiAssert's own terms; each row records the
-   GuiAssert verbs used, the result, and the GuiAssert commit and date it was
-   measured at. Scenarios whose subject is Agent Harbor policy or surfaces
-   (remote-view and intervention, screen-reader speech capture, MCP) are out
-   of scope and listed as such rather than dropped.
+    Run GuiAssert's macOS backends against the scenarios of Agent Harbor's
+    macOS computer-use end-to-end suite and record the results here. The
+    scenarios are restated in GuiAssert's own terms; each row records the
+    GuiAssert verbs used, the result, and the GuiAssert commit and date it was
+    measured at. Scenarios whose subject is Agent Harbor policy or surfaces
+    (remote-view and intervention, screen-reader speech capture, MCP) are out
+    of scope and listed as such rather than dropped.
 
 *** Deliverables
     - [ ] A parity script =tests/parity/macos_parity.sh= that runs each
@@ -3210,16 +3210,16 @@
       status: pending
 
 ** GS13: Linux parity evidence (companion)
-   :PROPERTIES:
-   :status: completed
-   :platform_status: linux=completed
-   :linux_status_note: companion/linux, 2026-10-23, from origin/agents at dfff95f (Linux x86_64, NixOS, kernel 6.18, inside nix develop): completed 2026-10-24. GS13-Linux completion implemented 2026-10-23 from origin/agents at cf8ebcb and independently verified 2026-10-24 by review (Outstanding Tasks, "GS13-Linux completion", its review entry): with the pinned package (GuiAssert agents 09ce0ce, no dev-build wrapper) Agent Harbor's leg passes every GuiAssert row on linux-sway and linux-xvfb (A0–A7, A9; A8 n/a; the unrouted verbs are gap rows; Agent Harbor df7083c12b), the parity harness 36/36 with the strengthened S4 (evidence regenerated at 09ce0ce). Before it: implemented; independently verified 2026-10-23 by review (GS13 Outstanding Tasks); in_progress until the consumer leg is green. tests/parity/linux_parity.sh (just test-parity-linux) runs S1–S9 through the real guiassert against the invented GTK 3 and GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs passed on three consecutive runs (about 75 s each), and with --sessions gnome 14/18 (recording only, see Deviations). Every scenario family has a falsifying mutation (M1–M9, each red, then reverted). Agent Harbor's own leg (its tests/computer-use/parity_linux_guiassert_substrate.sh: ah desktop with AH_DESKTOP_SUBSTRATE=guiassert, its own GTK 4 fixture, in GuiAssert sessions) passes 7 of 8 scenario rows per session, fails A3 (desktop focus on a GTK 4 field) and records 25 gaps per session as GS15 inputs (Outstanding Tasks); at review, with the teardown row A9 added, 8 of 9 (Agent Harbor ad6fe9586f). Evidence: tests/parity/evidence/. Contract 1.0 unchanged.
-   :depends_on: GS10
-   :owner: companion/linux
-   :platform_prereqs: GS5=linux GS6=linux GS7=linux GS8=linux
-   :requires: os.linux desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :platform_status: linux=completed
+    :linux_status_note: companion/linux, 2026-10-23, from origin/agents at dfff95f (Linux x86_64, NixOS, kernel 6.18, inside nix develop): completed 2026-10-24. GS13-Linux completion implemented 2026-10-23 from origin/agents at cf8ebcb and independently verified 2026-10-24 by review (Outstanding Tasks, "GS13-Linux completion", its review entry): with the pinned package (GuiAssert agents 09ce0ce, no dev-build wrapper) Agent Harbor's leg passes every GuiAssert row on linux-sway and linux-xvfb (A0–A7, A9; A8 n/a; the unrouted verbs are gap rows; Agent Harbor df7083c12b), the parity harness 36/36 with the strengthened S4 (evidence regenerated at 09ce0ce). Before it: implemented; independently verified 2026-10-23 by review (GS13 Outstanding Tasks); in_progress until the consumer leg is green. tests/parity/linux_parity.sh (just test-parity-linux) runs S1–S9 through the real guiassert against the invented GTK 3 and GTK 4 application tests/parity/fixtures/parity_lab.c in private linux-sway and linux-xvfb sessions it starts with session-start: 36/36 scenario runs passed on three consecutive runs (about 75 s each), and with --sessions gnome 14/18 (recording only, see Deviations). Every scenario family has a falsifying mutation (M1–M9, each red, then reverted). Agent Harbor's own leg (its tests/computer-use/parity_linux_guiassert_substrate.sh: ah desktop with AH_DESKTOP_SUBSTRATE=guiassert, its own GTK 4 fixture, in GuiAssert sessions) passes 7 of 8 scenario rows per session, fails A3 (desktop focus on a GTK 4 field) and records 25 gaps per session as GS15 inputs (Outstanding Tasks); at review, with the teardown row A9 added, 8 of 9 (Agent Harbor ad6fe9586f). Evidence: tests/parity/evidence/. Contract 1.0 unchanged.
+    :depends_on: GS10
+    :owner: companion/linux
+    :platform_prereqs: GS5=linux GS6=linux GS7=linux GS8=linux
+    :requires: os.linux desktop.automation
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - [X] =tests/parity/linux_parity.sh= and a results table, restating the
@@ -3547,38 +3547,38 @@
       carry a disposition (=open= or =native-specific=). Status after the
       GS13-Linux completion:
       1. OPEN (the next GS15 step, planned in Agent Harbor GA5a): not routed,
-         refused with the not-routed error (gap rows G1–G10): =ah desktop
-         session new / list / kill= (sessions are started with =guiassert
-         session-start= and targeted through =AH_DESKTOP_SESSION=),
-         =record-start=, =record-stop=, =capture-pass=, =run-script=, =type
-         --cadence=, =click --motion=, =drag --motion=.
+          refused with the not-routed error (gap rows G1–G10): =ah desktop
+          session new / list / kill= (sessions are started with =guiassert
+          session-start= and targeted through =AH_DESKTOP_SESSION=),
+          =record-start=, =record-stop=, =capture-pass=, =run-script=, =type
+          --cadence=, =click --motion=, =drag --motion=.
       2. DONE (GuiAssert): =ah desktop focus <path>= on GTK 4 (A3 passes).
       3. DONE (Agent Harbor binding): =ah desktop ocr= with no target reads
-         the primary display.
+          the primary display.
       4. DONE (Agent Harbor mapping): roles in Agent Harbor's AT-SPI
-         spellings (=push button=, =text=, =frame=, =password text=).
+          spellings (=push button=, =text=, =frame=, =password text=).
       5. NATIVE-SPECIFIC: =ah desktop tree= without =--app= reads the focused
-         application (Agent Harbor's substrate spec maps it to =--focused=),
-         not a =desktop frame= root.
+          application (Agent Harbor's substrate spec maps it to =--focused=),
+          not a =desktop frame= root.
       6. DONE (Agent Harbor mapping): =doctor= reports Agent Harbor's stable
-         feature keys derived from GuiAssert's features, a =reasonCode= on
-         every entry that is not =available=.
+          feature keys derived from GuiAssert's features, a =reasonCode= on
+          every entry that is not =available=.
       7. NATIVE-SPECIFIC: =.data.provider == "wlrctl"= and
-         =.data.launch_method == "swaymsg"=.
+          =.data.launch_method == "swaymsg"=.
       8. OPEN (Agent Harbor policy): =ah desktop get-text --fallback --trace=
-         exists on neither substrate; GuiAssert's S9 restates its stages.
+          exists on neither substrate; GuiAssert's S9 restates its stages.
       9. The native baseline on this host (the same script, =--with-native=,
-         each native e2e script in a private runtime directory): doctor PASS;
-         zero-touch and click/scroll/drag FAIL only at their cleanup check,
-         intermittently (in the GS13-Linux completion's final run zero-touch
-         passed and click/scroll/drag failed; xdg-desktop-portal, gvfsd and
-         gvfsd-fuse activated on the private bus outlive the lifecycle host);
-         find, form, wait and fallback SKIP (no Appium at 127.0.0.1:4723);
-         OCR FAIL (no words) and screenshot/recording FAIL (sway's stderr
-         mixed into the JSON the script parses), both starting an
-         unconfigured sway of their own. So the native suite is not green
-         here either; GS15 compares against the substrate rows, not against
-         it.
+          each native e2e script in a private runtime directory): doctor PASS;
+          zero-touch and click/scroll/drag FAIL only at their cleanup check,
+          intermittently (in the GS13-Linux completion's final run zero-touch
+          passed and click/scroll/drag failed; xdg-desktop-portal, gvfsd and
+          gvfsd-fuse activated on the private bus outlive the lifecycle host);
+          find, form, wait and fallback SKIP (no Appium at 127.0.0.1:4723);
+          OCR FAIL (no words) and screenshot/recording FAIL (sway's stderr
+          mixed into the JSON the script parses), both starting an
+          unconfigured sway of their own. So the native suite is not green
+          here either; GS15 compares against the substrate rows, not against
+          it.
     - [ ] Spec requests for substrate/macos (Desktop-Substrate.md is theirs):
       (a) =ocr= with =--out= and no target: §7.5 says a capture verb with no
       =--display= / =--window= / =--region= uses the session's primary
@@ -3624,14 +3624,14 @@
       and linux-gnome cannot record (GS5).
 
 ** GS14: Windows parity evidence
-   :PROPERTIES:
-   :status: planned
-   :depends_on: GS11
-   :owner: later/windows
-   :platform_prereqs: GS5=windows GS6=windows GS7=windows GS8=windows
-   :requires: os.windows desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: planned
+    :depends_on: GS11
+    :owner: later/windows
+    :platform_prereqs: GS5=windows GS6=windows GS7=windows GS8=windows
+    :requires: os.windows desktop.automation
+    :complexity: medium
+    :END:
 
 *** Deliverables
     - [ ] =tests/parity/windows_parity.ps1= and a results table covering the
@@ -3644,19 +3644,19 @@
       status: pending
 
 ** GS15: Agent Harbor switch-over, per platform (companion)
-   :PROPERTIES:
-   :status: in_progress
-   :platform_status: macos=planned linux=completed windows=planned
-   :linux_status_note: companion/linux, 2026-10-24: completed 2026-10-24. Independently reviewed and committed in Agent Harbor (agents 685ed60b61: ecdd0307d1, 04df4b7999, 911431b091, the review fixes 5746b24f64, 3d2d4a0d0a, 8dfbca5383, merged as 30fa43d34a). The review kept Agent Harbor's documented --json result fields on the new default, fixed the desktop MCP configuration of --with-desktop agents, and added a real-agent test that no Session.envUnset variable reaches the agent; just computer-use-guiassert-linux 22/22 not failing on two runs per session backend; the consumer leg 40/40 GuiAssert rows (evidence regenerated from Agent Harbor 30fa43d34a). Implemented 2026-10-24 from origin/agents at 2e5bc81 (Linux x86_64, NixOS, kernel 6.18, inside nix develop; Agent Harbor from origin/agents at 1f0e7697a4). Agent Harbor GA5a: ah agent start --with-desktop runs an agent-owned GuiAssert session (session-start --lifetime owner on the agent process's own serve --stdio daemon; Session.env handed to the agent, Session.envUnset removed from its command; stopped on exit, by GuiAssert when the agent is SIGKILLed and the daemon's stdin closes, and by Agent Harbor's owner-record sweep when both die); its Linux computer-use suite asserts its documented contract on the selected substrate; GuiAssert is Agent Harbor's Linux default (--substrate native still selects native; macOS and Windows unchanged). Verification: just computer-use-guiassert-linux, with no selection, 22/22 not failing on linux-sway and linux-xvfb with the pinned package (agents 09ce0ce); the consumer leg 40/40 GuiAssert rows (evidence refreshed). No GuiAssert code change was needed; contract 1.0 unchanged.
-   :depends_on: GS3
-   :owner: companion/linux
-   :platform_prereqs: per platform: macOS needs GS12, Linux needs GS13, Windows needs GS14
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: in_progress
+    :platform_status: macos=planned linux=completed windows=planned
+    :linux_status_note: companion/linux, 2026-10-24: completed 2026-10-24. Independently reviewed and committed in Agent Harbor (agents 685ed60b61: ecdd0307d1, 04df4b7999, 911431b091, the review fixes 5746b24f64, 3d2d4a0d0a, 8dfbca5383, merged as 30fa43d34a). The review kept Agent Harbor's documented --json result fields on the new default, fixed the desktop MCP configuration of --with-desktop agents, and added a real-agent test that no Session.envUnset variable reaches the agent; just computer-use-guiassert-linux 22/22 not failing on two runs per session backend; the consumer leg 40/40 GuiAssert rows (evidence regenerated from Agent Harbor 30fa43d34a). Implemented 2026-10-24 from origin/agents at 2e5bc81 (Linux x86_64, NixOS, kernel 6.18, inside nix develop; Agent Harbor from origin/agents at 1f0e7697a4). Agent Harbor GA5a: ah agent start --with-desktop runs an agent-owned GuiAssert session (session-start --lifetime owner on the agent process's own serve --stdio daemon; Session.env handed to the agent, Session.envUnset removed from its command; stopped on exit, by GuiAssert when the agent is SIGKILLed and the daemon's stdin closes, and by Agent Harbor's owner-record sweep when both die); its Linux computer-use suite asserts its documented contract on the selected substrate; GuiAssert is Agent Harbor's Linux default (--substrate native still selects native; macOS and Windows unchanged). Verification: just computer-use-guiassert-linux, with no selection, 22/22 not failing on linux-sway and linux-xvfb with the pinned package (agents 09ce0ce); the consumer leg 40/40 GuiAssert rows (evidence refreshed). No GuiAssert code change was needed; contract 1.0 unchanged.
+    :depends_on: GS3
+    :owner: companion/linux
+    :platform_prereqs: per platform: macOS needs GS12, Linux needs GS13, Windows needs GS14
+    :complexity: medium
+    :END:
 
-   Agent Harbor's default desktop backend flips to GuiAssert one platform at a
-   time, and only for a platform whose parity milestone is =completed=. Until
-   then the GuiAssert backend stays opt-in there.
+    Agent Harbor's default desktop backend flips to GuiAssert one platform at a
+    time, and only for a platform whose parity milestone is =completed=. Until
+    then the GuiAssert backend stays opt-in there.
 
 *** Deliverables
     - [ ] macOS default flipped (after GS12).
@@ -3727,17 +3727,17 @@
       status: passing on Linux 2026-10-24, reviewed (companion/linux; review re-runs after a forced rebuild, Agent Harbor 685ed60b61: 22/22 not failing on linux-sway and linux-xvfb on two runs, a script leaving a process behind fails; Agent Harbor's just computer-use-guiassert-linux, tests/computer-use/run_linux_computer_use_suite.sh, with no --substrate and no AH_DESKTOP_SUBSTRATE, after checking the default is guiassert: 22/22 not failing on linux-sway and linux-xvfb with the pinned package, agents 09ce0ce, each script in its own private GuiAssert session with Agent Harbor's GTK fixture: doctor, zero-touch, click/scroll/drag, find, form, wait, OCR, screenshot/recording, MCP roundtrip and run-script pass, the get-text fallback trace skips on both substrates because Agent Harbor has no such verb; falsified by an untranslated button role, which turns find and form red). macOS (after GS12) and Windows (after GS14) pending.
 
 ** GS16: Removal of Agent Harbor's duplicated native code (companion)
-   :PROPERTIES:
-   :status: planned
-   :depends_on: GS12 GS13 GS14 GS15
-   :owner: companion/linux
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: planned
+    :depends_on: GS12 GS13 GS14 GS15
+    :owner: companion/linux
+    :complexity: medium
+    :END:
 
-   Gated on parity on every platform: the native capture, OCR, tree, input and
-   off-screen session code in Agent Harbor is removed only after GS12, GS13 and
-   GS14 are all =completed= and GS15 has flipped every platform. Agent
-   Harbor's policy layers (spec §11) are untouched.
+    Gated on parity on every platform: the native capture, OCR, tree, input and
+    off-screen session code in Agent Harbor is removed only after GS12, GS13 and
+    GS14 are all =completed= and GS15 has flipped every platform. Agent
+    Harbor's policy layers (spec §11) are untouched.
 
 *** Deliverables
     - [ ] Native duplicated backends removed from Agent Harbor; the GuiAssert
@@ -3749,37 +3749,37 @@
       status: pending
 
 ** GS17: Remote takeover and secret-guarded frames for unattended sign-ins (contract 1.1)
-   :PROPERTIES:
-   :status: completed
-   :progress_note: Specified and implemented 2026-10-27 by consumer/isonim-email from origin/agents at 95a7610; independently reviewed the same day (one test added for a frame the engine fails to read, see Verification) and landed on agents. Linux only; macOS and Windows have no private session with a VNC endpoint yet (GS9, GS11), and the secret guard is platform-neutral (it runs over any OCR backend).
-   :depends_on: GS6 GS8 GS10
-   :owner: consumer/isonim-email
-   :platform_prereqs: GS6=linux GS8=linux GS10=linux
-   :requires: os.linux desktop.automation
-   :complexity: medium
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :progress_note: Specified and implemented 2026-10-27 by consumer/isonim-email from origin/agents at 95a7610; independently reviewed the same day (one test added for a frame the engine fails to read, see Verification) and landed on agents. Linux only; macOS and Windows have no private session with a VNC endpoint yet (GS9, GS11), and the secret guard is platform-neutral (it runs over any OCR backend).
+    :depends_on: GS6 GS8 GS10
+    :owner: consumer/isonim-email
+    :platform_prereqs: GS6=linux GS8=linux GS10=linux
+    :requires: os.linux desktop.automation
+    :complexity: medium
+    :END:
 
-   The first consumer outside Agent Harbor: isonim-email signs its own QA
-   accounts in to hosted webmail with a real browser on an off-screen
-   session, typing through OS-level input, so that its captures can later run
-   unattended. Everything general it needs is here; the provider steps, the
-   challenge detection and the attempt / cool-down guard stay in isonim-email
-   (its milestone B; running it in CI is its milestone C). What it found
-   GuiAssert lacked, and what this milestone adds (spec §6.5, §7.5, §7.7):
+    The first consumer outside Agent Harbor: isonim-email signs its own QA
+    accounts in to hosted webmail with a real browser on an off-screen
+    session, typing through OS-level input, so that its captures can later run
+    unattended. Everything general it needs is here; the provider steps, the
+    challenge detection and the attempt / cool-down guard stay in isonim-email
+    (its milestone B; running it in CI is its milestone C). What it found
+    GuiAssert lacked, and what this milestone adds (spec §6.5, §7.5, §7.7):
 
-   1. An **owner-only remote view**. =--vnc= listens on loopback TCP without
+    1. An **owner-only remote view**. =--vnc= listens on loopback TCP without
       a password, so any local user can watch, and drive, a session in which
       a password was just typed and a mailbox is signed in. =session-start
       --vnc-socket= serves VNC on a Unix socket in the session's 0700 runtime
       directory instead, with no TCP listener; a person reaches it with
       =ssh -L <port>:<socket>=. Both endpoints accept a viewer's input, so a
       person can take a session over (a challenge only a person answers).
-   2. A **1.0 defect** found on the way: x11vnc 0.9.17 started as GS10 starts
+    2. A **1.0 defect** found on the way: x11vnc 0.9.17 started as GS10 starts
       it (=-localhost -noipv6 -rfbport P=) ALSO listens on =[::1]:5900= (its
       default IPv6 port), which =waitVncListening= did not look at because
       it checked only port P. Fixed with =-rfbportv6 -1=, and the check now
       refuses a server with any listening TCP socket other than its endpoint.
-   3. **Secret-guarded frames**: =screenshot --secret-stdin= and =ocr …
+    3. **Secret-guarded frames**: =screenshot --secret-stdin= and =ocr …
       --secret-stdin= keep a frame, or answer its words, only when a secret
       read from stdin is not legible in it (OCR, white space removed,
       case-insensitive, at most floor((n-4)/4) differing characters); otherwise
@@ -3789,16 +3789,16 @@
       without ever holding a frame or a text in which the password is
       readable.
 
-   Already present on origin/agents and used as they are: private
-   =linux-xvfb= / =linux-sway= sessions (GS10), =app-launch= into them,
-   =type --stdin= (the text never in argv, never echoed; GS2.1), =key=,
-   =click=, =screenshot=, =ocr= and =wait --text= (GS5, GS6, GS8). The
-   consumer entry point is the =guiassert= program of the flake's
-   =packages.<system>.guiassert= (it carries Xvfb, Openbox, x11vnc, wayvnc
-   and tesseract on its PATH), driven per verb or through =serve=; no new
-   library API is needed. A multi-needle =wait --text= was considered and
-   left out: the consumer classifies =ocr= text itself, because which
-   screen is which is provider policy.
+    Already present on origin/agents and used as they are: private
+    =linux-xvfb= / =linux-sway= sessions (GS10), =app-launch= into them,
+    =type --stdin= (the text never in argv, never echoed; GS2.1), =key=,
+    =click=, =screenshot=, =ocr= and =wait --text= (GS5, GS6, GS8). The
+    consumer entry point is the =guiassert= program of the flake's
+    =packages.<system>.guiassert= (it carries Xvfb, Openbox, x11vnc, wayvnc
+    and tesseract on its PATH), driven per verb or through =serve=; no new
+    library API is needed. A multi-needle =wait --text= was considered and
+    left out: the consumer classifies =ocr= text itself, because which
+    screen is which is provider policy.
 
 *** Deliverables
     - [X] Spec: §6.5 (remote view and takeover), §7.5 (=Session.vncSocket=,

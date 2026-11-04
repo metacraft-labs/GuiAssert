@@ -69,7 +69,7 @@ reports exactly what happened, and refuses what it cannot do faithfully.
 2. **Reject, don't drop.** An input that cannot be honoured exactly is an
    error, never silently ignored or approximated. An unknown flag is
    `bad-args`; a known flag the selected backend cannot honour (capture a
-   *window* with a display-only backend, OCR a language the engine lacks,
+   _window_ with a display-only backend, OCR a language the engine lacks,
    `--lifetime owner` from a one-shot CLI) is `backend-unavailable` with a
    reason. A backend never substitutes a different operation (e.g. a
    display capture cropped to a window's bounds when window capture was
@@ -132,8 +132,8 @@ session backend wraps a `TargetEnvironment`.
 A module under `gui_assert/core/`:
 
 - imports only other `core/` modules and this stdlib allowlist: `std/[math,
-  strutils, sequtils, algorithm, tables, sets, hashes, options, json, times,
-  parseutils, unicode, bitops, endians, streams, strformat]` (`streams` for
+strutils, sequtils, algorithm, tables, sets, hashes, options, json, times,
+parseutils, unicode, bitops, endians, streams, strformat]` (`streams` for
   in-memory streams only);
 - performs no FFI (`importc`, `dynlib`, `header`, `emit`, `compile`), no
   subprocess (`osproc`), no filesystem access except through procs that take an
@@ -151,8 +151,8 @@ binary links no framework or shared library beyond the platform C runtime).
 Decoding is the one place the old pure code was not pure: `image_math.decodeGray`
 shells out to `ffmpeg`. In the new layout PNG is decoded in core (`png.nim`);
 every other image and all video formats go through the opt-in
-`backends/media/ffmpeg.nim`. Video *segmentation* is therefore pure (it consumes
-a sequence of decoded frames, or an SSIM series), and video *decoding* is
+`backends/media/ffmpeg.nim`. Video _segmentation_ is therefore pure (it consumes
+a sequence of decoded frames, or an SSIM series), and video _decoding_ is
 opt-in.
 
 ### 3.3 How a Nim application links only what it needs
@@ -186,12 +186,12 @@ its constructor returns a backend whose every operation fails with
 **Compile time.** `gui_assert/cli/registry.nim` decides which backends are
 compiled in:
 
-| Define | Effect |
-| --- | --- |
-| *(none)* | every backend for the target OS, plus `fixture` |
-| `-d:guiassertMinimal` | `core` plus the `fixture` backends only (this is `guiassert-fixture`, §9.2) |
-| `-d:guiassertNo<Module>` (`Capture`, `Ocr`, `Tree`, `Input`, `Session`, `Media`) | omit every backend of that module |
-| `-d:guiassertNo<Backend>` (e.g. `guiassertNoTesseract`) | omit one backend |
+| Define                                                                           | Effect                                                                      |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| _(none)_                                                                         | every backend for the target OS, plus `fixture`                             |
+| `-d:guiassertMinimal`                                                            | `core` plus the `fixture` backends only (this is `guiassert-fixture`, §9.2) |
+| `-d:guiassertNo<Module>` (`Capture`, `Ocr`, `Tree`, `Input`, `Session`, `Media`) | omit every backend of that module                                           |
+| `-d:guiassertNo<Backend>` (e.g. `guiassertNoTesseract`)                          | omit one backend                                                            |
 
 `version` and `capabilities` report what was compiled in, so a consumer can
 tell "not compiled in" (`backend-unavailable`, reason `not-compiled-in`) from
@@ -220,13 +220,13 @@ Defaults are in **bold**. "TCC" marks a macOS privacy permission (§9.4).
 
 ### 4.1 macOS
 
-| Module | Backends | Notes |
-| --- | --- | --- |
-| capture | **`macos-sck`** (ScreenCaptureKit: `SCScreenshotManager` stills, `SCStream` recordings), `macos-cgwindow` (enumeration only) | Stills and window-own-pixel capture already exist (`screen_capture.nim`, a signed helper bundle). Enumeration through `CGWindowListCopyWindowInfo` is unprivileged and is the positive control; window titles are redacted without the TCC grant, reported as `title: null` and `titlesVisible: false`. TCC: Screen Recording. |
-| ocr | **`apple-vision`** (`VNRecognizeTextRequest`), `tesseract` | Apple Vision already exists behind `ocr.obAppleVision`. Confidence is normalized to 0–100. |
-| tree | **`macos-ax`** (`AXUIElement`), `appium` (Mac2 driver, optional) | Direct C API, no helper. TCC: Accessibility. |
-| input | **`macos-cgevent`** (`CGEventCreateMouseEvent` / `CGEventCreateKeyboardEvent` / `CGEventKeyboardSetUnicodeString`, posted with `CGEventPost`, or `CGEventPostToPid` when a target pid is given) | Replaces the AppleScript keystroke path in `input.nim` (kept as a shim). TCC: Accessibility (posting events). |
-| session | **`macos-host`** (the logged-in user's own session), `macos-virtual-display`, `macos-isolated` | §6.2. |
+| Module  | Backends                                                                                                                                                                                        | Notes                                                                                                                                                                                                                                                                                                                          |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| capture | **`macos-sck`** (ScreenCaptureKit: `SCScreenshotManager` stills, `SCStream` recordings), `macos-cgwindow` (enumeration only)                                                                    | Stills and window-own-pixel capture already exist (`screen_capture.nim`, a signed helper bundle). Enumeration through `CGWindowListCopyWindowInfo` is unprivileged and is the positive control; window titles are redacted without the TCC grant, reported as `title: null` and `titlesVisible: false`. TCC: Screen Recording. |
+| ocr     | **`apple-vision`** (`VNRecognizeTextRequest`), `tesseract`                                                                                                                                      | Apple Vision already exists behind `ocr.obAppleVision`. Confidence is normalized to 0–100.                                                                                                                                                                                                                                     |
+| tree    | **`macos-ax`** (`AXUIElement`), `appium` (Mac2 driver, optional)                                                                                                                                | Direct C API, no helper. TCC: Accessibility.                                                                                                                                                                                                                                                                                   |
+| input   | **`macos-cgevent`** (`CGEventCreateMouseEvent` / `CGEventCreateKeyboardEvent` / `CGEventKeyboardSetUnicodeString`, posted with `CGEventPost`, or `CGEventPostToPid` when a target pid is given) | Replaces the AppleScript keystroke path in `input.nim` (kept as a shim). TCC: Accessibility (posting events).                                                                                                                                                                                                                  |
+| session | **`macos-host`** (the logged-in user's own session), `macos-virtual-display`, `macos-isolated`                                                                                                  | §6.2.                                                                                                                                                                                                                                                                                                                          |
 
 Objective-C / Swift-only APIs (ScreenCaptureKit, Vision, `CGVirtualDisplay`)
 are reached through the small signed Swift helper pattern GuiAssert already
@@ -237,23 +237,23 @@ code identity (§9.4).
 
 ### 4.2 Linux
 
-| Module | Backends | Notes |
-| --- | --- | --- |
-| capture | **`linux-wlr`** (wlr-screencopy via `grim`; recordings via `wf-recorder`), `linux-gnome` (GNOME Shell screenshot API), `linux-portal-pipewire` (xdg-desktop-portal ScreenCast + PipeWire stream, for compositors that only offer the portal), `linux-x11` (XGetImage/XShm; recordings via ffmpeg `x11grab`, for Xvfb) | Default follows the session: sway → `linux-wlr`, GNOME → `linux-gnome`, Xvfb → `linux-x11`. Window capture on wlroots crops the compositor-reported window rect and says so (`source.kind: "window-crop"`), because wlr-screencopy has no per-window capture; a caller that needs own-pixels capture gets `backend-unavailable` / `unsupported-option` when it passes `--own-pixels`. |
-| ocr | **`tesseract`** | Pinned by the flake. |
-| tree | **`linux-atspi`** (AT-SPI2 over D-Bus, on the session's own bus), `appium` (optional) | Requires the application's toolkit accessibility bridge; a session backend starts the AT-SPI bus inside the session it owns. |
-| input | **`linux-wlr-virtual`** (wlroots virtual-pointer and virtual-keyboard protocols; the existing `helpers/linux/virtual_pointer.c` and `wtype`), `linux-mutter` (Clutter virtual devices inside GNOME Shell, as `desktop_env/gnome` does today), `linux-xtest` (XTest, for Xvfb), `linux-uinput` (`/dev/uinput`, compositor-independent, needs device access) | Default follows the session. |
-| session | **`linux-host`** (attach to the caller's session; `attachSwayTarget` / `attachGnomeTarget`), `linux-sway` (private headless sway), `linux-gnome` (private headless GNOME Shell), `linux-xvfb` (Xvfb plus a minimal window manager) | §6.3. Optional per-session VNC endpoint through `wayvnc` (sway) or `x11vnc` (Xvfb), bound to loopback (`--vnc`) or on an owner-only Unix socket (`--vnc-socket`, 1.1), §6.5. |
+| Module  | Backends                                                                                                                                                                                                                                                                                                                                                   | Notes                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| capture | **`linux-wlr`** (wlr-screencopy via `grim`; recordings via `wf-recorder`), `linux-gnome` (GNOME Shell screenshot API), `linux-portal-pipewire` (xdg-desktop-portal ScreenCast + PipeWire stream, for compositors that only offer the portal), `linux-x11` (XGetImage/XShm; recordings via ffmpeg `x11grab`, for Xvfb)                                      | Default follows the session: sway → `linux-wlr`, GNOME → `linux-gnome`, Xvfb → `linux-x11`. Window capture on wlroots crops the compositor-reported window rect and says so (`source.kind: "window-crop"`), because wlr-screencopy has no per-window capture; a caller that needs own-pixels capture gets `backend-unavailable` / `unsupported-option` when it passes `--own-pixels`. |
+| ocr     | **`tesseract`**                                                                                                                                                                                                                                                                                                                                            | Pinned by the flake.                                                                                                                                                                                                                                                                                                                                                                  |
+| tree    | **`linux-atspi`** (AT-SPI2 over D-Bus, on the session's own bus), `appium` (optional)                                                                                                                                                                                                                                                                      | Requires the application's toolkit accessibility bridge; a session backend starts the AT-SPI bus inside the session it owns.                                                                                                                                                                                                                                                          |
+| input   | **`linux-wlr-virtual`** (wlroots virtual-pointer and virtual-keyboard protocols; the existing `helpers/linux/virtual_pointer.c` and `wtype`), `linux-mutter` (Clutter virtual devices inside GNOME Shell, as `desktop_env/gnome` does today), `linux-xtest` (XTest, for Xvfb), `linux-uinput` (`/dev/uinput`, compositor-independent, needs device access) | Default follows the session.                                                                                                                                                                                                                                                                                                                                                          |
+| session | **`linux-host`** (attach to the caller's session; `attachSwayTarget` / `attachGnomeTarget`), `linux-sway` (private headless sway), `linux-gnome` (private headless GNOME Shell), `linux-xvfb` (Xvfb plus a minimal window manager)                                                                                                                         | §6.3. Optional per-session VNC endpoint through `wayvnc` (sway) or `x11vnc` (Xvfb), bound to loopback (`--vnc`) or on an owner-only Unix socket (`--vnc-socket`, 1.1), §6.5.                                                                                                                                                                                                          |
 
 ### 4.3 Windows
 
-| Module | Backends | Notes |
-| --- | --- | --- |
-| capture | **`windows-dxgi`** (DXGI Desktop Duplication, displays), `windows-wgc` (Windows.Graphics.Capture, window own-pixels), `windows-gdi` (`BitBlt` / `PrintWindow`, works on a non-input desktop) | Desktop Duplication only sees the *input* desktop; on a `windows-desktop` session the default becomes `windows-gdi`. |
-| ocr | **`windows-media`** (`Windows.Media.Ocr`), `tesseract` | |
-| tree | **`windows-uia`** (UI Automation) | |
-| input | **`windows-sendinput`** (`SendInput`) | `SendInput` reaches only the input desktop; on a `windows-desktop` session input is posted to the target window (`PostMessage` of mouse/keyboard messages) and the report says `delivery: "posted"`. Applications that read raw input or check the input desktop will not see posted input; that limit is a GS11 measurement item. |
-| session | **`windows-host`**, `windows-desktop` (`CreateDesktop` in the caller's window station; processes launched with `STARTUPINFO.lpDesktop`) | §6.4. |
+| Module  | Backends                                                                                                                                                                                     | Notes                                                                                                                                                                                                                                                                                                                              |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| capture | **`windows-dxgi`** (DXGI Desktop Duplication, displays), `windows-wgc` (Windows.Graphics.Capture, window own-pixels), `windows-gdi` (`BitBlt` / `PrintWindow`, works on a non-input desktop) | Desktop Duplication only sees the _input_ desktop; on a `windows-desktop` session the default becomes `windows-gdi`.                                                                                                                                                                                                               |
+| ocr     | **`windows-media`** (`Windows.Media.Ocr`), `tesseract`                                                                                                                                       |                                                                                                                                                                                                                                                                                                                                    |
+| tree    | **`windows-uia`** (UI Automation)                                                                                                                                                            |                                                                                                                                                                                                                                                                                                                                    |
+| input   | **`windows-sendinput`** (`SendInput`)                                                                                                                                                        | `SendInput` reaches only the input desktop; on a `windows-desktop` session input is posted to the target window (`PostMessage` of mouse/keyboard messages) and the report says `delivery: "posted"`. Applications that read raw input or check the input desktop will not see posted input; that limit is a GS11 measurement item. |
+| session | **`windows-host`**, `windows-desktop` (`CreateDesktop` in the caller's window station; processes launched with `STARTUPINFO.lpDesktop`)                                                      | §6.4.                                                                                                                                                                                                                                                                                                                              |
 
 ## 5. Coordinates and units
 
@@ -278,12 +278,12 @@ that touches a desktop takes `--session <id>`; the default is the reserved id
 `host`, the caller's own desktop, which always exists and is never started or
 stopped by GuiAssert.
 
-| Kind | Meaning |
-| --- | --- |
-| `host` | the caller's own interactive session (attached, never modified beyond what a verb does) |
+| Kind              | Meaning                                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host`            | the caller's own interactive session (attached, never modified beyond what a verb does)                                                           |
 | `virtual-display` | an extra display that exists only in software, attached to the host's window server; windows placed on it are not visible on any physical monitor |
-| `isolated` | a separate login session (its own window server session, its own input focus, its own clipboard) |
-| `headless` | a private display server or compositor with no physical output (Linux sway / GNOME / Xvfb; Windows separate desktop) |
+| `isolated`        | a separate login session (its own window server session, its own input focus, its own clipboard)                                                  |
+| `headless`        | a private display server or compositor with no physical output (Linux sway / GNOME / Xvfb; Windows separate desktop)                              |
 
 `session-start` returns a `Session` (§7.5) and records it in the state
 directory (§7.6). A session outlives the CLI invocation that started it: the
@@ -406,9 +406,9 @@ There are two endpoints, and a session has at most one:
   on another host can. The server listens on that address and port and
   **nowhere else**: `session-start` checks every TCP socket the server
   process holds (/proc/net/tcp and tcp6), and a server that listens anywhere
-  else as well fails the start (exit 5 / `session-failed`). *Measured
-  2026-10-27 (GS17):* x11vnc 0.9.17 started with `-localhost -noipv6
-  -rfbport P` also listened on `[::1]:5900`, its default IPv6 port, which
+  else as well fails the start (exit 5 / `session-failed`). _Measured
+  2026-10-27 (GS17):_ x11vnc 0.9.17 started with `-localhost -noipv6
+-rfbport P` also listened on `[::1]:5900`, its default IPv6 port, which
   1.0's check did not look at; it is now started with `-rfbportv6 -1`.
 - **`--vnc-socket`** (1.1): a Unix stream socket, `vnc.sock` in the session's
   private runtime directory (mode 0700, the caller's), and no TCP listener at
@@ -417,7 +417,7 @@ There are two endpoints, and a session has at most one:
   viewer on another machine reaches it through SSH's stream-local forwarding
   (`ssh -L <port>:<socket path> <host>`, then a viewer on
   `localhost:<port>`). x11vnc serves it with `-unixsock <path> -rfbport 0
-  -rfbportv6 -1`, wayvnc with `--unix-socket <path>`. `session-start` checks
+-rfbportv6 -1`, wayvnc with `--unix-socket <path>`. `session-start` checks
   that the server process holds the listening socket bound to that path
   (/proc/net/unix), holds no listening TCP socket, and greets with an RFB
   banner there; otherwise the start fails (exit 5 / `session-failed`).
@@ -450,14 +450,14 @@ not call it.
 
 **Global flags**
 
-| Flag | Meaning |
-| --- | --- |
-| `--state-dir <dir>` | state directory root (§7.6) |
-| `--session <id>` | session to act in (default `host`) |
-| `--backend <name>` / `--<module>-backend <name>` | backend selection (§3.4) |
-| `--timeout-ms <n>` | overall deadline for the verb; on expiry the verb is cancelled and exits 7 / `deadline` |
-| `--contract <major>` | the contract major version the caller speaks; any other value than one this binary implements is `bad-args` / `contract-unsupported` |
-| `--fixture-scenario <file>` | the fixture backend's scenario file (§9.2); `bad-args` / `conflicting-arguments` when no module selects `fixture` |
+| Flag                                             | Meaning                                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--state-dir <dir>`                              | state directory root (§7.6)                                                                                                          |
+| `--session <id>`                                 | session to act in (default `host`)                                                                                                   |
+| `--backend <name>` / `--<module>-backend <name>` | backend selection (§3.4)                                                                                                             |
+| `--timeout-ms <n>`                               | overall deadline for the verb; on expiry the verb is cancelled and exits 7 / `deadline`                                              |
+| `--contract <major>`                             | the contract major version the caller speaks; any other value than one this binary implements is `bad-args` / `contract-unsupported` |
+| `--fixture-scenario <file>`                      | the fixture backend's scenario file (§9.2); `bad-args` / `conflicting-arguments` when no module selects `fixture`                    |
 
 **Environment**: `GUIASSERT_STATE_DIR`, `GUIASSERT_BACKEND`,
 `GUIASSERT_<MODULE>_BACKEND`, and the fixture's variables (§9.2). Existing
@@ -514,17 +514,17 @@ cannot run at all).
 
 ### 7.3 Exit codes, kinds and reasons (frozen)
 
-| code | kind | meaning | reasons |
-| --- | --- | --- | --- |
-| 0 | — | success, `"ok": true` | |
-| 1 | `internal` | unexpected failure, a bug | `exception`, `serialization` |
-| 2 | `bad-args` | malformed invocation | `unknown-verb`, `unknown-flag`, `missing-argument`, `invalid-value`, `conflicting-arguments`, `unknown-backend`, `contract-unsupported`, `invalid-name`, `name-in-use` |
-| 3 | `not-found` | a named object does not resolve | `session`, `display`, `window`, `app`, `element`, `recording`, `file`, `request` (serve `cancel` target) |
-| 4 | `backend-unavailable` | the selected backend cannot do this here | `not-compiled-in`, `wrong-platform`, `missing-tool`, `display-server-unsupported`, `unsupported-option`, `not-implemented`, `no-isolated-session`, `session-not-running` |
-| 5 | `backend-error` | the backend tried and failed | `capture-failed`, `ocr-failed`, `tree-failed`, `input-failed`, `session-failed`, `busy`, `stale-path`, `secret-visible` (1.1) |
-| 6 | `permission-denied` | the OS refused for lack of a permission | `tcc-screen-recording`, `tcc-accessibility`, `uinput-access`, `atspi-disabled`, `desktop-access` |
-| 7 | `timeout` | a deadline or wait condition expired | `deadline`, `condition-not-met` |
-| 8 | `cancelled` | cancelled by the caller (serve `cancel`, SIGINT, SIGTERM) | `request`, `signal`, `shutdown` |
+| code | kind                  | meaning                                                   | reasons                                                                                                                                                                  |
+| ---- | --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | —                     | success, `"ok": true`                                     |                                                                                                                                                                          |
+| 1    | `internal`            | unexpected failure, a bug                                 | `exception`, `serialization`                                                                                                                                             |
+| 2    | `bad-args`            | malformed invocation                                      | `unknown-verb`, `unknown-flag`, `missing-argument`, `invalid-value`, `conflicting-arguments`, `unknown-backend`, `contract-unsupported`, `invalid-name`, `name-in-use`   |
+| 3    | `not-found`           | a named object does not resolve                           | `session`, `display`, `window`, `app`, `element`, `recording`, `file`, `request` (serve `cancel` target)                                                                 |
+| 4    | `backend-unavailable` | the selected backend cannot do this here                  | `not-compiled-in`, `wrong-platform`, `missing-tool`, `display-server-unsupported`, `unsupported-option`, `not-implemented`, `no-isolated-session`, `session-not-running` |
+| 5    | `backend-error`       | the backend tried and failed                              | `capture-failed`, `ocr-failed`, `tree-failed`, `input-failed`, `session-failed`, `busy`, `stale-path`, `secret-visible` (1.1)                                            |
+| 6    | `permission-denied`   | the OS refused for lack of a permission                   | `tcc-screen-recording`, `tcc-accessibility`, `uinput-access`, `atspi-disabled`, `desktop-access`                                                                         |
+| 7    | `timeout`             | a deadline or wait condition expired                      | `deadline`, `condition-not-met`                                                                                                                                          |
+| 8    | `cancelled`           | cancelled by the caller (serve `cancel`, SIGINT, SIGTERM) | `request`, `signal`, `shutdown`                                                                                                                                          |
 
 Codes 0–5 have the meanings of the process-boundary convention Agent Harbor
 already parses; 6–8 are GuiAssert's additions. `permission-denied` is separate
@@ -691,39 +691,39 @@ that session's backends, §3.4). The same names are `details.feature` of exit 4
 and exit 6 envelopes (§7.2). The set is closed; a new feature is a minor
 contract change.
 
-| Feature | Module | Needed by |
-| --- | --- | --- |
-| `window-enumeration` | capture | `displays`, `windows`, `wait --window` / `--window-gone`, `watch --windows` |
-| `display-capture` | capture | `screenshot`, `ocr` and `wait --text` of a display, `watch --frames` |
-| `window-capture` | capture | `screenshot --window`, `ocr --window` |
-| `region-capture` | capture | `screenshot --region`, `ocr --region`, `wait --text --ocr-region` |
-| `own-pixels-capture` | capture | `screenshot --window --own-pixels` |
-| `recording` | capture | `record`, `record-start`, `record-stop`, `recordings` |
-| `ocr` | ocr | `ocr`, `wait --text`, `vision-windows --ocr` |
-| `tree-read` | tree | `tree`, `find`, `element`, `wait --element` |
-| `element-actions` | tree | `element-action` |
-| `pointer-input` | input | `move`, `click`, `drag`, `scroll`, `gesture` |
-| `keyboard-input` | input | `type`, `key` |
-| `window-management` | input | `window-focus`, `window-set-bounds` |
-| `session-management` | session | `session-list`, `session-info`, `session-stop`, `permissions` |
-| `app-management` | session | `apps`, `app-launch`, `app-quit` |
-| `session-virtual-display` | session | `session-start --kind virtual-display` |
-| `session-isolated` | session | `session-start --kind isolated` |
-| `session-headless` | session | `session-start --kind headless` |
-| `session-vnc` | session | `session-start --vnc` |
-| `video-decode` | media | `vision-segment <video>` |
+| Feature                   | Module  | Needed by                                                                   |
+| ------------------------- | ------- | --------------------------------------------------------------------------- |
+| `window-enumeration`      | capture | `displays`, `windows`, `wait --window` / `--window-gone`, `watch --windows` |
+| `display-capture`         | capture | `screenshot`, `ocr` and `wait --text` of a display, `watch --frames`        |
+| `window-capture`          | capture | `screenshot --window`, `ocr --window`                                       |
+| `region-capture`          | capture | `screenshot --region`, `ocr --region`, `wait --text --ocr-region`           |
+| `own-pixels-capture`      | capture | `screenshot --window --own-pixels`                                          |
+| `recording`               | capture | `record`, `record-start`, `record-stop`, `recordings`                       |
+| `ocr`                     | ocr     | `ocr`, `wait --text`, `vision-windows --ocr`                                |
+| `tree-read`               | tree    | `tree`, `find`, `element`, `wait --element`                                 |
+| `element-actions`         | tree    | `element-action`                                                            |
+| `pointer-input`           | input   | `move`, `click`, `drag`, `scroll`, `gesture`                                |
+| `keyboard-input`          | input   | `type`, `key`                                                               |
+| `window-management`       | input   | `window-focus`, `window-set-bounds`                                         |
+| `session-management`      | session | `session-list`, `session-info`, `session-stop`, `permissions`               |
+| `app-management`          | session | `apps`, `app-launch`, `app-quit`                                            |
+| `session-virtual-display` | session | `session-start --kind virtual-display`                                      |
+| `session-isolated`        | session | `session-start --kind isolated`                                             |
+| `session-headless`        | session | `session-start --kind headless`                                             |
+| `session-vnc`             | session | `session-start --vnc`                                                       |
+| `video-decode`            | media   | `vision-segment <video>`                                                    |
 
 A feature's `reason` is `null` when its `state` is `supported` or
 `available`; a `backend-unavailable` or `permission-denied` reason (§7.3) when
 it is `unavailable`; and one of the following when it is `degraded`:
 
-| Degraded reason | Meaning |
-| --- | --- |
-| `window-crop` | window capture crops a display capture to the window (`source.kind: "window-crop"`) |
-| `png-sequence` | recordings are PNG sequences (no media backend) |
-| `fixture-frames-only` | the fixture OCR reads only frames the fixture captured |
-| `titles-redacted` | windows are enumerated with `title: null` (no Screen Recording grant) |
-| `posted-delivery` | input is posted to the target window (`delivery: "posted"`) |
+| Degraded reason       | Meaning                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `window-crop`         | window capture crops a display capture to the window (`source.kind: "window-crop"`) |
+| `png-sequence`        | recordings are PNG sequences (no media backend)                                     |
+| `fixture-frames-only` | the fixture OCR reads only frames the fixture captured                              |
+| `titles-redacted`     | windows are enumerated with `title: null` (no Screen Recording grant)               |
+| `posted-delivery`     | input is posted to the target window (`delivery: "posted"`)                         |
 
 #### The key table
 
@@ -735,30 +735,30 @@ naming a modifier twice (under any spelling) or a name not in the table is
 exit 2 / `invalid-value`, never guessed. Spelling variants beyond these
 (`page_up`, `arrowleft`) are the caller's to translate.
 
-| Kind | Canonical | Also accepted |
-| --- | --- | --- |
-| modifier | `ctrl` | `control` |
-| modifier | `alt` | `option` |
-| modifier | `shift` | — |
-| modifier | `cmd` | `command`, `meta`, `super`, `win` |
-| named | `Return` | `Enter` |
-| named | `Tab` | — |
-| named | `Escape` | `Esc` |
-| named | `BackSpace` | — |
-| named | `Delete` | — |
-| named | `Insert` | — |
-| named | `Space` | — |
-| named | `Home` | — |
-| named | `End` | — |
-| named | `PageUp` | — |
-| named | `PageDown` | — |
-| named | `Pause` | — |
-| named | `Up` | — |
-| named | `Down` | — |
-| named | `Left` | — |
-| named | `Right` | — |
-| function | `F1` … `F24` | — |
-| character | any single printable character | — |
+| Kind      | Canonical                      | Also accepted                     |
+| --------- | ------------------------------ | --------------------------------- |
+| modifier  | `ctrl`                         | `control`                         |
+| modifier  | `alt`                          | `option`                          |
+| modifier  | `shift`                        | —                                 |
+| modifier  | `cmd`                          | `command`, `meta`, `super`, `win` |
+| named     | `Return`                       | `Enter`                           |
+| named     | `Tab`                          | —                                 |
+| named     | `Escape`                       | `Esc`                             |
+| named     | `BackSpace`                    | —                                 |
+| named     | `Delete`                       | —                                 |
+| named     | `Insert`                       | —                                 |
+| named     | `Space`                        | —                                 |
+| named     | `Home`                         | —                                 |
+| named     | `End`                          | —                                 |
+| named     | `PageUp`                       | —                                 |
+| named     | `PageDown`                     | —                                 |
+| named     | `Pause`                        | —                                 |
+| named     | `Up`                           | —                                 |
+| named     | `Down`                         | —                                 |
+| named     | `Left`                         | —                                 |
+| named     | `Right`                        | —                                 |
+| function  | `F1` … `F24`                   | —                                 |
+| character | any single printable character | —                                 |
 
 `cmd` is the Command key on macOS and the Windows / Super key elsewhere. A
 **character** is one Unicode code point that is not a control character and
@@ -768,23 +768,23 @@ key as `a`–`z` and normalize to lower case (an upper-case letter is
 
 **Meta**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `version` | — | `{"guiassert": str, "contract": {"name": "guiassert-desktop", "major": 1, "minor": int}, "platform": str, "arch": str, "compiled": {"capture": [str], "ocr": [str], "tree": [str], "input": [str], "session": [str], "media": [str]}}` |
-| `capabilities` | `[--probe]` (run active probes, may take seconds); honours `--session` (that session's backends) | `{"platform": str, "selected": {module: str}, "features": [{"feature": str, "backend": str, "state": "supported"\|"available"\|"degraded"\|"unavailable", "reason": str\|null, "remedy": str\|null}], "permissions": Permissions}` |
-| `permissions` | `[--request screen-recording\|accessibility]` (shows the OS prompt; never bypasses it) | `{"permissions": Permissions, "requested": str\|null}` where `Permissions = {"screenRecording", "accessibility", "inputSynthesis", "desktopAccess"}` each `"granted"\|"denied"\|"not-determined"\|"not-applicable"\|"unknown"`, plus `"identity": str\|null` (the bundle or binary the OS evaluates) |
+| Verb           | Arguments                                                                                        | `data`                                                                                                                                                                                                                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`      | —                                                                                                | `{"guiassert": str, "contract": {"name": "guiassert-desktop", "major": 1, "minor": int}, "platform": str, "arch": str, "compiled": {"capture": [str], "ocr": [str], "tree": [str], "input": [str], "session": [str], "media": [str]}}`                                                               |
+| `capabilities` | `[--probe]` (run active probes, may take seconds); honours `--session` (that session's backends) | `{"platform": str, "selected": {module: str}, "features": [{"feature": str, "backend": str, "state": "supported"\|"available"\|"degraded"\|"unavailable", "reason": str\|null, "remedy": str\|null}], "permissions": Permissions}`                                                                   |
+| `permissions`  | `[--request screen-recording\|accessibility]` (shows the OS prompt; never bypasses it)           | `{"permissions": Permissions, "requested": str\|null}` where `Permissions = {"screenRecording", "accessibility", "inputSynthesis", "desktopAccess"}` each `"granted"\|"denied"\|"not-determined"\|"not-applicable"\|"unknown"`, plus `"identity": str\|null` (the bundle or binary the OS evaluates) |
 
 **Sessions and applications**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc \| --vnc-socket] [--account <user>]` (`--account` only for `isolated`; `--vnc-socket` 1.1, §6.5); returns once the session is ready, else exit 5 / `session-failed`; a `--name` in use is exit 2 / `name-in-use` (§6.1) | `{"session": Session}` (state `running`) |
-| `session-list` | — | `{"sessions": [Session]}` (includes `host`) |
-| `session-info` | `<id>` | `{"session": Session}` |
-| `session-stop` | `<id> [--force]` | `{"session": Session}` (state `stopped`); stopping `host` is `bad-args` |
-| `apps` | — | `{"apps": [App]}` |
-| `app-launch` | `(--bundle-id <id> \| --app <path> \| -- <argv…>) [--wait-window-ms N] [--env KEY=VALUE]…` | `{"app": App, "window": Window\|null}` |
-| `app-quit` | `<pid> [--force]` | `{"pid": int, "exited": bool, "exitCode": int\|null}` |
+| Verb            | Arguments                                                                                                                                                                                                                                                                                                                                 | `data`                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `session-start` | `--kind <kind> [--name <n>] [--width W --height H] [--scale S] [--displays N] [--lifetime detached\|owner] [--vnc \| --vnc-socket] [--account <user>]` (`--account` only for `isolated`; `--vnc-socket` 1.1, §6.5); returns once the session is ready, else exit 5 / `session-failed`; a `--name` in use is exit 2 / `name-in-use` (§6.1) | `{"session": Session}` (state `running`)                                |
+| `session-list`  | —                                                                                                                                                                                                                                                                                                                                         | `{"sessions": [Session]}` (includes `host`)                             |
+| `session-info`  | `<id>`                                                                                                                                                                                                                                                                                                                                    | `{"session": Session}`                                                  |
+| `session-stop`  | `<id> [--force]`                                                                                                                                                                                                                                                                                                                          | `{"session": Session}` (state `stopped`); stopping `host` is `bad-args` |
+| `apps`          | —                                                                                                                                                                                                                                                                                                                                         | `{"apps": [App]}`                                                       |
+| `app-launch`    | `(--bundle-id <id> \| --app <path> \| -- <argv…>) [--wait-window-ms N] [--env KEY=VALUE]…`                                                                                                                                                                                                                                                | `{"app": App, "window": Window\|null}`                                  |
+| `app-quit`      | `<pid> [--force]`                                                                                                                                                                                                                                                                                                                         | `{"pid": int, "exited": bool, "exitCode": int\|null}`                   |
 
 `app-launch` without `--wait-window-ms` does not wait: `window` is the
 application's first window if it already has one, else `null`. With
@@ -798,22 +798,22 @@ most once) sets a variable for the launched process over `Session.env`
 
 **Displays and windows**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `displays` | — | `{"displays": [Display]}` |
-| `windows` | `[--app <name>] [--pid N] [--title <exact>] [--title-contains <s>] [--all-layers] [--include-offscreen]` | `{"windows": [Window], "titlesVisible": bool}` (ordered front to back) |
-| `window-focus` | `<window-id>` | `{"window": Window}` |
-| `window-set-bounds` | `<window-id> --bounds x,y,w,h` | `{"window": Window, "requested": Rect}` (the window's *reported* bounds after the change; they may differ from `requested`, and the caller decides) |
+| Verb                | Arguments                                                                                                | `data`                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `displays`          | —                                                                                                        | `{"displays": [Display]}`                                                                                                                           |
+| `windows`           | `[--app <name>] [--pid N] [--title <exact>] [--title-contains <s>] [--all-layers] [--include-offscreen]` | `{"windows": [Window], "titlesVisible": bool}` (ordered front to back)                                                                              |
+| `window-focus`      | `<window-id>`                                                                                            | `{"window": Window}`                                                                                                                                |
+| `window-set-bounds` | `<window-id> --bounds x,y,w,h`                                                                           | `{"window": Window, "requested": Rect}` (the window's _reported_ bounds after the change; they may differ from `requested`, and the caller decides) |
 
 **Capture**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `screenshot` | `--out <path.png> [--display <id> \| --window <id> \| --region x,y,w,h] [--own-pixels] [--no-cursor] [--secret-stdin]` (`--secret-stdin` 1.1, below) | `{"image": ImageRef}` |
-| `record` | `--out <path.mp4> --duration-ms N [--display\|--window\|--region] [--fps F]` (blocking) | `{"recording": Recording}`; serve streams `progress` |
-| `record-start` | `--out <path.mp4> [--display\|--window\|--region] [--fps F]` | `{"recording": Recording}` (state `recording`) |
-| `record-stop` | `<recording-id>` | `{"recording": Recording}` (state `stopped`, `durationMs` and `frames` set) |
-| `recordings` | — | `{"recordings": [Recording]}` |
+| Verb           | Arguments                                                                                                                                            | `data`                                                                      |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `screenshot`   | `--out <path.png> [--display <id> \| --window <id> \| --region x,y,w,h] [--own-pixels] [--no-cursor] [--secret-stdin]` (`--secret-stdin` 1.1, below) | `{"image": ImageRef}`                                                       |
+| `record`       | `--out <path.mp4> --duration-ms N [--display\|--window\|--region] [--fps F]` (blocking)                                                              | `{"recording": Recording}`; serve streams `progress`                        |
+| `record-start` | `--out <path.mp4> [--display\|--window\|--region] [--fps F]`                                                                                         | `{"recording": Recording}` (state `recording`)                              |
+| `record-stop`  | `<recording-id>`                                                                                                                                     | `{"recording": Recording}` (state `stopped`, `durationMs` and `frames` set) |
+| `recordings`   | —                                                                                                                                                    | `{"recordings": [Recording]}`                                               |
 
 **Recordings.** `record` and `record-stop` report `durationMs`, `frames`,
 `width` and `height` **measured from the finalized file**: an MP4's from its
@@ -833,8 +833,8 @@ and renamed when complete, so a reader never sees a partial PNG or MP4.
 
 **OCR**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
+| Verb  | Arguments                                                                                                                                                                                                                                | `data`                                                                                                               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `ocr` | `(--image <path> \| (--display <id> \| --window <id> \| --region x,y,w,h) --out <path.png>) [--lang <code>…] [--psm N] [--upscale F] [--invert auto\|never\|always] [--min-confidence C] [--secret-stdin]` (`--secret-stdin` 1.1, below) | `{"image": ImageRef, "backend": str, "languages": [str], "words": [OcrWord], "text": str}` (`text` in reading order) |
 
 Capturing for OCR requires `--out`, so the frame the words refer to is always
@@ -869,13 +869,13 @@ knobs; an engine that has no equivalent rejects them (`unsupported-option`).
 
 **Accessibility tree**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `tree` | `(--pid N \| --app <name> \| --window <id> \| --focused) [--depth N] [--max-nodes N (default 5000)]` | `{"root": Node, "nodeCount": int, "truncated": bool}` |
-| `find` | `[--pid\|--app\|--window] [--role r] [--name s] [--name-contains s] [--ignore-case] [--state s]… [--limit N]` (matching rules above) | `{"elements": [Element], "truncated": bool}` |
-| `element` | `<path>` | `{"element": Element}` |
-| `element-action` | `<path> <action> [--value v \| --value-stdin]` (`press`, `focus`, `set-value`, `increment`, `decrement`, `expand`, `collapse`, `select`, `show-menu`, `scroll-to-visible`; `--value` / `--value-stdin` only for `set-value`, and `set-value --value ""` is valid and clears the field) | `{"element": Element, "action": str}` (the element re-read after the action) |
-| `wait` | `(--element <filter flags as in find> \| --text <needle> [--ocr-region x,y,w,h] --out-dir <dir> \| --window <query flags as in windows> \| --window-gone <query>) --wait-ms N [--interval-ms N]` | `{"matched": true, "elapsedMs": int, "attempts": int, "element": Element\|null, "word": OcrWord\|null, "image": ImageRef\|null, "window": Window\|null}`; on expiry exit 7 / `condition-not-met` with `details.attempts`; serve streams `poll` |
+| Verb             | Arguments                                                                                                                                                                                                                                                                              | `data`                                                                                                                                                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tree`           | `(--pid N \| --app <name> \| --window <id> \| --focused) [--depth N] [--max-nodes N (default 5000)]`                                                                                                                                                                                   | `{"root": Node, "nodeCount": int, "truncated": bool}`                                                                                                                                                                                          |
+| `find`           | `[--pid\|--app\|--window] [--role r] [--name s] [--name-contains s] [--ignore-case] [--state s]… [--limit N]` (matching rules above)                                                                                                                                                   | `{"elements": [Element], "truncated": bool}`                                                                                                                                                                                                   |
+| `element`        | `<path>`                                                                                                                                                                                                                                                                               | `{"element": Element}`                                                                                                                                                                                                                         |
+| `element-action` | `<path> <action> [--value v \| --value-stdin]` (`press`, `focus`, `set-value`, `increment`, `decrement`, `expand`, `collapse`, `select`, `show-menu`, `scroll-to-visible`; `--value` / `--value-stdin` only for `set-value`, and `set-value --value ""` is valid and clears the field) | `{"element": Element, "action": str}` (the element re-read after the action)                                                                                                                                                                   |
+| `wait`           | `(--element <filter flags as in find> \| --text <needle> [--ocr-region x,y,w,h] --out-dir <dir> \| --window <query flags as in windows> \| --window-gone <query>) --wait-ms N [--interval-ms N]`                                                                                       | `{"matched": true, "elapsedMs": int, "attempts": int, "element": Element\|null, "word": OcrWord\|null, "image": ImageRef\|null, "window": Window\|null}`; on expiry exit 7 / `condition-not-met` with `details.attempts`; serve streams `poll` |
 
 `wait --wait-ms` bounds the wait condition and expires as `condition-not-met`;
 the global `--timeout-ms` bounds the whole verb and expires as `deadline`.
@@ -885,15 +885,15 @@ never depends on a race between the two clocks.
 
 **Input**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `move` | `--to x,y` | `{"input": InputReport}` |
-| `click` | `--at x,y [--button left\|right\|middle] [--count N] [--modifiers cmd,shift,…]` | `{"input": InputReport}` |
-| `drag` | `--from x,y --to x,y [--path x,y;x,y;…] [--button b] [--steps N] [--duration-ms N] [--modifiers cmd,shift,…]` | `{"input": InputReport}` (`path` set; `keys` set when modifiers were held) |
+| Verb      | Arguments                                                                                                                                                                                                                                                                    | `data`                                                                                      |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `move`    | `--to x,y`                                                                                                                                                                                                                                                                   | `{"input": InputReport}`                                                                    |
+| `click`   | `--at x,y [--button left\|right\|middle] [--count N] [--modifiers cmd,shift,…]`                                                                                                                                                                                              | `{"input": InputReport}`                                                                    |
+| `drag`    | `--from x,y --to x,y [--path x,y;x,y;…] [--button b] [--steps N] [--duration-ms N] [--modifiers cmd,shift,…]`                                                                                                                                                                | `{"input": InputReport}` (`path` set; `keys` set when modifiers were held)                  |
 | `gesture` | `--steps "<step>; <step>; …"`, each step `move x,y`, `press x,y [button]`, `release x,y [button]`, `key-down <combo or modifier>`, `key-up <combo or modifier>` or `wait <ms>`; delivered as one script, and whatever the steps leave held is released when the gesture ends | `{"input": InputReport}` (`path` set: the points the gesture pressed, released or moved to) |
-| `scroll` | `--at x,y --dx N --dy N [--unit line\|pixel]` | `{"input": InputReport}` |
-| `type` | `(<text> \| --text-file <path> \| --stdin)` `[--interval-ms N]` | `{"input": InputReport}` (`length` set, text not echoed) |
-| `key` | `<combo>` e.g. `cmd+s`, `ctrl+shift+Tab`, `Return` (names from the key table above; unknown names are `bad-args`) | `{"input": InputReport}` (`keys` normalized) |
+| `scroll`  | `--at x,y --dx N --dy N [--unit line\|pixel]`                                                                                                                                                                                                                                | `{"input": InputReport}`                                                                    |
+| `type`    | `(<text> \| --text-file <path> \| --stdin)` `[--interval-ms N]`                                                                                                                                                                                                              | `{"input": InputReport}` (`length` set, text not echoed)                                    |
+| `key`     | `<combo>` e.g. `cmd+s`, `ctrl+shift+Tab`, `Return` (names from the key table above; unknown names are `bad-args`)                                                                                                                                                            | `{"input": InputReport}` (`keys` normalized)                                                |
 
 **Secrets off `argv`.** On the one-shot CLI, `argv` is visible to other local
 users through the process table, and `--text-file` puts the text on disk.
@@ -923,11 +923,11 @@ caller's next `windows` / `tree` / `screenshot`.
 
 **Vision (pure core; no session, no permission)**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
-| `vision-compare` | `<a.png> <b.png> [--tiles GXxGY]` | `{"width": int, "height": int, "ssim": float, "tiles": {"grid": [int, int], "values": [float], "min": float}\|null, "phashDistance": int, "edgeChangeRatio": float}`; different sizes are `bad-args` |
+| Verb             | Arguments                                                                                                              | `data`                                                                                                                                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vision-compare` | `<a.png> <b.png> [--tiles GXxGY]`                                                                                      | `{"width": int, "height": int, "ssim": float, "tiles": {"grid": [int, int], "values": [float], "min": float}\|null, "phashDistance": int, "edgeChangeRatio": float}`; different sizes are `bad-args`                                                |
 | `vision-segment` | `(<video> [--fps F] [--scale-width W] \| --frames <dir-of-png>) [--threshold T]` (video input needs the media backend) | `{"source": {"path": str, "durationS": float\|null, "width": int, "height": int}, "params": {"fps": float\|null, "scaleWidth": int\|null, "threshold": float}, "segments": [{"index": int, "tStart": float, "tEnd": float, "changeScore": float}]}` |
-| `vision-windows` | `<image.png> [--ocr]` | `{"image": {"path": str, "width": int, "height": int}, "windows": [{"bbox": Rect, "confidence": float, "titleText": str\|null, "text": str\|null}]}` (`titleText`/`text` are `null` without `--ocr`) |
+| `vision-windows` | `<image.png> [--ocr]`                                                                                                  | `{"image": {"path": str, "width": int, "height": int}, "windows": [{"bbox": Rect, "confidence": float, "titleText": str\|null, "text": str\|null}]}` (`titleText`/`text` are `null` without `--ocr`)                                                |
 
 `vision-segment` defaults (written down in GS4; they fill in what the 1.0
 table leaves unstated and change no shape or meaning): `--threshold` 0.35, applied to the most-changed cell of a
@@ -964,8 +964,8 @@ these verbs.
 
 **Streaming (serve-first)**
 
-| Verb | Arguments | `data` |
-| --- | --- | --- |
+| Verb    | Arguments                                                                                    | `data`                                                                                                                                                                                                                                                                  |
+| ------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `watch` | `(--windows \| --frames --out-dir <dir> [--fps F]) [--duration-ms N] [--events-file <path>]` | `{"events": int, "elapsedMs": int}`; serve streams `windows-changed` / `frame` events until `--duration-ms`, cancel or shutdown. On the one-shot CLI `--duration-ms` and `--events-file` are required, and events are appended there as NDJSON (stdout stays one line). |
 
 ### 7.6 State directory
@@ -1047,8 +1047,16 @@ moves with the contract major).
 On start the daemon writes one line before reading anything:
 
 ```jsonc
-{"v":1,"type":"ready","data":{"pid":4242,"guiassert":"0.2.0",
- "contract":{"name":"guiassert-desktop","major":1,"minor":0},"transport":"stdio"}}
+{
+  "v": 1,
+  "type": "ready",
+  "data": {
+    "pid": 4242,
+    "guiassert": "0.2.0",
+    "contract": { "name": "guiassert-desktop", "major": 1, "minor": 0 },
+    "transport": "stdio",
+  },
+}
 ```
 
 ### 8.3 Requests
@@ -1107,7 +1115,7 @@ Every accepted request receives zero or more `event` messages and then
   The daemon sends it for the `lifetime: owner` sessions of the connection,
   and only for changes that no request on the connection reported itself:
   when the session's state changes on its own (its host exited: `state:
-  "error"`), which the daemon checks at least once a second, and when the
+"error"`), which the daemon checks at least once a second, and when the
   daemon stops the session because the connection closes or the daemon
   shuts down (`state: "stopped"`, before the `shutdown` line). A session
   whose record another client removed (`session-stop` on another
@@ -1139,21 +1147,20 @@ SIGTERM/SIGINT. It stops accepting requests; with `drain: true` it lets
 in-flight requests finish, otherwise it cancels them (each still gets its
 `result`, `exit 8` / `shutdown`); it stops every session with `lifetime: owner`
 that belongs to the closing connection(s); it writes
-`{"v":1,"type":"shutdown","data":{"cancelled":N,"sessionsStopped":N}}` and exits
-0. A client disconnect on the socket transport is a shutdown of that
+`{"v":1,"type":"shutdown","data":{"cancelled":N,"sessionsStopped":N}}` and exits 0. A client disconnect on the socket transport is a shutdown of that
 connection only. Sessions with `lifetime: detached` are left running.
 
 ## 9. Test strategy
 
 ### 9.1 Layers
 
-| Layer | What runs | Where |
-| --- | --- | --- |
-| core unit | pure procs on in-memory images and fixture JSON | every host, default `just test` |
-| core purity | `tests/tcore_purity.nim` (§3.2) | every host |
-| contract | the real `guiassert` binary and real `guiassert serve` with the fixture backend: envelope shape, every verb, every exit code, CLI/serve byte parity, cancellation, shutdown | every host, `just test-contract` |
-| backend live | each platform backend against the real OS: real compositor, real window server, real tesseract/Vision, a real fixture application | per platform, `just test-live-<os>` |
-| parity | the consumer scenarios (GS12–GS14) against GuiAssert's backends | per platform |
+| Layer        | What runs                                                                                                                                                                   | Where                               |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| core unit    | pure procs on in-memory images and fixture JSON                                                                                                                             | every host, default `just test`     |
+| core purity  | `tests/tcore_purity.nim` (§3.2)                                                                                                                                             | every host                          |
+| contract     | the real `guiassert` binary and real `guiassert serve` with the fixture backend: envelope shape, every verb, every exit code, CLI/serve byte parity, cancellation, shutdown | every host, `just test-contract`    |
+| backend live | each platform backend against the real OS: real compositor, real window server, real tesseract/Vision, a real fixture application                                           | per platform, `just test-live-<os>` |
+| parity       | the consumer scenarios (GS12–GS14) against GuiAssert's backends                                                                                                             | per platform                        |
 
 Workspace policy applies: mock as little as possible, and every test file that
 uses a stand-in justifies it in its header comment. The fixture backend is the
@@ -1194,7 +1201,7 @@ deterministically from a scenario file, with no OS access:
   words it drew, so `screenshot` → `ocr --image` round-trips exactly.
 - Failure injection: `GUIASSERT_FIXTURE_FAIL=<verb>:<code>[:<reason>]` (comma
   separated) makes that verb fail with that code; `GUIASSERT_FIXTURE_DENY=
-  screen-recording|accessibility` makes the matching verbs return exit 6;
+screen-recording|accessibility` makes the matching verbs return exit 6;
   `GUIASSERT_FIXTURE_UNAVAILABLE=<module>` makes a module exit 4;
   `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>` makes a verb slow enough to cancel;
   `GUIASSERT_FIXTURE_HOST=exit-before-ready|never-ready` makes the session
@@ -1208,8 +1215,8 @@ deterministically from a scenario file, with no OS access:
   so the host's must not leak in). Every `app-launch` records the
   environment the process would receive relative to the session in
   `<state-dir>/fixture/launches/<pid>.json` (`{"schema":
-  "guiassert/fixture-launch/1", "session", "pid", "env": {…}, "envUnset":
-  […]}`: `Session.env` merged with `--env`, and the `envUnset` names that
+"guiassert/fixture-launch/1", "session", "pid", "env": {…}, "envUnset":
+[…]}`: `Session.env` merged with `--env`, and the `envUnset` names that
   `--env` does not set), so a consumer's launch policy is observable without a
   real process.
 - The fixture is shipped as a flake package output (`guiassert-fixture`)
@@ -1243,7 +1250,7 @@ TCC:
   `just test-live-macos`.
 - When a gated test runs and the grant is missing, it **fails** (never skips)
   with `BLOCKED: TCC <Screen Recording|Accessibility> for <bundle or binary
-  path>` and the grant click-path, so a missing grant cannot pass as green.
+path>` and the grant click-path, so a missing grant cannot pass as green.
 - Every gated suite first runs the unprivileged positive control (window
   enumeration without titles) so "no permission" and "nothing works" are told
   apart.

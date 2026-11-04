@@ -74,7 +74,7 @@ static void report(const char *state, int code, const char *message) {
   if (!f)
     return;
   fprintf(f, "state=%s\npid=%ld\nchild=%ld\nframeWidth=%ld\nframeHeight=%ld\nframes=%ld\n"
-             "code=%d\nmessage=%s\n",
+              "code=%d\nmessage=%s\n",
           state, (long)getpid(), child_pid, frame_w, frame_h, frames, code, message);
   if (fclose(f) == 0)
     rename(tmp, report_path);
@@ -130,7 +130,7 @@ static const struct wl_output_listener output_listener = {
 };
 
 static void global(void *data, struct wl_registry *r, uint32_t id, const char *iface,
-                   uint32_t version) {
+                    uint32_t version) {
   (void)data;
   if (strcmp(iface, wl_shm_interface.name) == 0) {
     shm = wl_registry_bind(r, id, &wl_shm_interface, 1);
@@ -138,7 +138,7 @@ static void global(void *data, struct wl_registry *r, uint32_t id, const char *i
     manager_version = version < 3 ? version : 3;
     manager = wl_registry_bind(r, id, &zwlr_screencopy_manager_v1_interface, manager_version);
   } else if (strcmp(iface, wl_output_interface.name) == 0 && version >= 4 &&
-             n_outputs < MAX_OUTPUTS) {
+              n_outputs < MAX_OUTPUTS) {
     /* The name event exists from version 4 on. */
     struct output *o = &outputs[n_outputs++];
     o->wl = wl_registry_bind(r, id, &wl_output_interface, 4);
@@ -218,7 +218,7 @@ static void send_copy(struct zwlr_screencopy_frame_v1 *frame, struct copy *c) {
 }
 
 static void frame_buffer(void *data, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-                         uint32_t w, uint32_t h, uint32_t stride) {
+                          uint32_t w, uint32_t h, uint32_t stride) {
   struct copy *c = data;
   c->format = format;
   c->width = (int)w;
@@ -244,11 +244,11 @@ static void frame_failed(void *data, struct zwlr_screencopy_frame_v1 *frame) {
   ((struct copy *)data)->done = -1;
 }
 static void frame_damage(void *data, struct zwlr_screencopy_frame_v1 *frame, uint32_t x,
-                         uint32_t y, uint32_t w, uint32_t h) {
+                          uint32_t y, uint32_t w, uint32_t h) {
   (void)data, (void)frame, (void)x, (void)y, (void)w, (void)h;
 }
 static void frame_dmabuf(void *data, struct zwlr_screencopy_frame_v1 *frame, uint32_t format,
-                         uint32_t w, uint32_t h) {
+                          uint32_t w, uint32_t h) {
   (void)data, (void)frame, (void)format, (void)w, (void)h; /* shm only */
 }
 static void frame_buffer_done(void *data, struct zwlr_screencopy_frame_v1 *frame) {
@@ -306,8 +306,8 @@ static int copy_frame(struct wl_display *d, struct wl_output *o, const int *regi
   struct copy c = {.buf = buf};
   struct zwlr_screencopy_frame_v1 *frame =
       region ? zwlr_screencopy_manager_v1_capture_output_region(manager, 1, o, region[0],
-                                                                 region[1], region[2], region[3])
-             : zwlr_screencopy_manager_v1_capture_output(manager, 1, o);
+                                                                  region[1], region[2], region[3])
+              : zwlr_screencopy_manager_v1_capture_output(manager, 1, o);
   zwlr_screencopy_frame_v1_add_listener(frame, &frame_listener, &c);
   int r = wait_copy(d, &c);
   zwlr_screencopy_frame_v1_destroy(frame);
@@ -431,7 +431,7 @@ static int record(int argc, char **argv) {
       /* A malformed region is a usage error, never the whole output. */
       char tail;
       if (sscanf(argv[++i], "%d,%d,%d,%d%c", &region[0], &region[1], &region[2], &region[3],
-                 &tail) != 4 ||
+                  &tail) != 4 ||
           region[2] <= 0 || region[3] <= 0)
         return usage();
       have_region = 1;
@@ -489,7 +489,7 @@ static int record(int argc, char **argv) {
   int r = copy_frame(d, output, have_region ? region : NULL, &buf, &c);
   if (r != 1) {
     report("failed", 5, r == 0 ? "stopped before the first frame was copied"
-                               : "the compositor failed the first copy");
+                                : "the compositor failed the first copy");
     return 5;
   }
   frame_w = c.width;
@@ -499,7 +499,7 @@ static int record(int argc, char **argv) {
   if (!px || !to_rgb(&c, px)) {
     char msg[128];
     snprintf(msg, sizeof msg, "unsupported frame (pixel format 0x%08x, %dx%d, stride %d)",
-             c.format, c.width, c.height, c.stride);
+              c.format, c.width, c.height, c.stride);
     report("failed", 5, msg);
     return 5;
   }
@@ -586,12 +586,12 @@ static int record(int argc, char **argv) {
   if (failed || code != 0) {
     char msg[160];
     snprintf(msg, sizeof msg,
-             failed == 1   ? "the compositor failed a copy while recording"
-             : failed == 2 ? "the encoder stopped reading frames"
-             : failed == 3 ? "the output's size changed while recording"
-             : failed == 4 ? "a copied frame has a pixel format or layout this helper cannot read"
-                           : "the encoder exited with status %d",
-             code);
+              failed == 1   ? "the compositor failed a copy while recording"
+              : failed == 2 ? "the encoder stopped reading frames"
+              : failed == 3 ? "the output's size changed while recording"
+              : failed == 4 ? "a copied frame has a pixel format or layout this helper cannot read"
+                            : "the encoder exited with status %d",
+              code);
     report("failed", code ? code : 5, msg);
     return failed == 1 || failed == 3 || failed == 4 ? 5 : 6;
   }

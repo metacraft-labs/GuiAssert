@@ -29,8 +29,9 @@
 #                    build/parity/linux-parity.json (inside `nix develop`).
 # `just test-contract` - the contract suite (tests/contract_suite.txt) against
 #                    the REAL built binaries, run once per binary.
-# `just lint`      - placeholder; required by the workspace pre-commit
-#                    hook.  Add real linters here as they come online.
+# `just lint`      - check the public library and shipping vision CLI
+#                    entrypoints with `nim check` (required by the workspace
+#                    pre-commit hook).
 
 default: test
 
@@ -136,7 +137,8 @@ analyze VIDEO OUT="vision-out":
     nim c --hints:off -o:src/gui_assert_vision src/gui_assert_vision.nim
     ./src/gui_assert_vision analyze {{VIDEO}} --out {{OUT}}
 
-# Required by the workspace's pre-commit hook (`just lint`).  Add real
-# linters here as they come online (e.g. `nim check`).
+# Required by the workspace's pre-commit hook (`just lint`). Checks the public
+# library and the shipping vision CLI entrypoints with the owning compiler.
 lint:
-    @echo "[lint] no linters configured yet for GuiAssert."
+    nim check src/gui_assert.nim
+    nim check src/gui_assert_vision.nim

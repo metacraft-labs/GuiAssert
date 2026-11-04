@@ -81,7 +81,7 @@ static void on_submit(GtkWidget *button, gpointer data) {
   (void)data;
   char text[512];
   snprintf(text, sizeof text, "Submitted %s; passphrase of %ld characters",
-           entry_text(name_entry), (long)g_utf8_strlen(entry_text(pass_entry), -1));
+            entry_text(name_entry), (long)g_utf8_strlen(entry_text(pass_entry), -1));
   if (status_label == NULL) {
     status_label = gtk_label_new(text);
     append(form_box, status_label);
@@ -223,7 +223,7 @@ static void keylog_pressed(GtkGestureClick *g, int n, double x, double y, gpoint
   gtk_widget_grab_focus(key_log);
 }
 static gboolean window_key(GtkEventControllerKey *k, guint keyval, guint code,
-                           GdkModifierType state, gpointer window) {
+                            GdkModifierType state, gpointer window) {
   (void)k;
   (void)code;
   if (gtk_root_get_focus(GTK_ROOT(window)) != key_log) return FALSE;
@@ -281,7 +281,7 @@ static gboolean window_key(GtkWidget *window, GdkEventKey *e, gpointer d) {
 static GtkWidget *canvas(const char *name, int w, int h) {
 #if GTK_MAJOR_VERSION >= 4
   /* GTK 4 exposes a drawing area as an unnamed generic panel; a group
-     carries its label. */
+      carries its label. */
   GtkWidget *a = g_object_new(GTK_TYPE_DRAWING_AREA, "accessible-role",
                               GTK_ACCESSIBLE_ROLE_GROUP, NULL);
 #else
@@ -326,7 +326,7 @@ static void add_input_lab(GtkWidget *window) {
   gtk_widget_add_controller(window, keys);
 #else
   gtk_widget_add_events(pad, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
-                                 GDK_BUTTON1_MOTION_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
+                                  GDK_BUTTON1_MOTION_MASK | GDK_SCROLL_MASK | GDK_SMOOTH_SCROLL_MASK);
   g_signal_connect(pad, "button-press-event", G_CALLBACK(pad_button), NULL);
   g_signal_connect(pad, "button-release-event", G_CALLBACK(pad_button), NULL);
   g_signal_connect(pad, "motion-notify-event", G_CALLBACK(pad_motion), NULL);
@@ -338,10 +338,10 @@ static void add_input_lab(GtkWidget *window) {
 }
 
 /* --clipped-field: a text field scrolled out of a 48-pixel viewport, placed so
-   that its own centre lies on the Submit button drawn just below the
-   viewport. Its toolkit still reports it showing (GTK 4), so this is the
-   field a `focus` by pointer must refuse to click: a click at its centre
-   would press Submit. */
+    that its own centre lies on the Submit button drawn just below the
+    viewport. Its toolkit still reports it showing (GTK 4), so this is the
+    field a `focus` by pointer must refuse to click: a click at its centre
+    would press Submit. */
 static void add_clipped_field(void) {
 #if GTK_MAJOR_VERSION >= 4
   GtkWidget *sw = gtk_scrolled_window_new();
@@ -352,7 +352,7 @@ static void add_clipped_field(void) {
   gtk_widget_set_size_request(sw, -1, 48);
   GtkWidget *inner = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   /* The viewport (48) plus form_box's spacing (6): the field starts where
-     Submit does. */
+      Submit does. */
   GtkWidget *spacer = gtk_label_new("");
   gtk_widget_set_size_request(spacer, -1, 54);
   append(inner, spacer);
@@ -368,9 +368,9 @@ static void add_clipped_field(void) {
 }
 
 /* Also with --clipped-field, below Submit: a text field "Covered note" whose
-   centre a button "Cover" overlays (GtkOverlay). The field is unclipped and
-   showing, but the point at its centre is the button's, which presses like
-   Submit when clicked; a `focus` by pointer must refuse it too. */
+    centre a button "Cover" overlays (GtkOverlay). The field is unclipped and
+    showing, but the point at its centre is the button's, which presses like
+    Submit when clicked; a `focus` by pointer must refuse it too. */
 static void add_covered_field(void) {
   GtkWidget *ov = gtk_overlay_new();
   GtkWidget *entry = gtk_entry_new();
@@ -447,7 +447,7 @@ int main(int argc, char **argv) {
   gtk_window_set_default_size(GTK_WINDOW(window), 360, input_log_path ? 720 : 420);
   if (csd) {
     /* A header bar as the titlebar: both toolkits then draw the window's
-       decorations (and, floating, its shadow) themselves. */
+        decorations (and, floating, its shadow) themselves. */
     GtkWidget *bar = gtk_header_bar_new();
 #if GTK_MAJOR_VERSION < 4
     gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(bar), TRUE);

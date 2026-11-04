@@ -83,7 +83,7 @@ app.setActivationPolicy(.accessory)
 guard let primary = NSScreen.screens.first else { fail("no screen") }
 let primaryHeight = primary.frame.height
 let frame = NSRect(x: rectArg[0], y: primaryHeight - rectArg[1] - rectArg[3],
-                   width: rectArg[2], height: rectArg[3])
+                    width: rectArg[2], height: rectArg[3])
 
 let window = NSWindow(contentRect: frame, styleMask: [.borderless],
                       backing: .buffered, defer: false)
@@ -91,8 +91,8 @@ window.title = title
 window.isOpaque = true
 window.hasShadow = false
 window.backgroundColor = NSColor(srgbRed: CGFloat(rgb[0] / 255.0),
-                                 green: CGFloat(rgb[1] / 255.0),
-                                 blue: CGFloat(rgb[2] / 255.0), alpha: 1.0)
+                                  green: CGFloat(rgb[1] / 255.0),
+                                  blue: CGFloat(rgb[2] / 255.0), alpha: 1.0)
 window.level = floating ? .floating : .normal
 
 /// The label's text attributes, and the view that draws it (top-left origin).
@@ -149,7 +149,7 @@ DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
     report()
     for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
         NotificationCenter.default.addObserver(forName: name, object: window,
-                                               queue: .main) { _ in report() }
+                                                queue: .main) { _ in report() }
     }
 }
 

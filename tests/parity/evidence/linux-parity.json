@@ -24,14 +24,8 @@
           "linux-x11",
           "fixture"
         ],
-        "ocr": [
-          "tesseract",
-          "fixture"
-        ],
-        "tree": [
-          "linux-atspi",
-          "fixture"
-        ],
+        "ocr": ["tesseract", "fixture"],
+        "tree": ["linux-atspi", "fixture"],
         "input": [
           "linux-wlr-virtual",
           "linux-mutter",
@@ -46,16 +40,11 @@
           "linux-xvfb",
           "fixture"
         ],
-        "media": [
-          "ffmpeg"
-        ]
+        "media": ["ffmpeg"]
       }
     }
   },
-  "display": [
-    1280,
-    800
-  ],
+  "display": [1280, 800],
   "runs": [
     {
       "run": "linux-sway/gtk3",
@@ -72,12 +61,8 @@
         {
           "id": "S2",
           "scenario": "capability report of a live session",
-          "consumerScenarios": [
-            "e2e_linux_doctor_reports_capabilities"
-          ],
-          "verbs": [
-            "capabilities --probe --session"
-          ],
+          "consumerScenarios": ["e2e_linux_doctor_reports_capabilities"],
+          "verbs": ["capabilities --probe --session"],
           "result": "pass",
           "error": null,
           "elapsedMs": 211,
@@ -316,11 +301,7 @@
           "consumerScenarios": [
             "e2e_linux_ocr_extracts_text_from_canvas_fixture"
           ],
-          "verbs": [
-            "windows",
-            "ocr --window",
-            "find"
-          ],
+          "verbs": ["windows", "ocr --window", "find"],
           "result": "pass",
           "error": null,
           "elapsedMs": 511,
@@ -359,11 +340,7 @@
           "consumerScenarios": [
             "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
           ],
-          "verbs": [
-            "find",
-            "element",
-            "ocr --region"
-          ],
+          "verbs": ["find", "element", "ocr --region"],
           "result": "pass",
           "error": null,
           "elapsedMs": 715,
@@ -399,9 +376,7 @@
         {
           "id": "S6",
           "scenario": "screenshot and recording pipeline",
-          "consumerScenarios": [
-            "e2e_linux_screenshot_recording_pipeline"
-          ],
+          "consumerScenarios": ["e2e_linux_screenshot_recording_pipeline"],
           "verbs": [
             "screenshot",
             "record --duration-ms",
@@ -464,9 +439,7 @@
         {
           "id": "S7",
           "scenario": "waiting for a timer-driven dialog",
-          "consumerScenarios": [
-            "e2e_linux_wait_observes_timer_driven_dialog"
-          ],
+          "consumerScenarios": ["e2e_linux_wait_observes_timer_driven_dialog"],
           "verbs": [
             "app-launch",
             "wait --element --role dialog",
@@ -503,9 +476,7 @@
         {
           "id": "S8",
           "scenario": "zero-touch session bootstrap and teardown",
-          "consumerScenarios": [
-            "e2e_linux_zero_touch_session_bootstrap"
-          ],
+          "consumerScenarios": ["e2e_linux_zero_touch_session_bootstrap"],
           "verbs": [
             "session-start --kind headless",
             "session-info",
@@ -598,12 +569,8 @@
         {
           "id": "S2",
           "scenario": "capability report of a live session",
-          "consumerScenarios": [
-            "e2e_linux_doctor_reports_capabilities"
-          ],
-          "verbs": [
-            "capabilities --probe --session"
-          ],
+          "consumerScenarios": ["e2e_linux_doctor_reports_capabilities"],
+          "verbs": ["capabilities --probe --session"],
           "result": "pass",
           "error": null,
           "elapsedMs": 104,
@@ -842,11 +809,7 @@
           "consumerScenarios": [
             "e2e_linux_ocr_extracts_text_from_canvas_fixture"
           ],
-          "verbs": [
-            "windows",
-            "ocr --window",
-            "find"
-          ],
+          "verbs": ["windows", "ocr --window", "find"],
           "result": "pass",
           "error": null,
           "elapsedMs": 512,
@@ -885,11 +848,7 @@
           "consumerScenarios": [
             "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
           ],
-          "verbs": [
-            "find",
-            "element",
-            "ocr --region"
-          ],
+          "verbs": ["find", "element", "ocr --region"],
           "result": "pass",
           "error": null,
           "elapsedMs": 666,
@@ -925,9 +884,7 @@
         {
           "id": "S6",
           "scenario": "screenshot and recording pipeline",
-          "consumerScenarios": [
-            "e2e_linux_screenshot_recording_pipeline"
-          ],
+          "consumerScenarios": ["e2e_linux_screenshot_recording_pipeline"],
           "verbs": [
             "screenshot",
             "record --duration-ms",
@@ -990,9 +947,7 @@
         {
           "id": "S7",
           "scenario": "waiting for a timer-driven dialog",
-          "consumerScenarios": [
-            "e2e_linux_wait_observes_timer_driven_dialog"
-          ],
+          "consumerScenarios": ["e2e_linux_wait_observes_timer_driven_dialog"],
           "verbs": [
             "app-launch",
             "wait --element --role dialog",
@@ -1029,9 +984,7 @@
         {
           "id": "S8",
           "scenario": "zero-touch session bootstrap and teardown",
-          "consumerScenarios": [
-            "e2e_linux_zero_touch_session_bootstrap"
-          ],
+          "consumerScenarios": ["e2e_linux_zero_touch_session_bootstrap"],
           "verbs": [
             "session-start --kind headless",
             "session-info",
@@ -1124,12 +1077,8 @@
         {
           "id": "S2",
           "scenario": "capability report of a live session",
-          "consumerScenarios": [
-            "e2e_linux_doctor_reports_capabilities"
-          ],
-          "verbs": [
-            "capabilities --probe --session"
-          ],
+          "consumerScenarios": ["e2e_linux_doctor_reports_capabilities"],
+          "verbs": ["capabilities --probe --session"],
           "result": "pass",
           "error": null,
           "elapsedMs": 106,
@@ -1368,11 +1317,7 @@
           "consumerScenarios": [
             "e2e_linux_ocr_extracts_text_from_canvas_fixture"
           ],
-          "verbs": [
-            "windows",
-            "ocr --window",
-            "find"
-          ],
+          "verbs": ["windows", "ocr --window", "find"],
           "result": "pass",
           "error": null,
           "elapsedMs": 487,
@@ -1411,11 +1356,7 @@
           "consumerScenarios": [
             "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
           ],
-          "verbs": [
-            "find",
-            "element",
-            "ocr --region"
-          ],
+          "verbs": ["find", "element", "ocr --region"],
           "result": "pass",
           "error": null,
           "elapsedMs": 642,
@@ -1451,9 +1392,7 @@
         {
           "id": "S6",
           "scenario": "screenshot and recording pipeline",
-          "consumerScenarios": [
-            "e2e_linux_screenshot_recording_pipeline"
-          ],
+          "consumerScenarios": ["e2e_linux_screenshot_recording_pipeline"],
           "verbs": [
             "screenshot",
             "record --duration-ms",
@@ -1516,9 +1455,7 @@
         {
           "id": "S7",
           "scenario": "waiting for a timer-driven dialog",
-          "consumerScenarios": [
-            "e2e_linux_wait_observes_timer_driven_dialog"
-          ],
+          "consumerScenarios": ["e2e_linux_wait_observes_timer_driven_dialog"],
           "verbs": [
             "app-launch",
             "wait --element --role dialog",
@@ -1555,9 +1492,7 @@
         {
           "id": "S8",
           "scenario": "zero-touch session bootstrap and teardown",
-          "consumerScenarios": [
-            "e2e_linux_zero_touch_session_bootstrap"
-          ],
+          "consumerScenarios": ["e2e_linux_zero_touch_session_bootstrap"],
           "verbs": [
             "session-start --kind headless",
             "session-info",
@@ -1650,12 +1585,8 @@
         {
           "id": "S2",
           "scenario": "capability report of a live session",
-          "consumerScenarios": [
-            "e2e_linux_doctor_reports_capabilities"
-          ],
-          "verbs": [
-            "capabilities --probe --session"
-          ],
+          "consumerScenarios": ["e2e_linux_doctor_reports_capabilities"],
+          "verbs": ["capabilities --probe --session"],
           "result": "pass",
           "error": null,
           "elapsedMs": 54,
@@ -1894,11 +1825,7 @@
           "consumerScenarios": [
             "e2e_linux_ocr_extracts_text_from_canvas_fixture"
           ],
-          "verbs": [
-            "windows",
-            "ocr --window",
-            "find"
-          ],
+          "verbs": ["windows", "ocr --window", "find"],
           "result": "pass",
           "error": null,
           "elapsedMs": 423,
@@ -1937,11 +1864,7 @@
           "consumerScenarios": [
             "e2e_linux_visual_fallback_trace_shows_tree_then_ocr"
           ],
-          "verbs": [
-            "find",
-            "element",
-            "ocr --region"
-          ],
+          "verbs": ["find", "element", "ocr --region"],
           "result": "pass",
           "error": null,
           "elapsedMs": 540,
@@ -1977,9 +1900,7 @@
         {
           "id": "S6",
           "scenario": "screenshot and recording pipeline",
-          "consumerScenarios": [
-            "e2e_linux_screenshot_recording_pipeline"
-          ],
+          "consumerScenarios": ["e2e_linux_screenshot_recording_pipeline"],
           "verbs": [
             "screenshot",
             "record --duration-ms",
@@ -2042,9 +1963,7 @@
         {
           "id": "S7",
           "scenario": "waiting for a timer-driven dialog",
-          "consumerScenarios": [
-            "e2e_linux_wait_observes_timer_driven_dialog"
-          ],
+          "consumerScenarios": ["e2e_linux_wait_observes_timer_driven_dialog"],
           "verbs": [
             "app-launch",
             "wait --element --role dialog",
@@ -2081,9 +2000,7 @@
         {
           "id": "S8",
           "scenario": "zero-touch session bootstrap and teardown",
-          "consumerScenarios": [
-            "e2e_linux_zero_touch_session_bootstrap"
-          ],
+          "consumerScenarios": ["e2e_linux_zero_touch_session_bootstrap"],
           "verbs": [
             "session-start --kind headless",
             "session-info",

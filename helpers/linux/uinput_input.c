@@ -60,7 +60,7 @@ static int open_uinput(void) {
       fail(EXIT_ACCESS, "access no write access to " DEVICE ": %s", strerror(errno));
     if (errno == ENOENT || errno == ENODEV)
       fail(EXIT_PROTOCOL, "protocol " DEVICE " does not exist (the uinput module is not loaded): %s",
-           strerror(errno));
+            strerror(errno));
     fail(EXIT_FAILED, "failed cannot open " DEVICE ": %s", strerror(errno));
   }
   return fd;
@@ -152,7 +152,7 @@ static int mode_run(char **argv) {
     }
     if (o->kind == OP_KEY) fail(EXIT_SCRIPT, "script %s", "uinput takes key codes, not keysyms");
     if (o->kind == OP_MOVE && (o->x < box[0] || o->y < box[1] || o->x >= box[0] + box[2] ||
-                               o->y >= box[1] + box[3])) {
+                                o->y >= box[1] + box[3])) {
       char at[48];
       snprintf(at, sizeof at, "%d %d", o->x, o->y);
       fail(EXIT_OUTSIDE, "outside %s", at);
@@ -177,7 +177,7 @@ static int mode_run(char **argv) {
       emit(pfd, EV_KEY, (int)o->button, o->down);
       syn(pfd);
       /* Each of the three buttons is held once at most, so the list
-         cannot overflow whatever the script presses. */
+          cannot overflow whatever the script presses. */
       int at = -1;
       for (int k = 0; k < n_buttons; k++)
         if (held_buttons[k] == (int)o->button) at = k;
@@ -187,11 +187,11 @@ static int mode_run(char **argv) {
     }
     case OP_SCROLL: {
       /* The wheel counts away from the user: positive REL_WHEEL scrolls up,
-         so a scroll down is negative. 120 hi-res units are one notch. */
+          so a scroll down is negative. 120 hi-res units are one notch. */
       int sign = o->vertical ? -1 : 1;
       if (o->pixel) {
         emit(pfd, EV_REL, o->vertical ? REL_WHEEL_HI_RES : REL_HWHEEL_HI_RES,
-             sign * o->amount * 8);
+              sign * o->amount * 8);
         syn(pfd);
       } else {
         int step = o->amount < 0 ? -1 : 1;

@@ -814,4 +814,3 @@ proc connectBus*(address: string, timeoutMs = 5000,
       if not (e of ref DbusError) or e of ref DbusTimeoutError: raise
       lastErr = e.msg
   raise newException(DbusError, lastErr)
-

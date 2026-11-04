@@ -107,9 +107,9 @@ until their milestones land.
 
 `gui_assert/desktop_env` drives a GUI application inside a real desktop
 session and checks what the COMPOSITOR reports, not what the application
-says about itself. A *target* starts the session, runs the application,
+says about itself. A _target_ starts the session, runs the application,
 injects pointer and key input, reads windows back, captures frames, changes
-desktop settings, and answers *facts*: typed questions about what the desktop
+desktop settings, and answers _facts_: typed questions about what the desktop
 supports and prefers, each marked as measured, declared or configured. A
 scenario is written once and computes its expectations from the facts.
 
@@ -214,8 +214,8 @@ the exact click-path to grant it (`screen_capture.grantInstructions`). Grant it
 once in **System Settings > Privacy & Security > Screen & System Audio
 Recording** and the capture tests go green.
 
-The grant is recorded by TCC against the bundle's code-signing *designated
-requirement*. With a real signing identity — an Apple Development certificate
+The grant is recorded by TCC against the bundle's code-signing _designated
+requirement_. With a real signing identity — an Apple Development certificate
 from a free Apple ID is enough — that requirement is keyed on the bundle
 identifier and the signing certificate, not on the code bytes, so rebuilding
 the helper does **not** revoke the grant. `ensureCaptureApp` verifies this after

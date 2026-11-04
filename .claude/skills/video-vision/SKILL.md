@@ -14,7 +14,7 @@ description: >-
 
 GuiAssert turns a screen recording into a **compact textual index** so you can
 explore it and write assertions **without dumping many frames into context**.
-The workflow mirrors DrVideo/VideoAgent: read the text index → *grep the video*
+The workflow mirrors DrVideo/VideoAgent: read the text index → _grep the video_
 → extract only the 1–3 frames you actually need to look at.
 
 ## Golden rule (token efficiency)
@@ -23,7 +23,7 @@ Do **not** extract-and-view many frames. Instead:
 
 1. `analyze` the video once → `index.json` + `digest.md`.
 2. **Read `digest.md`** (or the index `summary`) — a few hundred tokens tells you
-   the states, window titles, URLs, and per-state *what-changed* diffs. Often
+   the states, window titles, URLs, and per-state _what-changed_ diffs. Often
    this alone answers "what happens in this recording?" with **zero images**.
 3. `find "<text|url>"` to get the exact timestamps where something appears.
 4. `extract-frame --at <ts>` to pull **only that one frame**, then `Read` the PNG.

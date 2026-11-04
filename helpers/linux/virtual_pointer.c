@@ -40,12 +40,12 @@ static struct zwlr_virtual_pointer_manager_v1 *manager;
 static struct wl_seat *seat;
 
 static void global_add(void *data, struct wl_registry *registry, uint32_t name,
-                       const char *interface, uint32_t version) {
+                        const char *interface, uint32_t version) {
   (void)data;
   (void)version;
   if (strcmp(interface, zwlr_virtual_pointer_manager_v1_interface.name) == 0) {
     manager = wl_registry_bind(registry, name,
-                               &zwlr_virtual_pointer_manager_v1_interface, 1);
+                                &zwlr_virtual_pointer_manager_v1_interface, 1);
   } else if (strcmp(interface, wl_seat_interface.name) == 0 && !seat) {
     seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
   }
@@ -131,7 +131,7 @@ int main(int argc, char **argv) {
         zwlr_virtual_pointer_v1_button(
             ptr, now_ms(), code,
             down ? WL_POINTER_BUTTON_STATE_PRESSED
-                 : WL_POINTER_BUTTON_STATE_RELEASED);
+                  : WL_POINTER_BUTTON_STATE_RELEASED);
         zwlr_virtual_pointer_v1_frame(ptr);
       }
     } else if (sscanf(line, "wheel %lf", &a) == 1) {

@@ -15,7 +15,11 @@
   };
 
   outputs =
-    { self, nixpkgs, nimble-src }:
+    {
+      self,
+      nixpkgs,
+      nimble-src,
+    }:
     let
       lib = nixpkgs.lib;
       systems = [
@@ -250,7 +254,7 @@
                 env -i HOME="$HOME" ${guiassert}/bin/guiassert --state-dir "$TMPDIR/state" \
                   --ocr-backend tesseract capabilities --probe > caps.json
                 jq -e '.ok == true and ([.data.features[]
-                         | select(.feature == "ocr" and .backend == "tesseract"
+                          | select(.feature == "ocr" and .backend == "tesseract"
                                   and .state == "supported")] | length == 1)' caps.json
                 touch "$out"
               '';
@@ -296,15 +300,15 @@
                 }
                 ga capabilities --probe > caps.json
                 jq -e '.ok == true and .data.selected.capture == "linux-x11" and
-                       ([.data.features[] | select(.backend == "linux-x11" and
-                         .feature == "display-capture" and .state == "supported")]
+                        ([.data.features[] | select(.backend == "linux-x11" and
+                          .feature == "display-capture" and .state == "supported")]
                         | length == 1)' caps.json
                 ga screenshot --out "$TMPDIR/shot.png" > shot.json
                 jq -e '.ok == true and .data.image.width == 320 and
-                       .data.image.height == 240' shot.json
+                        .data.image.height == 240' shot.json
                 ga record --out "$TMPDIR/rec.mp4" --duration-ms 1000 --fps 10 > rec.json
                 jq -e '.ok == true and .data.recording.state == "stopped" and
-                       .data.recording.frames >= 5' rec.json
+                        .data.recording.frames >= 5' rec.json
                 # OCR of a capture with the packaged tesseract: the label in a
                 # window at (10, 60), read through linux-x11.
                 ffmpeg -hide_banner -loglevel error -f lavfi -i \
@@ -325,15 +329,15 @@
                   || { cat ocr.json ocr.err; exit 1; }
                 [ ! -s ocr.err ] || { cat ocr.err; exit 1; }
                 jq -e '.ok == true and .data.backend == "tesseract" and
-                       .data.languages == ["eng"] and
-                       .data.text == "QUARTZ 4719\nPELICAN DOCK" and
-                       .data.image.origin == [10, 60] and
-                       ([.data.words[].text] == ["QUARTZ", "4719", "PELICAN", "DOCK"]) and
-                       ([.data.words[] | select(.confidence >= 50 and .confidence <= 100)]
+                        .data.languages == ["eng"] and
+                        .data.text == "QUARTZ 4719\nPELICAN DOCK" and
+                        .data.image.origin == [10, 60] and
+                        ([.data.words[].text] == ["QUARTZ", "4719", "PELICAN", "DOCK"]) and
+                        ([.data.words[] | select(.confidence >= 50 and .confidence <= 100)]
                         | length == 4)' ocr.json || { cat ocr.json; exit 1; }
                 ga ocr --region 14,64,280,44 --out "$TMPDIR/ocr-region.png" > ocr-region.json
                 jq -e '.ok == true and .data.text == "QUARTZ 4719" and
-                       .data.image.origin == [14, 64]' ocr-region.json || { cat ocr-region.json; exit 1; }
+                        .data.image.origin == [14, 64]' ocr-region.json || { cat ocr-region.json; exit 1; }
                 kill $win
                 trap 'kill $xvfb' EXIT
                 # linux-wlr in a private headless sway (unwrapped: the wrapper
@@ -360,7 +364,7 @@
                   record --out "$TMPDIR/rec-wlr.mp4" --duration-ms 1000 --fps 10 > rec-wlr.json \
                   || { cat rec-wlr.json sway.log; exit 1; }
                 jq -e '.ok == true and .data.recording.state == "stopped" and
-                       .data.recording.width == 320 and .data.recording.frames >= 10' rec-wlr.json
+                        .data.recording.width == 320 and .data.recording.frames >= 10' rec-wlr.json
                 touch "$out"
               '';
 
@@ -432,20 +436,20 @@
                 ga tree --app guiassert-form > tree.json 2> tree.err || { cat tree.json tree.err; exit 1; }
                 [ ! -s tree.err ] || { cat tree.err; exit 1; }
                 jq -e '.ok == true and .data.root.role == "application" and
-                       .data.root.name == "guiassert-form" and .data.truncated == false and
-                       ([.data.root | .. | objects | select(has("name")) | .name] as $n |
+                        .data.root.name == "guiassert-form" and .data.truncated == false and
+                        ([.data.root | .. | objects | select(has("name")) | .name] as $n |
                         ["Order Form 7", "Display name", "Passphrase", "Remember this device",
-                         "Delivery notes", "Submit"] | all(. as $g | $n | index($g) != null)) and
-                       (.data.root.children[0].role == "window") and
-                       (.data.root.children[0].bounds[0:2] == [40, 30]) and
-                       ([.data.root | .. | objects | select(.nativeRole? == "password text")] |
+                          "Delivery notes", "Submit"] | all(. as $g | $n | index($g) != null)) and
+                        (.data.root.children[0].role == "window") and
+                        (.data.root.children[0].bounds[0:2] == [40, 30]) and
+                        ([.data.root | .. | objects | select(.nativeRole? == "password text")] |
                         length == 1 and .[0].value == null and .[0].text == null and
                         (.[0].states | index("protected") != null))' tree.json \
                   || { cat tree.json; exit 1; }
                 ga find --app guiassert-form --role button --name Submit > find.json
                 jq -e '.ok == true and (.data.elements | length == 1) and
-                       (.data.elements[0].actions | index("press") != null) and
-                       .data.elements[0].bounds[0] >= 40 and .data.elements[0].bounds[1] > 30' \
+                        (.data.elements[0].actions | index("press") != null) and
+                        .data.elements[0].bounds[0] >= 40 and .data.elements[0].bounds[1] > 30' \
                   find.json || { cat find.json; exit 1; }
                 ga element-action "$(jq -r '.data.elements[0].path' find.json)" press > press.json
                 jq -e '.ok == true and .data.action == "press"' press.json || { cat press.json; exit 1; }
@@ -453,12 +457,12 @@
                   --wait-ms 10000 > status.json || { cat status.json; exit 1; }
                 ga capabilities --probe > caps.json
                 jq -e '.ok == true and .data.selected.tree == "linux-atspi" and
-                       ([.data.features[] | select(.feature == "tree-read" and
-                         .backend == "linux-atspi" and .state == "supported")] | length == 1)' \
+                        ([.data.features[] | select(.feature == "tree-read" and
+                          .backend == "linux-atspi" and .state == "supported")] | length == 1)' \
                   caps.json || { cat caps.json; exit 1; }
                 ga apps > apps.json
                 jq -e '.ok == true and ([.data.apps[] | select(.name == "guiassert-form" and
-                         .accessible == true)] | length == 1)' apps.json || { cat apps.json; exit 1; }
+                          .accessible == true)] | length == 1)' apps.json || { cat apps.json; exit 1; }
                 touch "$out"
               '';
 
@@ -530,9 +534,9 @@
                   --wait-ms 30000 > ready.json || { cat ready.json form.log launcher.log; exit 1; }
                 ga capabilities --probe > caps.json
                 jq -e '.ok == true and .data.selected.input == "linux-xtest" and
-                       ([.data.features[] | select((.feature == "pointer-input" or
-                         .feature == "keyboard-input") and .backend == "linux-xtest" and
-                         .state == "supported")] | length == 2)' caps.json || { cat caps.json; exit 1; }
+                        ([.data.features[] | select((.feature == "pointer-input" or
+                          .feature == "keyboard-input") and .backend == "linux-xtest" and
+                          .state == "supported")] | length == 2)' caps.json || { cat caps.json; exit 1; }
                 ga windows --title "Input Form 8" > windows.json
                 ga window-focus "$(jq -r '.data.windows[0].id' windows.json)" > focus.json \
                   || { cat focus.json; exit 1; }
@@ -554,7 +558,7 @@
                   || { cat value.json; exit 1; }
                 ga find --app guiassert-form --role button --name Submit > submit.json
                 above=$(jq -r '.data.elements[0].bounds as [$x, $y, $w, $h] |
-                               "\($x + ($w / 2 | floor)),\($y - 4)"' submit.json)
+                                "\($x + ($w / 2 | floor)),\($y - 4)"' submit.json)
                 ga click --at "$above" > beside.json || { cat beside.json; exit 1; }
                 sleep 0.5
                 ga find --app guiassert-form --role label --name-contains Submitted > none.json
@@ -598,18 +602,18 @@
                 for b in linux-xvfb linux-sway; do
                   ga --session-backend "$b" capabilities --probe > "caps-$b.json"
                   jq -e --arg b "$b" '.ok == true and ([.data.features[] | select(.backend == $b
-                         and (.feature == "session-headless" or .feature == "session-vnc")
-                         and .state == "supported")] | length == 2)' "caps-$b.json" \
+                          and (.feature == "session-headless" or .feature == "session-vnc")
+                          and .state == "supported")] | length == 2)' "caps-$b.json" \
                     || { cat "caps-$b.json"; exit 1; }
                 done
                 # linux-xvfb with a loopback VNC endpoint.
                 ga --session-backend linux-xvfb session-start --kind headless --name x1 \
                   --width 320 --height 240 --vnc > x1.json || { cat x1.json; exit 1; }
                 jq -e '.data.session | .state == "running" and .backend == "linux-xvfb" and
-                       .displays[0].bounds == [0, 0, 320, 240] and
-                       (.env | has("DISPLAY") and has("XAUTHORITY") and
-                         has("DBUS_SESSION_BUS_ADDRESS") and has("AT_SPI_BUS_ADDRESS")) and
-                       .vnc.host == "127.0.0.1" and .vnc.port > 0' x1.json || { cat x1.json; exit 1; }
+                        .displays[0].bounds == [0, 0, 320, 240] and
+                        (.env | has("DISPLAY") and has("XAUTHORITY") and
+                          has("DBUS_SESSION_BUS_ADDRESS") and has("AT_SPI_BUS_ADDRESS")) and
+                        .vnc.host == "127.0.0.1" and .vnc.port > 0' x1.json || { cat x1.json; exit 1; }
                 port=$(jq -r .data.session.vnc.port x1.json)
                 exec 3<>"/dev/tcp/127.0.0.1/$port"
                 banner=$(head -c 11 <&3)
@@ -633,8 +637,8 @@
                 ga --session-backend linux-sway session-start --kind headless --name w1 \
                   --width 320 --height 240 > w1.json || { cat w1.json; exit 1; }
                 jq -e '.data.session | .state == "running" and .backend == "linux-sway" and
-                       .displays[0].bounds == [0, 0, 320, 240] and
-                       (.env | has("WAYLAND_DISPLAY") and has("AT_SPI_BUS_ADDRESS"))' w1.json \
+                        .displays[0].bounds == [0, 0, 320, 240] and
+                        (.env | has("WAYLAND_DISPLAY") and has("AT_SPI_BUS_ADDRESS"))' w1.json \
                   || { cat w1.json; exit 1; }
                 ga --session w1 app-launch --wait-window-ms 20000 -- "$helpers/wm_probe" \
                   "title=Sway Probe" map rgb=28a05a hold=120000 > w1-launch.json \
@@ -747,6 +751,15 @@
                 nim
                 nimbleFor
                 just
+                # The pre-commit gate (`prek run`, see .pre-commit-config.yaml):
+                # its hooks run these as `language: system` tools from this shell.
+                prek
+                uv
+                python3
+                editorconfig-checker
+                nixfmt-rfc-style
+                opentofu
+                prettier
                 # Plain `ffmpeg` (NOT ffmpeg-full): the default nixpkgs build ships
                 # libx264 + freetype/fontconfig (so `drawtext` works) which the
                 # vision tests require, while avoiding the ffmpeg-full/kvazaar
@@ -761,7 +774,16 @@
               # compositors and session stack a target starts, pinned here so a
               # target's identity is part of this flake's lock rather than of
               # whatever the host or a consumer's shell provides.
-              ++ lib.optionals pkgs.stdenv.isLinux desktopEnvPackages;
+              ++ lib.optionals pkgs.stdenv.isLinux (
+                desktopEnvPackages
+                ++ [
+                  # The headless Linux test runner (scripts/run-test-in-display.sh)
+                  # starts a private Xvfb through xvfb-run and checks it with
+                  # xdpyinfo. Declared here so the runner never depends on the host.
+                  xvfb-run
+                  xorg.xdpyinfo
+                ]
+              );
 
             shellHook = ''
               # Canonicalize TMPDIR to its physical path. On macOS /tmp is a

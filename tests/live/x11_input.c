@@ -40,7 +40,7 @@ static long window_pid(Display *d, Window w) {
   unsigned char *data = NULL;
   long pid = -1;
   if (XGetWindowProperty(d, w, pid_atom, 0, 1, False, XA_CARDINAL, &type, &format, &n, &after,
-                         &data) == Success && data != NULL) {
+                          &data) == Success && data != NULL) {
     if (type == XA_CARDINAL && format == 32 && n == 1) pid = (long)*(unsigned long *)data;
     XFree(data);
   }

@@ -165,10 +165,10 @@ static void xo_description(void *data, struct zxdg_output_v1 *o, const char *d) 
   (void)d;
 }
 static const struct zxdg_output_v1_listener xo_listener = {xo_position, xo_size, xo_done,
-                                                           xo_name, xo_description};
+                                                            xo_name, xo_description};
 
 static void global_add(void *data, struct wl_registry *registry, uint32_t name,
-                       const char *interface, uint32_t version) {
+                        const char *interface, uint32_t version) {
   (void)data;
   if (strcmp(interface, zwlr_virtual_pointer_manager_v1_interface.name) == 0) {
     pointer_manager =
@@ -196,7 +196,7 @@ static const struct wl_registry_listener registry_listener = {global_add, global
 static struct wl_display *connect_display(void) {
   struct wl_display *d = wl_display_connect(NULL);
   if (!d) fail(EXIT_CONNECT, "connect cannot connect to the Wayland display %s",
-               getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "(WAYLAND_DISPLAY unset)");
+                getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "(WAYLAND_DISPLAY unset)");
   struct wl_registry *registry = wl_display_get_registry(d);
   wl_registry_add_listener(registry, &registry_listener, NULL);
   if (wl_display_roundtrip(d) < 0 || wl_display_roundtrip(d) < 0)
@@ -233,23 +233,23 @@ static void kb_keymap(void *data, struct wl_keyboard *k, uint32_t format, int32_
   if (map == MAP_FAILED) return;
   if (seat_keymap) xkb_keymap_unref(seat_keymap);
   seat_keymap = xkb_keymap_new_from_buffer(xkb, map, strnlen(map, size),
-                                           XKB_KEYMAP_FORMAT_TEXT_V1,
-                                           XKB_KEYMAP_COMPILE_NO_FLAGS);
+                                            XKB_KEYMAP_FORMAT_TEXT_V1,
+                                            XKB_KEYMAP_COMPILE_NO_FLAGS);
   munmap(map, size);
 }
 static void kb_enter(void *d, struct wl_keyboard *k, uint32_t s, struct wl_surface *f,
-                     struct wl_array *keys) {
+                      struct wl_array *keys) {
   (void)d; (void)k; (void)s; (void)f; (void)keys;
 }
 static void kb_leave(void *d, struct wl_keyboard *k, uint32_t s, struct wl_surface *f) {
   (void)d; (void)k; (void)s; (void)f;
 }
 static void kb_key(void *d, struct wl_keyboard *k, uint32_t s, uint32_t t, uint32_t key,
-                   uint32_t st) {
+                    uint32_t st) {
   (void)d; (void)k; (void)s; (void)t; (void)key; (void)st;
 }
 static void kb_modifiers(void *d, struct wl_keyboard *k, uint32_t s, uint32_t dep,
-                         uint32_t lat, uint32_t lock, uint32_t group) {
+                          uint32_t lat, uint32_t lock, uint32_t group) {
   (void)d; (void)k; (void)s; (void)dep; (void)lat; (void)lock;
   seat_group = group;
 }
@@ -330,13 +330,13 @@ static void add_sym(uint32_t sym) {
 }
 
 /* The XKB keymap text of `syms` (xkbcommon's keymap format,
-   https://xkbcommon.org/doc/current/keymap-text-format-v1.html). */
+    https://xkbcommon.org/doc/current/keymap-text-format-v1.html). */
 static char *keymap_text(void) {
   size_t cap = 4096 + n_syms * 160, len = 0;
   char *t = malloc(cap);
   if (!t) fail(EXIT_FAILED, "failed %s", "out of memory");
   /* Once the text outgrows `cap`, EMIT only counts (snprintf to nothing),
-     never writes past the buffer; the check below then refuses it. */
+      never writes past the buffer; the check below then refuses it. */
 #define EMIT(...)                                                              \
   do {                                                                         \
     int n_ = snprintf(len < cap ? t + len : NULL, len < cap ? cap - len : 0,   \
@@ -344,11 +344,11 @@ static char *keymap_text(void) {
     if (n_ > 0) len += (size_t)n_;                                             \
   } while (0)
   EMIT("xkb_keymap {\nxkb_keycodes \"guiassert\" {\n  minimum = 8;\n  maximum = %zu;\n",
-       n_syms + 9 < 255 ? (size_t)255 : n_syms + 9);
+        n_syms + 9 < 255 ? (size_t)255 : n_syms + 9);
   for (size_t i = 0; i < n_syms; i++) EMIT("  <K%zu> = %zu;\n", i, i + 9);
   EMIT("};\nxkb_types \"guiassert\" { include \"complete\" };\n"
-       "xkb_compatibility \"guiassert\" { include \"complete\" };\n"
-       "xkb_symbols \"guiassert\" {\n");
+        "xkb_compatibility \"guiassert\" { include \"complete\" };\n"
+        "xkb_symbols \"guiassert\" {\n");
   for (size_t i = 0; i < n_syms; i++) {
     char name[64], upper[64];
     xkb_keysym_get_name(syms[i], name, sizeof name);
@@ -428,20 +428,20 @@ static void key(uint32_t sym, int down) {
 
 static void button(uint32_t code, int down) {
   zwlr_virtual_pointer_v1_button(ptr, script_now_ms(), code,
-                                 down ? WL_POINTER_BUTTON_STATE_PRESSED
+                                  down ? WL_POINTER_BUTTON_STATE_PRESSED
                                       : WL_POINTER_BUTTON_STATE_RELEASED);
   zwlr_virtual_pointer_v1_frame(ptr);
   int at = -1;
   for (int i = 0; i < n_held_buttons; i++)
     if (held_buttons[i] == code) at = i;
   /* Each of the three buttons is held once at most, so the list cannot
-     overflow whatever the script presses. */
+      overflow whatever the script presses. */
   if (down && at < 0) held_buttons[n_held_buttons++] = code;
   if (!down && at >= 0) held_buttons[at] = held_buttons[--n_held_buttons];
 }
 
 /* Release everything still held (a cancelled script, or one that pressed
-   without releasing): nothing stays down once the helper is gone. */
+    without releasing): nothing stays down once the helper is gone. */
 static void release_all(void) {
   while (n_held_buttons > 0) button(held_buttons[n_held_buttons - 1], 0);
   while (kbd && n_held_keys > 0) key(held_keys[n_held_keys - 1], 0);
@@ -474,10 +474,10 @@ static int mode_run(void) {
   struct wl_display *d = connect_display();
   if (need_ptr && !pointer_manager)
     fail(EXIT_PROTOCOL, "protocol %s",
-         "the compositor offers no zwlr_virtual_pointer_manager_v1 (virtual pointers)");
+          "the compositor offers no zwlr_virtual_pointer_manager_v1 (virtual pointers)");
   if (need_kbd && !keyboard_manager)
     fail(EXIT_PROTOCOL, "protocol %s",
-         "the compositor offers no zwp_virtual_keyboard_manager_v1 (virtual keyboards)");
+          "the compositor offers no zwp_virtual_keyboard_manager_v1 (virtual keyboards)");
   if (!seat) fail(EXIT_PROTOCOL, "protocol %s", "the compositor offers no seat");
   int min_x = 0, min_y = 0, max_x = 0, max_y = 0, any = 0;
   for (int i = 0; i < n_outputs; i++) {
@@ -491,7 +491,7 @@ static int mode_run(void) {
   }
   if (need_ptr && !output_manager)
     fail(EXIT_PROTOCOL, "protocol %s",
-         "the compositor offers no zxdg_output_manager_v1 (output layout)");
+          "the compositor offers no zxdg_output_manager_v1 (output layout)");
   if (need_ptr && !any) fail(EXIT_PROTOCOL, "protocol %s", "the compositor reports no output");
   for (size_t i = 0; i < s.len; i++) {
     if (s.ops[i].kind == OP_MOVE && !on_output(s.ops[i].x, s.ops[i].y)) {
@@ -554,7 +554,7 @@ static int mode_run(void) {
         zwlr_virtual_pointer_v1_frame(ptr);
       } else {
         /* One discrete notch per frame, 15 units each (wl_pointer's
-           conventional wheel step), as a wheel turned notch by notch. */
+            conventional wheel step), as a wheel turned notch by notch. */
         int step = o->amount < 0 ? -1 : 1;
         for (int n = 0; n != o->amount && !script_cancelled; n += step) {
           zwlr_virtual_pointer_v1_axis_source(ptr, WL_POINTER_AXIS_SOURCE_WHEEL);
@@ -598,10 +598,10 @@ static int mode_hold_keyboard(void) {
   struct wl_display *d = connect_display();
   if (!keyboard_manager)
     fail(EXIT_PROTOCOL, "protocol %s",
-         "the compositor offers no zwp_virtual_keyboard_manager_v1 (virtual keyboards)");
+          "the compositor offers no zwp_virtual_keyboard_manager_v1 (virtual keyboards)");
   if (!seat) fail(EXIT_PROTOCOL, "protocol %s", "the compositor offers no seat");
   /* A keymap of the modifier keys only: the device exists to give the seat
-     the keyboard capability, never to type (module comment). */
+      the keyboard capability, never to type (module comment). */
   for (int m = 0; m < 4; m++) add_sym(modifier_syms[m]);
   kbd = zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(keyboard_manager, seat);
   char *text = keymap_text();
@@ -617,9 +617,9 @@ static int mode_hold_keyboard(void) {
   printf("ok\n");
   fflush(stdout);
   /* Serve the connection until a signal or the compositor's end. Our own
-     poll rather than wl_display_dispatch, which retries a poll that a
-     signal interrupted and so would never return for SIGTERM.
-     https://wayland.freedesktop.org/docs/html/apb.html#Client-classwl__display */
+      poll rather than wl_display_dispatch, which retries a poll that a
+      signal interrupted and so would never return for SIGTERM.
+      https://wayland.freedesktop.org/docs/html/apb.html#Client-classwl__display */
   int broken = 0;
   struct pollfd pfd = {.fd = wl_display_get_fd(d), .events = POLLIN};
   while (!script_cancelled && !broken) {
@@ -665,7 +665,7 @@ static int mode_probe(void) {
   int n = 0;
   for (int i = 0; i < n_outputs; i++) n += outputs[i].have;
   printf("ok pointer=%d keyboard=%d outputs=%d\n", pointer_manager != NULL && output_manager != NULL,
-         keyboard_manager != NULL, n);
+          keyboard_manager != NULL, n);
   wl_display_disconnect(d);
   return EXIT_OK;
 }

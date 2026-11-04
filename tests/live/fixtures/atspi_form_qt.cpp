@@ -84,8 +84,8 @@ int main(int argc, char **argv) {
   QLabel *status = nullptr;
   QObject::connect(submit, &QPushButton::clicked, [&]() {
     const QString text = QStringLiteral("Submitted %1; passphrase of %2 characters")
-                             .arg(nameEntry->text())
-                             .arg(passEntry->text().length());
+                              .arg(nameEntry->text())
+                              .arg(passEntry->text().length());
     if (status == nullptr) {
       status = new QLabel(text);
       box->insertWidget(box->count() - 1, status);

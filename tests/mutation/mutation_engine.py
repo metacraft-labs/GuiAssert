@@ -82,12 +82,12 @@ def main(name: str, root: Path, arms: list, kill: list):
     stale = [s for s in subjects if recorded.get(s) != sha(root / s)]
     if stale:
         sys.exit("stale harness: subjects changed since the control hashes were recorded: "
-                 + ", ".join(stale) + " (review the needles, then --record-control-hashes)")
+                  + ", ".join(stale) + " (review the needles, then --record-control-hashes)")
 
     build = tempfile.mkdtemp(prefix=f"{name}-mut-")
     env = dict(os.environ, BUILD_DIR=build)
     lines = [f"# {name} mutation results — {time.strftime('%Y-%m-%d %H:%M:%S %z')}",
-             f"# kill command: {scrub(' '.join(kill), root, build)}", ""]
+              f"# kill command: {scrub(' '.join(kill), root, build)}", ""]
     survived = 0
     for a in arms:
         if only and a.id not in only:

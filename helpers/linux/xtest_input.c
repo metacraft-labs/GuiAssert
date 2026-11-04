@@ -49,8 +49,8 @@ static int min_kc, max_kc, per_kc;
 static KeySym *mapping;
 
 /* Run once by `fail` before the helper exits, while a script runs: it
-   releases what the script holds and empties every borrowed key code, so
-   no exit path leaves a key down or the keyboard mapping changed. */
+    releases what the script holds and empties every borrowed key code, so
+    no exit path leaves a key down or the keyboard mapping changed. */
 static void (*on_fail)(void);
 
 static void fail(int status, const char *fmt, const char *a) {
@@ -65,8 +65,8 @@ static void fail(int status, const char *fmt, const char *a) {
 }
 
 /* An X error is recorded, not acted on: Xlib forbids requests from inside
-   the handler, and the cleanup `fail` runs makes some. `check_x` turns it
-   into the helper's failure after the next XSync. */
+    the handler, and the cleanup `fail` runs makes some. `check_x` turns it
+    into the helper's failure after the next XSync. */
 static int x_failed;
 static char x_failed_text[128];
 
@@ -83,7 +83,7 @@ static void check_x(void) {
 static void open_display(void) {
   dpy = XOpenDisplay(NULL);
   if (!dpy) fail(EXIT_CONNECT, "connect cannot open the X display %s",
-                 getenv("DISPLAY") ? getenv("DISPLAY") : "(DISPLAY unset)");
+                  getenv("DISPLAY") ? getenv("DISPLAY") : "(DISPLAY unset)");
   XSetErrorHandler(x_error);
 }
 
@@ -131,8 +131,8 @@ static struct place *place_of(uint32_t sym) {
 }
 
 /* Empty every borrowed key code again, once `REMAP_SETTLE_MS` passed since
-   the last use of any (a code borrowed but never released counts as used
-   now). Safe to call twice. */
+    the last use of any (a code borrowed but never released counts as used
+    now). Safe to call twice. */
 static void restore_remapped(void) {
   uint32_t now = script_now_ms(), latest = 0;
   int any = 0;
@@ -180,7 +180,7 @@ static void plan_keys(struct script *s) {
       p.code = kc;
       p.remapped = 1;
       /* Recorded before the request, so a failure from here on empties it
-         again (`run_cleanup`). */
+          again (`run_cleanup`). */
       places[n_places++] = p;
       XChangeKeyboardMapping(dpy, kc, 2, both, 1);
       XSync(dpy, False);
@@ -192,7 +192,7 @@ static void plan_keys(struct script *s) {
   }
   if (n_places > 0) {
     /* Give clients the time to re-read a changed mapping before its first
-       use (see the module comment). */
+        use (see the module comment). */
     for (size_t i = 0; i < n_places; i++)
       if (places[i].remapped) {
         script_sleep(REMAP_SETTLE_MS);
@@ -240,13 +240,13 @@ static void button(unsigned b, int down) {
   for (int i = 0; i < n_held_buttons; i++)
     if (held_buttons[i] == (int)b) at = i;
   /* Each button is held once at most (there are three), so the list
-     cannot overflow whatever the script presses. */
+      cannot overflow whatever the script presses. */
   if (down && at < 0) held_buttons[n_held_buttons++] = (int)b;
   if (!down && at >= 0) held_buttons[at] = held_buttons[--n_held_buttons];
 }
 
 /* Release every button and key still held, then empty the borrowed key
-   codes: the end of every script, and `fail`'s cleanup once one runs. */
+    codes: the end of every script, and `fail`'s cleanup once one runs. */
 static void run_cleanup(void) {
   while (n_held_buttons > 0) button((unsigned)held_buttons[n_held_buttons - 1], 0);
   while (n_held_codes > 0) press_code(held_codes[n_held_codes - 1], 0);
@@ -379,7 +379,7 @@ static int mode_bounds(char **argv) {
   XSync(dpy, False);
   check_x();
   /* Wait (bounded) until the server reports the new geometry, so the
-     caller's re-read sees it. */
+      caller's re-read sees it. */
   for (int tries = 0; tries < 100; tries++) {
     Window root, child;
     int x, y;
@@ -398,7 +398,7 @@ static int mode_bounds(char **argv) {
 static int mode_probe(void) {
   open_display();
   printf("ok xtest=%d width=%d height=%d\n", has_xtest() ? 1 : 0,
-         DisplayWidth(dpy, DefaultScreen(dpy)), DisplayHeight(dpy, DefaultScreen(dpy)));
+          DisplayWidth(dpy, DefaultScreen(dpy)), DisplayHeight(dpy, DefaultScreen(dpy)));
   XCloseDisplay(dpy);
   return EXIT_OK;
 }

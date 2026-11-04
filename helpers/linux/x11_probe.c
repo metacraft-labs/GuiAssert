@@ -80,7 +80,7 @@ static void put_json_string(const unsigned char *s, size_t n) {
   for (size_t i = 0; i < n;) {
     unsigned char c = s[i];
     size_t len = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3
-                 : (c >> 3) == 30 ? 4 : 0;
+                  : (c >> 3) == 30 ? 4 : 0;
     int ok = len > 0 && i + len <= n;
     for (size_t k = 1; ok && k < len; k++)
       ok = (s[i + k] & 0xC0) == 0x80;
@@ -112,7 +112,7 @@ static int get_property(Display *d, Window w, Atom prop, Atom type,
   *data = NULL;
   *n = 0;
   if (XGetWindowProperty(d, w, prop, 0, 1 << 16, False, type, &actual,
-                         &format, n, &after, data) != Success ||
+                          &format, n, &after, data) != Success ||
       *data == NULL) {
     return 0;
   }
@@ -169,7 +169,7 @@ static void print_title(Display *d, Window w) {
 }
 
 static void print_window(Display *d, Window root, Window client, Window frame,
-                         int *first) {
+                          int *first) {
   XWindowAttributes attrs, frame_attrs;
   if (!XGetWindowAttributes(d, client, &attrs) ||
       !XGetWindowAttributes(d, frame, &frame_attrs))
@@ -226,10 +226,10 @@ static void print_window(Display *d, Window root, Window client, Window frame,
   fputs(",\"title\":", stdout);
   print_title(d, client);
   printf(",\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d,\"mapped\":%s,"
-         "\"overrideRedirect\":%s}",
-         x, y, attrs.width, attrs.height,
-         frame_attrs.map_state == IsViewable ? "true" : "false",
-         frame_attrs.override_redirect ? "true" : "false");
+          "\"overrideRedirect\":%s}",
+          x, y, attrs.width, attrs.height,
+          frame_attrs.map_state == IsViewable ? "true" : "false",
+          frame_attrs.override_redirect ? "true" : "false");
 }
 
 static int list(Display *d) {
@@ -275,7 +275,7 @@ static int list(Display *d) {
     }
   }
   printf("{\"screen\":%d,\"width\":%d,\"height\":%d,\"wm\":%s,\"focus\":", screen,
-         DisplayWidth(d, screen), DisplayHeight(d, screen), wm ? "true" : "false");
+          DisplayWidth(d, screen), DisplayHeight(d, screen), wm ? "true" : "false");
   if (focus_client != None)
     printf("%lu", (unsigned long)focus_client);
   else
@@ -381,7 +381,7 @@ static int open_window(Display *d, int argc, char **argv) {
     int depth = DefaultDepth(d, screen);
     char *data = malloc((size_t)w * h * 4);
     XImage *xi = data ? XCreateImage(d, visual, (unsigned)depth, ZPixmap, 0, data,
-                                     (unsigned)w, (unsigned)h, 32, 0)
+                                      (unsigned)w, (unsigned)h, 32, 0)
                       : NULL;
     if (!xi) {
       fprintf(stderr, "x11_probe window: cannot create the image\n");
@@ -396,7 +396,7 @@ static int open_window(Display *d, int argc, char **argv) {
       }
     free(rgb24);
     background = XCreatePixmap(d, RootWindow(d, screen), (unsigned)w, (unsigned)h,
-                               (unsigned)depth);
+                                (unsigned)depth);
     GC gc = XCreateGC(d, background, 0, NULL);
     XPutImage(d, background, gc, xi, 0, 0, 0, 0, (unsigned)w, (unsigned)h);
     XFreeGC(d, gc);
@@ -409,8 +409,8 @@ static int open_window(Display *d, int argc, char **argv) {
     attr_mask |= CWBackPixel;
   }
   Window win = XCreateWindow(d, RootWindow(d, screen), x, y, w, h, 0,
-                             CopyFromParent, InputOutput, CopyFromParent,
-                             attr_mask, &sa);
+                              CopyFromParent, InputOutput, CopyFromParent,
+                              attr_mask, &sa);
   XSizeHints *size = XAllocSizeHints();
   size->flags = PPosition | PSize | USPosition | USSize;
   size->x = x;
@@ -446,7 +446,7 @@ static int open_window(Display *d, int argc, char **argv) {
   while (!stop_requested) {
     clock_gettime(CLOCK_MONOTONIC, &now);
     long elapsed = (now.tv_sec - start.tv_sec) * 1000 +
-                   (now.tv_nsec - start.tv_nsec) / 1000000;
+                    (now.tv_nsec - start.tv_nsec) / 1000000;
     if (elapsed >= hold_ms)
       break;
     while (XPending(d)) {
@@ -506,7 +506,7 @@ static int grab_rgb(Display *d, int x, int y, int w, int h, unsigned char *out) 
         /* A visual without this channel (mask 0) reads as 0, never a
          * division by zero. */
         o[c] = bits[c] == 0  ? 0
-               : bits[c] >= 8 ? (unsigned char)(v >> (bits[c] - 8))
+                : bits[c] >= 8 ? (unsigned char)(v >> (bits[c] - 8))
                               : (unsigned char)(v * 255 / ((1ul << bits[c]) - 1));
       }
     }
@@ -553,7 +553,7 @@ static int grab(Display *d, int argc, char **argv) {
 
 static const char *report_path;
 static void write_report(const char *state, long child, long frames, int code,
-                         const char *message) {
+                          const char *message) {
   char tmp[4096];
   snprintf(tmp, sizeof tmp, "%s.tmp", report_path);
   FILE *f = fopen(tmp, "w");

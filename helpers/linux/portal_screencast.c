@@ -91,7 +91,7 @@ static void write_report(void) {
   if (!f)
     return;
   fprintf(f, "state=%s\npid=%ld\nnode=%ld\nx=%d\ny=%d\nwidth=%d\nheight=%d\n"
-             "frameWidth=%d\nframeHeight=%d\nframes=%ld\nchild=%ld\ncode=%ld\nmessage=%s\n",
+              "frameWidth=%d\nframeHeight=%d\nframes=%ld\nchild=%ld\ncode=%ld\nmessage=%s\n",
           st_state, (long)getpid(), st_node, st_x, st_y, st_w, st_h, st_fw, st_fh,
           st_frames, st_child, st_code, st_message);
   fclose(f);
@@ -152,8 +152,8 @@ static int counter;
  * (0 success, 1 cancelled by the user, 2 other), or -1 for a D-Bus error,
  * -2 for a timeout. */
 static int request(GDBusConnection *conn, const char *method, GVariant *args,
-                   const char *token, int timeout_ms, GVariant **results,
-                   char *err, size_t errlen) {
+                    const char *token, int timeout_ms, GVariant **results,
+                    char *err, size_t errlen) {
   char *sender = sender_token(conn);
   char *path = g_strdup_printf(PORTAL_PATH "/request/%s/%s", sender, token);
   g_free(sender);

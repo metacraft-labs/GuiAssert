@@ -719,4 +719,3 @@ when defined(macosx) and defined(captureLive):
           let pinned = newGuiAssertHarness(frame)
           check detectLayoutOverflow(pinned, @[[0, 0, 1, 1]]) ==
                 detectLayoutOverflow(pinned, frame, @[[0, 0, 1, 1]])
-

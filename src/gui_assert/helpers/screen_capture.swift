@@ -140,8 +140,8 @@ var recordStatusOnExit = false
 func flushAndExit(_ status: Status, _ message: String? = nil) -> Never {
     if recordStatusOnExit && status != .ok {
         writeStatus([("state", status == .denied ? "denied" : "failed"),
-                     ("code", String(status.rawValue)), ("pid", String(getpid())),
-                     ("message", message ?? status.label)])
+                      ("code", String(status.rawValue)), ("pid", String(getpid())),
+                      ("message", message ?? status.label)])
     }
     var out = "status=\(status.label)\ncode=\(status.rawValue)\n"
     for (k, v) in report { out += "\(k)=\(v)\n" }
@@ -314,7 +314,7 @@ func matchingWindows(_ windows: [CGWindowRecord]) -> [CGWindowRecord] {
 
 func tsvRow(_ r: CGWindowRecord) -> String {
     return "\(r.windowId)\t\(r.ownerPid)\t\(r.ownerName)\t\(r.title)" +
-           "\t\(r.x)\t\(r.y)\t\(r.w)\t\(r.h)\t\(r.layer)\t\(r.onScreen ? 1 : 0)"
+            "\t\(r.x)\t\(r.y)\t\(r.w)\t\(r.h)\t\(r.layer)\t\(r.onScreen ? 1 : 0)"
 }
 
 // ---------------------------------------------------------------------------
@@ -432,8 +432,8 @@ func selectDisplay(_ content: SCShareableContent) -> (SCDisplay, CGRect?) {
             flushAndExit(.usage, "the region \(r) does not lie within one display")
         }
         let local = CGRect(x: r.origin.x - d.frame.origin.x,
-                           y: r.origin.y - d.frame.origin.y,
-                           width: r.width, height: r.height)
+                            y: r.origin.y - d.frame.origin.y,
+                            width: r.width, height: r.height)
         return (d, local)
     }
     if let id = displayId {
@@ -496,8 +496,8 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
     var stopping = false
 
     init(writer: AVAssetWriter, input: AVAssetWriterInput,
-         adaptor: AVAssetWriterInputPixelBufferAdaptor, rate: Double,
-         width: Int, height: Int, scale: Double) {
+          adaptor: AVAssetWriterInputPixelBufferAdaptor, rate: Double,
+          width: Int, height: Int, scale: Double) {
         self.writer = writer
         self.input = input
         self.adaptor = adaptor
@@ -509,9 +509,9 @@ final class Recorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func status(_ state: String, _ extra: [(String, String)] = []) {
         writeStatus([("state", state), ("pid", String(getpid())),
-                     ("width", String(width)), ("height", String(height)),
-                     ("scale", String(format: "%.3f", scale)),
-                     ("fps", String(rate)), ("frames", String(frames))] + extra)
+                      ("width", String(width)), ("height", String(height)),
+                      ("scale", String(format: "%.3f", scale)),
+                      ("fps", String(rate)), ("frames", String(frames))] + extra)
     }
 
     // SCStreamOutput: keep only the newest COMPLETE frame. Idle and blank
@@ -682,7 +682,7 @@ func runRecorder(out: String) -> Never {
             kCVPixelBufferWidthKey as String: width,
             kCVPixelBufferHeightKey as String: height])
     let rec = Recorder(writer: writer, input: input, adaptor: adaptor, rate: fps,
-                       width: width, height: height, scale: scale)
+                        width: width, height: height, scale: scale)
     activeRecorder = rec
     for sig in [SIGTERM, SIGINT] {
         signal(sig, SIG_IGN)
@@ -798,9 +798,9 @@ case "window":
         var why = "no window in CGWindowListCopyWindowInfo matched"
         if (wantTitleExact != nil || wantTitleContains != nil) && !titlesVisible {
             why += "; NOTE no window title was readable at all (titles_visible=0), " +
-                   "so a title filter cannot match: kCGWindowName is redacted " +
-                   "until this code holds the ScreenCapture grant. Match on " +
-                   "--owner instead, or grant first"
+                    "so a title filter cannot match: kCGWindowName is redacted " +
+                    "until this code holds the ScreenCapture grant. Match on " +
+                    "--owner instead, or grant first"
         }
         flushAndExit(.targetNotFound, why)
     }

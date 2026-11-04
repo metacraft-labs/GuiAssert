@@ -94,7 +94,7 @@ static void on_sign_in(GtkWidget *button, gpointer data) {
   (void)data;
   sign_ins += 1;
   set_status("State: signed in %d as %s; passcode of %ld characters", sign_ins,
-             entry_text(account_entry), (long)g_utf8_strlen(entry_text(passcode_entry), -1));
+              entry_text(account_entry), (long)g_utf8_strlen(entry_text(passcode_entry), -1));
 }
 
 static void on_scrolled(GtkAdjustment *adj, gpointer data) {
@@ -140,7 +140,7 @@ static gboolean draw_sign(GtkWidget *w, cairo_t *cr, gpointer d) {
 static GtkWidget *signboard(void) {
 #if GTK_MAJOR_VERSION >= 4
   /* GTK 4 exposes a plain drawing area as an unnamed generic node; as a
-     group it carries its accessible name. */
+      group it carries its accessible name. */
   GtkWidget *a = g_object_new(GTK_TYPE_DRAWING_AREA, "accessible-role",
                               GTK_ACCESSIBLE_ROLE_GROUP, NULL);
   gtk_drawing_area_set_content_width(GTK_DRAWING_AREA(a), 460);
@@ -171,11 +171,11 @@ static GtkWidget *row_list(void) {
   gtk_container_add(GTK_CONTAINER(scroller), list);
 #endif
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_NEVER,
-                                 GTK_POLICY_ALWAYS);
+                                  GTK_POLICY_ALWAYS);
   gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(scroller), 120);
   gtk_scrolled_window_set_max_content_height(GTK_SCROLLED_WINDOW(scroller), 120);
   g_signal_connect(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scroller)),
-                   "value-changed", G_CALLBACK(on_scrolled), NULL);
+                    "value-changed", G_CALLBACK(on_scrolled), NULL);
   return scroller;
 }
 
@@ -196,7 +196,7 @@ static gboolean open_dialog(gpointer data) {
   (void)data;
 #if GTK_MAJOR_VERSION >= 4
   GtkWidget *dialog = g_object_new(GTK_TYPE_WINDOW, "accessible-role",
-                                   GTK_ACCESSIBLE_ROLE_DIALOG, NULL);
+                                    GTK_ACCESSIBLE_ROLE_DIALOG, NULL);
   GtkWidget *body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
   gtk_window_set_child(GTK_WINDOW(dialog), body);
 #else

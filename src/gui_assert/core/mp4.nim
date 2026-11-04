@@ -251,4 +251,3 @@ when not defined(js):
 proc describe*(i: Mp4Info): string =
   ## A one-line summary, for messages.
   $i.width & "x" & $i.height & ", " & $i.frames & " frames, " & $i.durationMs & " ms"
-

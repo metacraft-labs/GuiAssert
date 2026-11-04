@@ -20,17 +20,17 @@ import tempfile
 from pathlib import Path
 
 MOVED = ["editor_backend", "media", "speech_synthesis", "speech_synth", "talking_head",
-         "avatar_track", "emotive", "artifact_project", "storyboard", "parser", "driver"]
+          "avatar_track", "emotive", "artifact_project", "storyboard", "parser", "driver"]
 # `import gui_assert/media`, `from gui_assert/talking_head/core import x`,
 # `import gui_assert/[media, ocr]`
 PATTERN = (r"^\s*(import|from|include)\b.*gui_assert/(\[[^]]*\b(" + "|".join(MOVED) +
-           r")\b|(" + "|".join(MOVED) + r")\b)")
+            r")\b|(" + "|".join(MOVED) + r")\b)")
 SELF = Path(__file__).resolve().parents[2]
 
 
 def scan_repo(repo, ref):
     r = subprocess.run(["git", "-C", str(repo), "grep", "-nIE", PATTERN, ref, "--", "*.nim", "*.nims"],
-                       capture_output=True, text=True)
+                        capture_output=True, text=True)
     hits = [l for l in r.stdout.splitlines() if l]
     return hits
 
@@ -38,7 +38,7 @@ def scan_repo(repo, ref):
 def is_gui_assert(repo):
     # GuiAssert itself (any checkout of it) is the former home, not a consumer
     url = subprocess.run(["git", "-C", str(repo), "remote", "get-url", "origin"],
-                         capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True).stdout.strip()
     return repo.resolve() == SELF or re.search(r"[/:]GuiAssert(\.git)?$", url) is not None
 
 

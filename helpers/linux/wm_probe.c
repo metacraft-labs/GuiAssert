@@ -88,14 +88,14 @@ static char capabilities[128] = "";
 static const char *decoration_mode = "none";
 
 static void global_add(void *data, struct wl_registry *registry, uint32_t name,
-                       const char *interface, uint32_t version) {
+                        const char *interface, uint32_t version) {
   (void)data;
   if (strcmp(interface, wl_compositor_interface.name) == 0) {
     compositor = wl_registry_bind(registry, name, &wl_compositor_interface, 1);
   } else if (strcmp(interface, xdg_wm_base_interface.name) == 0) {
     wm_base_version = version < 6 ? version : 6;
     wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface,
-                               wm_base_version);
+                                wm_base_version);
   } else if (strcmp(interface, wl_shm_interface.name) == 0) {
     shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
   } else if (strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0) {
@@ -129,7 +129,7 @@ static void surface_configure(void *d, struct xdg_surface *s, uint32_t serial) {
 static const struct xdg_surface_listener surface_listener = {surface_configure};
 
 static void toplevel_configure(void *d, struct xdg_toplevel *t, int32_t w,
-                               int32_t h, struct wl_array *states) {
+                                int32_t h, struct wl_array *states) {
   (void)d;
   (void)t;
   (void)w;
@@ -158,7 +158,7 @@ static void toplevel_bounds(void *d, struct xdg_toplevel *t, int32_t w,
 }
 
 static void toplevel_wm_capabilities(void *d, struct xdg_toplevel *t,
-                                     struct wl_array *caps) {
+                                      struct wl_array *caps) {
   (void)d;
   (void)t;
   capabilities_reported = 1;
@@ -184,7 +184,7 @@ static void toplevel_wm_capabilities(void *d, struct xdg_toplevel *t,
       continue;
     size_t used = strlen(capabilities);
     snprintf(capabilities + used, sizeof capabilities - used, "%s\"%s\"",
-             used ? "," : "", name);
+              used ? "," : "", name);
   }
 }
 
@@ -193,8 +193,8 @@ static const struct xdg_toplevel_listener toplevel_listener = {
     toplevel_wm_capabilities};
 
 static void decoration_configure(void *d,
-                                 struct zxdg_toplevel_decoration_v1 *dec,
-                                 uint32_t mode) {
+                                  struct zxdg_toplevel_decoration_v1 *dec,
+                                  uint32_t mode) {
   (void)d;
   (void)dec;
   decoration_mode =
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
   struct zxdg_toplevel_decoration_v1 *dec = NULL;
   if (decoration_manager) {
     dec = zxdg_decoration_manager_v1_get_toplevel_decoration(decoration_manager,
-                                                             top);
+                                                              top);
     zxdg_toplevel_decoration_v1_add_listener(dec, &decoration_listener, NULL);
     if (strcmp(requested, "client") == 0)
       zxdg_toplevel_decoration_v1_set_mode(
@@ -315,8 +315,8 @@ int main(int argc, char **argv) {
     }
     for (int i = 0; i < w * h; i++) {
       uint32_t c = rgb24 ? ((uint32_t)rgb24[i * 3] << 16) |
-                               ((uint32_t)rgb24[i * 3 + 1] << 8) | rgb24[i * 3 + 2]
-                         : (uint32_t)rgb;
+                                ((uint32_t)rgb24[i * 3 + 1] << 8) | rgb24[i * 3 + 2]
+                          : (uint32_t)rgb;
       px[i] = 0xff000000u | c;
       px[w * h + i] = 0xff000000u | (c ^ 1u);
     }
@@ -339,7 +339,7 @@ int main(int argc, char **argv) {
       for (;;) {
         clock_gettime(CLOCK_MONOTONIC, &now);
         long elapsed = (now.tv_sec - start.tv_sec) * 1000 +
-                       (now.tv_nsec - start.tv_nsec) / 1000000;
+                        (now.tv_nsec - start.tv_nsec) / 1000000;
         if (elapsed >= hold_ms)
           break;
         if (pulse && elapsed >= next_pulse) {
@@ -378,15 +378,15 @@ int main(int argc, char **argv) {
     close(fd);
   }
   printf("{\"xdg_wm_base_version\":%u,\"capabilities_reported\":%s,"
-         "\"capabilities\":[%s],\"decoration_manager\":%s,"
-         "\"decoration_requested\":\"%s\",\"decoration_mode\":\"%s\","
-         "\"fixed\":%s,\"maximize_honoured\":%s,\"fullscreen_honoured\":%s}\n",
-         wm_base_version, capabilities_reported ? "true" : "false",
-         capabilities, decoration_manager ? "true" : "false",
-         requested[0] ? requested : "none", decoration_mode,
-         fixed ? "true" : "false",
-         maximize_honoured < 0 ? "null" : (maximize_honoured ? "true" : "false"),
-         fullscreen_honoured < 0 ? "null" : (fullscreen_honoured ? "true" : "false"));
+          "\"capabilities\":[%s],\"decoration_manager\":%s,"
+          "\"decoration_requested\":\"%s\",\"decoration_mode\":\"%s\","
+          "\"fixed\":%s,\"maximize_honoured\":%s,\"fullscreen_honoured\":%s}\n",
+          wm_base_version, capabilities_reported ? "true" : "false",
+          capabilities, decoration_manager ? "true" : "false",
+          requested[0] ? requested : "none", decoration_mode,
+          fixed ? "true" : "false",
+          maximize_honoured < 0 ? "null" : (maximize_honoured ? "true" : "false"),
+          fullscreen_honoured < 0 ? "null" : (fullscreen_honoured ? "true" : "false"));
   if (dec)
     zxdg_toplevel_decoration_v1_destroy(dec);
   xdg_toplevel_destroy(top);

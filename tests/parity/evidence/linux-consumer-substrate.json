@@ -25,14 +25,8 @@
         "linux-x11",
         "fixture"
       ],
-      "ocr": [
-        "tesseract",
-        "fixture"
-      ],
-      "tree": [
-        "linux-atspi",
-        "fixture"
-      ],
+      "ocr": ["tesseract", "fixture"],
+      "tree": ["linux-atspi", "fixture"],
       "input": [
         "linux-wlr-virtual",
         "linux-mutter",
@@ -47,15 +41,10 @@
         "linux-xvfb",
         "fixture"
       ],
-      "media": [
-        "ffmpeg"
-      ]
+      "media": ["ffmpeg"]
     }
   },
-  "display": [
-    1280,
-    800
-  ],
+  "display": [1280, 800],
   "rows": [
     {
       "session": "linux-sway",
