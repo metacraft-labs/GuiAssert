@@ -1,13 +1,48 @@
 ## Window-layout helper tests.
 ##
-## The default suite is pure — it asserts on the exact AppleScript
+## The builder suites are pure — they assert on the exact AppleScript
 ## strings and `open` argv the helpers build, without invoking any
 ## subprocess. The `appiumLive`-gated suite launches `TextEdit` via
 ## the helper and resizes it; that suite requires macOS Accessibility
 ## permission and is opt-in.
+## The documentation regression renders the real public API with Nim's
+## jsondoc command and checks the placement preconditions callers can read.
+## It uses no mock: the missing contract is documentation, rather than a
+## promise that AppleScript can control an unscriptable application.
 
-import std/[strutils, unittest, os]
+import std/[strutils, unittest, os, json]
 import ../src/gui_assert/window_layout
+import ./probe_compiler
+
+suite "window_layout public documentation":
+  test "placement documents scriptability and the permission boundary":
+    let work = freshDir("window_layout_docs")
+    defer: removeDir(work)
+    let (output, code) = run(nimExe(), @[
+      "jsondoc", "--hints:off", "--warnings:off",
+      "--nimcache:" & (work / "nimcache"), "--outdir:" & work,
+      srcDir() / "gui_assert" / "window_layout.nim"])
+    checkpoint output
+    require code == 0
+    let rendered = parseFile(work / "window_layout.json")
+    var placementDoc = ""
+    var setBoundsDoc = ""
+    for entry in rendered["entries"]:
+      case entry["name"].getStr
+      of "buildSetBoundsScript": placementDoc = entry{"description"}.getStr.toLowerAscii
+      of "setBounds": setBoundsDoc = entry{"description"}.getStr
+      else: discard
+    # Check the concepts, not a particular sentence or source-comment layout.
+    check placementDoc.contains("apple events")
+    check placementDoc.contains("bundleless")
+    check placementDoc.contains("-1728")
+    check placementDoc.contains("system events")
+    check placementDoc.contains("accessibility")
+    check placementDoc.contains("fallback")
+    check placementDoc.contains("windowlayouterror")
+    check placementDoc.contains("exit status")
+    check placementDoc.contains("subprocess output")
+    check setBoundsDoc.contains("buildSetBoundsScript")
 
 suite "window_layout AppleScript builder":
 

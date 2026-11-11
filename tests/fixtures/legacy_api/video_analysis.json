@@ -1,0 +1,142 @@
+[
+  {
+    "name": "Keyframe",
+    "kind": "skType",
+    "code": "Keyframe = object\n  index*: int\n  tStart*, tEnd*: float\n  changeScore*: float        ## 1 - SSIM vs the previous kept state\n  imagePath*: string         ## extracted full-res PNG (VU2)\n  words*: seq[OcrWord]\n  text*: string              ## reconstructed reading-order text (VU2)\n  urls*: seq[string]         ## extracted URLs / host:port paths (VU2)"
+  },
+  {
+    "name": "VideoAnalysis",
+    "kind": "skType",
+    "code": "VideoAnalysis = object\n  info*: VideoInfo\n  frames*: seq[Keyframe]     ## one per detected distinct state"
+  },
+  {
+    "name": "VideoAnalysisError",
+    "kind": "skType",
+    "code": "VideoAnalysisError = object of CatchableError"
+  },
+  {
+    "name": "VideoInfo",
+    "kind": "skType",
+    "code": "VideoInfo = object\n  path*: string\n  durationS*: float\n  width*, height*: int"
+  },
+  {
+    "name": "analyzeVideo",
+    "kind": "skProc",
+    "code": "proc analyzeVideo(path: string; sampleFps = 2.0; scaleW = 320;\n                  ssimThreshold = 0.12; ocrPsms: seq[int] = @[6, 11];\n                  ocrOpts = initOcrOptions(upscale = 2.0, invert = oiAuto);\n                  phashDupThreshold = 6): VideoAnalysis {.raises: [\n    VideoAnalysisError, OSError, IOError, ValueError, KeyError, ImageMathError,\n    MediaCompositionError, OcrError], tags: [ReadDirEffect, ReadEnvEffect,\n    ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect, WriteIOEffect,\n    WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "buildContactSheetArgv",
+    "kind": "skProc",
+    "code": "proc buildContactSheetArgv(inPattern: string; cols, rows: int; outPng: string): seq[\n    string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildExtractFrameArgv",
+    "kind": "skProc",
+    "code": "proc buildExtractFrameArgv(path: string; t: float; outPng: string): seq[string] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildIndex",
+    "kind": "skProc",
+    "code": "proc buildIndex(a: VideoAnalysis): JsonNode {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildProbeArgv",
+    "kind": "skProc",
+    "code": "proc buildProbeArgv(path: string): seq[string] {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "buildSampleFramesArgv",
+    "kind": "skProc",
+    "code": "proc buildSampleFramesArgv(path: string; fps: float; scaleW: int;\n                           outPattern: string): seq[string] {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "contactSheet",
+    "kind": "skProc",
+    "code": "proc contactSheet(path: string; outPng: string; cols = 0) {.raises: [\n    VideoAnalysisError, OSError, IOError, ValueError, KeyError, ImageMathError,\n    MediaCompositionError, OcrError, OSError, IOError, ValueError,\n    VideoAnalysisError], tags: [ReadDirEffect, ReadEnvEffect, ReadIOEffect,\n                                ExecIOEffect, RootEffect, TimeEffect,\n                                WriteIOEffect, WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "containsText",
+    "kind": "skProc",
+    "code": "proc containsText(a: VideoAnalysis; needle: string; caseInsensitive = true): bool {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "dedupeConsecutive",
+    "kind": "skProc",
+    "code": "proc dedupeConsecutive(a: VideoAnalysis; hashes: seq[uint64]; maxDist = 6): VideoAnalysis {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "distinctStateCount",
+    "kind": "skProc",
+    "code": "proc distinctStateCount(a: VideoAnalysis): int {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "extractFrameTo",
+    "kind": "skProc",
+    "code": "proc extractFrameTo(path: string; t: float; outPng: string) {.\n    raises: [VideoAnalysisError, OSError, IOError, ValueError], tags: [\n    ReadDirEffect, ReadEnvEffect, ExecIOEffect, RootEffect, ReadIOEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "extractUrls",
+    "kind": "skProc",
+    "code": "proc extractUrls(text: string): seq[string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "findInIndex",
+    "kind": "skProc",
+    "code": "proc findInIndex(index: JsonNode; query: string; regex = false): seq[JsonNode] {.\n    raises: [KeyError, RegexError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "locateText",
+    "kind": "skProc",
+    "code": "proc locateText(a: VideoAnalysis; needle: string; caseInsensitive = true): seq[\n    tuple[frame: int, word: OcrWord]] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "parseProbeJson",
+    "kind": "skProc",
+    "code": "proc parseProbeJson(jsonText: string): VideoInfo {.\n    raises: [IOError, OSError, ValueError, VideoAnalysisError, KeyError],\n    tags: [ReadIOEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "probeVideo",
+    "kind": "skProc",
+    "code": "proc probeVideo(path: string): VideoInfo {.\n    raises: [VideoAnalysisError, OSError, IOError, ValueError, KeyError], tags: [\n    ReadDirEffect, ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "seenUrl",
+    "kind": "skProc",
+    "code": "proc seenUrl(a: VideoAnalysis; substr: string): bool {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "segmentBoundaries",
+    "kind": "skProc",
+    "code": "proc segmentBoundaries(ssims: seq[float]; threshold: float): seq[int] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "segmentByChange",
+    "kind": "skProc",
+    "code": "proc segmentByChange(path: string; sampleFps = 2.0; scaleW = 320;\n                     ssimThreshold = 0.12; useLocal = true; gridX = 4;\n                     gridY = 4; localThreshold = 0.35): seq[\n    tuple[tStart, tEnd, changeScore: float]] {.raises: [VideoAnalysisError,\n    OSError, IOError, OSError, IOError, ValueError, VideoAnalysisError,\n    ImageMathError, MediaCompositionError], tags: [ReadDirEffect, ReadEnvEffect,\n    ReadIOEffect, WriteDirEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "textDiff",
+    "kind": "skProc",
+    "code": "proc textDiff(prevText, curText: string): string {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "textInRegion",
+    "kind": "skProc",
+    "code": "proc textInRegion(a: VideoAnalysis; frame: int; x, y, w, h: int; needle: string;\n                  caseInsensitive = true): bool {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "toDigest",
+    "kind": "skProc",
+    "code": "proc toDigest(a: VideoAnalysis): string {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "toJson",
+    "kind": "skProc",
+    "code": "proc toJson(a: VideoAnalysis): JsonNode {.raises: [KeyError], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "wordsToReadingOrderText",
+    "kind": "skProc",
+    "code": "proc wordsToReadingOrderText(words: seq[OcrWord]): string {.raises: [KeyError],\n    tags: [], forbids: [].}"
+  }
+]

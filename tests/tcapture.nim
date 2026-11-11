@@ -4,8 +4,8 @@
 ##
 ##   nim c -r --hints:off tests/tcapture.nim
 ##
-## Live macOS background capture (mirrors agent-harbor's
-## `verify_macos_background_capture`):
+## Live macOS background capture (records the screen in the background for
+## a few seconds and checks the resulting file):
 ##
 ##   nim c -d:captureLive -r --hints:off tests/tcapture.nim
 ##
@@ -18,14 +18,17 @@ import std/[options, strutils, unittest]
 
 import ../src/gui_assert/capture
 
+when defined(linux):
+  import std/os
+
 when defined(macosx) and defined(captureLive):
   import std/[json, os, osproc, streams, strtabs]
-  import ../src/gui_assert/media
+  import ../src/gui_assert/ffmpeg_tools
 
 # ---------------------------------------------------------------------------
 # Sample stderr output from `ffmpeg -f avfoundation -list_devices true -i ""`.
-# Copied from agent-harbor's capture.rs test fixture so the two
-# implementations stay byte-identical.
+# A representative device listing, so the parser is tested against the
+# exact format ffmpeg prints.
 # ---------------------------------------------------------------------------
 
 const FFMPEG_AVFOUNDATION_SAMPLE = """
@@ -67,16 +70,30 @@ proc valueAfter(argv: seq[string], tok: string): string =
 suite "capture: backend resolution":
 
   test "resolveBackend(cbAuto) maps to the current OS default":
-    let r = resolveBackend(cbAuto)
     when defined(macosx):
-      check r == rbAvfoundation
+      check resolveBackend(cbAuto) == rbAvfoundation
     elif defined(windows):
-      check r == rbDdagrab
+      check resolveBackend(cbAuto) == rbDdagrab
     elif defined(linux):
-      # On Linux the result depends on env. Any of the linux backends is
-      # acceptable; if neither WAYLAND_DISPLAY nor DISPLAY is set the
-      # resolver raises and we'd not reach here.
-      check (r == rbWfRecorder or r == rbX11Grab)
+      # On Linux the default follows the session's display variables, so the
+      # test sets each combination itself instead of depending on whether the
+      # host running it (a headless CI runner, a desktop) has a display:
+      # WAYLAND_DISPLAY wins over DISPLAY, and with neither the resolver
+      # refuses rather than guessing. The caller's values are restored.
+      let saved = [("WAYLAND_DISPLAY", getEnv("WAYLAND_DISPLAY"),
+                    existsEnv("WAYLAND_DISPLAY")),
+                   ("DISPLAY", getEnv("DISPLAY"), existsEnv("DISPLAY"))]
+      try:
+        putEnv("WAYLAND_DISPLAY", "wayland-test"); putEnv("DISPLAY", ":99")
+        check resolveBackend(cbAuto) == rbWfRecorder
+        delEnv("WAYLAND_DISPLAY")
+        check resolveBackend(cbAuto) == rbX11Grab
+        delEnv("DISPLAY")
+        expect CaptureError:
+          discard resolveBackend(cbAuto)
+      finally:
+        for (name, value, present) in saved:
+          if present: putEnv(name, value) else: delEnv(name)
 
   test "resolveBackend rejects an OS-incompatible explicit choice":
     when defined(linux):

@@ -8,9 +8,9 @@
 ## *overshoots* the target and settles back, and they *pause* before committing
 ## an action (the "send window").
 ##
-## This module reimplements those three ideas — borrowed from agent-harbor's
-## `ah-automation-pacing` crate (log-normal keystroke delays, Bézier mouse
-## motion with overshoot, idle/send-window pacing) — in pure Nim.
+## This module models those three behaviours in pure Nim: log-normal
+## keystroke delays, Bézier mouse motion with overshoot, and idle/send-window
+## pauses.
 ##
 ## ### Determinism
 ##

@@ -1,0 +1,52 @@
+[
+  {
+    "name": "GrayImage",
+    "kind": "skType",
+    "code": "GrayImage = object\n  width*: int\n  height*: int\n  pixels*: string"
+  },
+  {
+    "name": "ImageMathError",
+    "kind": "skType",
+    "code": "ImageMathError = object of CatchableError"
+  },
+  {
+    "name": "computeSsim",
+    "kind": "skProc",
+    "code": "proc computeSsim(a, b: GrayImage): float {.raises: [ImageMathError], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "dctHash",
+    "kind": "skProc",
+    "code": "proc dctHash(img: GrayImage): uint64 {.raises: [ImageMathError], tags: [],\n                                       forbids: [].}"
+  },
+  {
+    "name": "decodeGray",
+    "kind": "skProc",
+    "code": "proc decodeGray(path: string): GrayImage {.raises: [ImageMathError,\n    MediaCompositionError, OSError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "edgeChangeRatio",
+    "kind": "skProc",
+    "code": "proc edgeChangeRatio(a, b: GrayImage; threshold = 32): float {.\n    raises: [ImageMathError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "hammingDistance",
+    "kind": "skProc",
+    "code": "proc hammingDistance(a, b: uint64): int {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "probeImageSize",
+    "kind": "skProc",
+    "code": "proc probeImageSize(path: string): tuple[width, height: int] {.raises: [\n    ImageMathError, MediaCompositionError, OSError, IOError, ValueError,\n    ImageMathError], tags: [ReadDirEffect, ReadEnvEffect, ReadIOEffect,\n                            ExecIOEffect, RootEffect, TimeEffect, WriteIOEffect],\n    forbids: [].}"
+  },
+  {
+    "name": "ssimFromPaths",
+    "kind": "skProc",
+    "code": "proc ssimFromPaths(a, b: string): float {.raises: [ImageMathError,\n    MediaCompositionError, OSError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "tiledSsim",
+    "kind": "skProc",
+    "code": "proc tiledSsim(a, b: GrayImage; gridX = 4; gridY = 4): tuple[minLocal: float,\n    meanLocal: float] {.raises: [ImageMathError], tags: [], forbids: [].}"
+  }
+]

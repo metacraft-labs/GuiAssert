@@ -9,7 +9,7 @@
 ## A second suite, gated behind `-d:appiumLive`, talks to a real Appium
 ## server at `$APPIUM_URL` (or `http://127.0.0.1:4723` by default).
 
-import std/[json, net, options, os, strutils, unittest]
+import std/[atomics, json, nativesockets, net, options, os, strutils, unittest]
 import ../src/gui_assert/appium
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ type
     sock: Socket
     port: int
     requests: seq[Recorded]
-    stopping: bool
+    stopping: Atomic[bool]
 
 var mockState {.threadvar.}: ptr MockState
 
@@ -132,8 +132,16 @@ proc handleClient(state: ptr MockState, client: Socket) =
   client.close()
 
 proc mockServerThread(state: ptr MockState) {.thread.} =
-  while not state[].stopping:
+  while not state[].stopping.load():
     try:
+      # Poll only the owned listener so a failed wake connection still permits
+      # cleanup. This does not bound or shorten any protocol assertion.
+      var readable = @[state[].sock.getFd()]
+      let ready = selectRead(readable, timeout = 100)
+      if ready < 0:
+        raiseOSError(osLastError())
+      if ready == 0 or state[].stopping.load():
+        continue
       var client: Socket
       state[].sock.accept(client)
       handleClient(state, client)
@@ -154,15 +162,28 @@ proc startMockServer(state: ptr MockState): Thread[ptr MockState] =
   state[].sock.bindAddr(Port(port), "127.0.0.1")
   state[].sock.listen()
   state[].port = port
-  state[].stopping = false
+  state[].stopping.store(false)
   state[].requests = @[]
   createThread(result, mockServerThread, state)
 
 proc stopMockServer(state: ptr MockState, th: var Thread[ptr MockState]) =
-  state[].stopping = true
-  try: state[].sock.close() except CatchableError: discard
-  # The accept call will fail with OSError and the thread exits.
+  ## Stops the worker and waits for it. Closing the listening socket is not
+  ## enough to stop it: on Linux, close(2) on a socket another thread is
+  ## blocked in accept(2) on does not wake that thread (macOS does wake it,
+  ## with an error), so the join would wait forever. One connection of our
+  ## own wakes the accept on every platform; the worker reads EOF, closes it
+  ## and, seeing `stopping`, leaves its loop. Only then is the socket closed.
+  ## The wake connect is bounded by a timeout, and a failure to connect is not
+  ## fatal: the worker may already have left accept, and the join still runs.
+  state[].stopping.store(true)
+  try:
+    let waker = newSocket()
+    defer: waker.close()
+    waker.connect("127.0.0.1", Port(state[].port), timeout = 1000)
+  except CatchableError:
+    discard # the worker already left accept (e.g. it failed and exited)
   joinThread(th)
+  try: state[].sock.close() except CatchableError: discard
 
 suite "appium HTTP wire protocol against mock server":
 

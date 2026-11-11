@@ -1,0 +1,192 @@
+[
+  {
+    "name": "CaptureStatus",
+    "kind": "skType",
+    "code": "CaptureStatus = enum\n  csOk,                     ## capture succeeded\n  csUsage,                  ## the helper was invoked wrongly (a GuiAssert bug)\n  csTargetNotFound,         ## the window list was readable; nothing matched\n  csDenied,                 ## TCC refused this code\n  csCaptureFailed,          ## ScreenCaptureKit failed for another reason\n  csWriteFailed,            ## the image could not be written\n  csTimeout,                ## the capture did not answer in time\n  csUnknown                  ## unparseable report"
+  },
+  {
+    "name": "StillCaptureDenied",
+    "kind": "skType",
+    "code": "StillCaptureDenied = object of StillCaptureError"
+  },
+  {
+    "name": "StillCaptureError",
+    "kind": "skType",
+    "code": "StillCaptureError = object of CatchableError\n  report*: StillCaptureReport"
+  },
+  {
+    "name": "StillCaptureReport",
+    "kind": "skType",
+    "code": "StillCaptureReport = object\n  status*: CaptureStatus\n  code*: int\n  mode*: string\n  outPath*: string\n  width*, height*: int\n  scale*: float\n  windowsSeen*: int\n  titlesVisible*: bool\n  preflight*: bool\n  candidates*: int\n  windowId*: int\n  windowOwner*: string\n  windowTitle*: string\n  windowBounds*: array[4, int]\n  granted*: bool\n  message*: string\n  raw*: string               ## the report file verbatim, for diagnostics"
+  },
+  {
+    "name": "StillCaptureTargetNotFound",
+    "kind": "skType",
+    "code": "StillCaptureTargetNotFound = object of StillCaptureError"
+  },
+  {
+    "name": "StillCaptureUnavailable",
+    "kind": "skType",
+    "code": "StillCaptureUnavailable = object of CatchableError"
+  },
+  {
+    "name": "WindowInfo",
+    "kind": "skType",
+    "code": "WindowInfo = object\n  windowId*: int\n  ownerPid*: int\n  ownerName*: string\n  title*: string\n  bounds*: array[4, int]     ## [x, y, w, h] in points, top-left origin\n  layer*: int\n  onScreen*: bool"
+  },
+  {
+    "name": "WindowQuery",
+    "kind": "skType",
+    "code": "WindowQuery = object\n  windowId*: int             ## CoreGraphics window number; 0 means \"unset\"\n  owner*: string             ## `kCGWindowOwnerName`, case-insensitive exact\n  title*: string             ## exact `kCGWindowName`\n  titleContains*: string     ## case-insensitive substring of `kCGWindowName`\n  anyLayer*: bool            ## include non-zero window layers (panels, HUDs)\n  includeOffscreen*: bool    ## include windows that are not on screen"
+  },
+  {
+    "name": "buildHelperArgv",
+    "kind": "skProc",
+    "code": "proc buildHelperArgv(mode: string; outPath = \"\"; q = initWindowQuery();\n                     displayIndex = 0; timeoutMs = 20000; reportPath = \"\"): seq[\n    string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "captureAppDir",
+    "kind": "skProc",
+    "code": "proc captureAppDir(): string {.raises: [], tags: [ReadEnvEffect, ReadIOEffect],\n                               forbids: [].}"
+  },
+  {
+    "name": "captureAppPath",
+    "kind": "skProc",
+    "code": "proc captureAppPath(): string {.raises: [], tags: [ReadEnvEffect, ReadIOEffect],\n                                forbids: [].}"
+  },
+  {
+    "name": "captureBundleId",
+    "kind": "skProc",
+    "code": "proc captureBundleId(): string {.raises: [], tags: [ReadEnvEffect], forbids: [].}"
+  },
+  {
+    "name": "captureDisplayStill",
+    "kind": "skProc",
+    "code": "proc captureDisplayStill(outPath: string; displayIndex = 0; timeoutMs = 30000): StillCaptureReport {.\n    discardable, raises: [ValueError, OSError, IOError, StillCaptureUnavailable,\n                          StillCaptureDenied, StillCaptureTargetNotFound,\n                          StillCaptureError], tags: [WriteDirEffect,\n    ReadDirEffect, ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "captureHelperBinName",
+    "kind": "skConst",
+    "code": "captureHelperBinName = \"screen_capture\""
+  },
+  {
+    "name": "captureHelperCacheName",
+    "kind": "skConst",
+    "code": "captureHelperCacheName = \"gui_assert_screen_capture_helper\""
+  },
+  {
+    "name": "captureHelperSource",
+    "kind": "skProc",
+    "code": "proc captureHelperSource(): string {.raises: [], tags: [ReadEnvEffect],\n                                     forbids: [].}"
+  },
+  {
+    "name": "captureInfoPlist",
+    "kind": "skProc",
+    "code": "proc captureInfoPlist(bundleId: string): string {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "captureWindowStill",
+    "kind": "skProc",
+    "code": "proc captureWindowStill(outPath: string; q: WindowQuery; timeoutMs = 30000): StillCaptureReport {.\n    discardable, raises: [ValueError, OSError, IOError, StillCaptureUnavailable,\n                          StillCaptureDenied, StillCaptureTargetNotFound,\n                          StillCaptureError], tags: [WriteDirEffect,\n    ReadDirEffect, ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "defaultCaptureAppName",
+    "kind": "skConst",
+    "code": "defaultCaptureAppName = \"GuiAssertCapture.app\""
+  },
+  {
+    "name": "defaultCaptureBundleId",
+    "kind": "skConst",
+    "code": "defaultCaptureBundleId = \"com.metacraft-labs.guiassert.capture\""
+  },
+  {
+    "name": "designatedRequirement",
+    "kind": "skProc",
+    "code": "proc designatedRequirement(appPath: string): string {.\n    raises: [IOError, ValueError, OSError], tags: [ExecIOEffect, ReadEnvEffect,\n    RootEffect, TimeEffect, WriteIOEffect, ReadIOEffect], forbids: [].}"
+  },
+  {
+    "name": "detectSigningIdentity",
+    "kind": "skProc",
+    "code": "proc detectSigningIdentity(): string {.raises: [IOError, ValueError, OSError], tags: [\n    ReadEnvEffect, ExecIOEffect, RootEffect, TimeEffect, WriteIOEffect,\n    ReadIOEffect], forbids: [].}"
+  },
+  {
+    "name": "ensureCaptureApp",
+    "kind": "skProc",
+    "code": "proc ensureCaptureApp(force = false): string {.raises: [StillCaptureUnavailable,\n    ValueError, OSError, IOError, IOError, StillCaptureUnavailable], tags: [\n    ReadEnvEffect, ReadDirEffect, ReadIOEffect, WriteDirEffect, ExecIOEffect,\n    RootEffect, TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "grantInstructions",
+    "kind": "skProc",
+    "code": "proc grantInstructions(appPath = \"\"): string {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "initWindowQuery",
+    "kind": "skProc",
+    "code": "proc initWindowQuery(windowId = 0; owner = \"\"; title = \"\"; titleContains = \"\";\n                     anyLayer = false; includeOffscreen = false): WindowQuery {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "isEmpty",
+    "kind": "skProc",
+    "code": "proc isEmpty(q: WindowQuery): bool {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "listWindows",
+    "kind": "skProc",
+    "code": "proc listWindows(q = initWindowQuery(); viaApp = false; timeoutMs = 30000): seq[\n    WindowInfo] {.raises: [OSError, IOError, StillCaptureUnavailable,\n                           ValueError, StillCaptureDenied,\n                           StillCaptureTargetNotFound, StillCaptureError], tags: [\n    ReadEnvEffect, ReadIOEffect, WriteDirEffect, ReadDirEffect, ExecIOEffect,\n    RootEffect, TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "matchWindows",
+    "kind": "skProc",
+    "code": "proc matchWindows(windows: seq[WindowInfo]; q: WindowQuery): seq[WindowInfo] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "newDisplayFrameSource",
+    "kind": "skProc",
+    "code": "proc newDisplayFrameSource(dir = \"\"; displayIndex = 0; timeoutMs = 30000): proc (): string {.\n    closure.} {.raises: [OSError, IOError], tags: [ReadEnvEffect, ReadIOEffect,\n    WriteDirEffect, ReadDirEffect], forbids: [].}"
+  },
+  {
+    "name": "newWindowFrameSource",
+    "kind": "skProc",
+    "code": "proc newWindowFrameSource(q: WindowQuery; dir = \"\"; timeoutMs = 30000): proc (): string {.\n    closure.} {.raises: [OSError, IOError], tags: [ReadEnvEffect, ReadIOEffect,\n    WriteDirEffect, ReadDirEffect], forbids: [].}"
+  },
+  {
+    "name": "parseCaptureReport",
+    "kind": "skProc",
+    "code": "proc parseCaptureReport(text: string): StillCaptureReport {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "parseWindowListTsv",
+    "kind": "skProc",
+    "code": "proc parseWindowListTsv(text: string): seq[WindowInfo] {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "requestScreenCaptureAccess",
+    "kind": "skProc",
+    "code": "proc requestScreenCaptureAccess(timeoutMs = 120000): StillCaptureReport {.\n    raises: [OSError, IOError, StillCaptureUnavailable, ValueError], tags: [\n    ReadEnvEffect, ReadIOEffect, WriteDirEffect, ReadDirEffect, ExecIOEffect,\n    RootEffect, TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "resolveCaptureHelper",
+    "kind": "skProc",
+    "code": "proc resolveCaptureHelper(): string {.raises: [StillCaptureUnavailable,\n    ValueError, OSError, IOError, StillCaptureUnavailable], tags: [\n    ReadEnvEffect, ReadDirEffect, ReadIOEffect, WriteDirEffect, ExecIOEffect,\n    RootEffect, TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "satisfiesRequirement",
+    "kind": "skProc",
+    "code": "proc satisfiesRequirement(appPath, requirement: string): bool {.\n    raises: [IOError, ValueError, OSError], tags: [ExecIOEffect, ReadEnvEffect,\n    RootEffect, TimeEffect, WriteIOEffect, ReadIOEffect], forbids: [].}"
+  },
+  {
+    "name": "screenCapturePreflight",
+    "kind": "skProc",
+    "code": "proc screenCapturePreflight(viaApp = true; timeoutMs = 30000): StillCaptureReport {.\n    raises: [OSError, IOError, StillCaptureUnavailable, ValueError], tags: [\n    ReadEnvEffect, ReadIOEffect, WriteDirEffect, ReadDirEffect, ExecIOEffect,\n    RootEffect, TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "statusFromLabel",
+    "kind": "skProc",
+    "code": "proc statusFromLabel(label: string): CaptureStatus {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "stillCaptureProbablyAvailable",
+    "kind": "skProc",
+    "code": "proc stillCaptureProbablyAvailable(): bool {.raises: [OSError],\n    tags: [ReadEnvEffect, ReadDirEffect, ReadIOEffect], forbids: [].}"
+  }
+]

@@ -1,0 +1,102 @@
+[
+  {
+    "name": "DetectedElement",
+    "kind": "skType",
+    "code": "DetectedElement = object\n  label*: string             ## semantic label, e.g. \"Save button\"\n  kind*: string              ## coarse element kind, e.g. \"button\" / \"text\"\n  confidence*: float         ## detector confidence (0..100)\n  bbox*: array[4, int]       ## [x, y, w, h] in pixels"
+  },
+  {
+    "name": "ElementBackend",
+    "kind": "skType",
+    "code": "ElementBackend = enum\n  ebNone,                   ## No element detection; returns an empty seq.\n  ebOmniParser               ## OmniParser-class ONNX detector (requires pinned weights)."
+  },
+  {
+    "name": "OcrBackend",
+    "kind": "skType",
+    "code": "OcrBackend = enum\n  obTesseract,              ## Tesseract via `runOcrEx` — the reproducible DEFAULT.\n  obAppleVision,            ## macOS Vision (`VNRecognizeTextRequest`) via bundled helper.\n  obRapidOcr                 ## RapidOCR / PP-OCR ONNX runner (external, opt-in)."
+  },
+  {
+    "name": "OcrBackendUnavailable",
+    "kind": "skType",
+    "code": "OcrBackendUnavailable = object of CatchableError"
+  },
+  {
+    "name": "OcrError",
+    "kind": "skType",
+    "code": "OcrError = object of CatchableError"
+  },
+  {
+    "name": "OcrInvert",
+    "kind": "skType",
+    "code": "OcrInvert = enum\n  oiAuto,                   ## decide from region mean luma (invert dark backgrounds)\n  oiNever,                  ## never invert\n  oiAlways                   ## always invert (`ffmpeg negate`)"
+  },
+  {
+    "name": "OcrOptions",
+    "kind": "skType",
+    "code": "OcrOptions = object\n  psm*: int                  ## tesseract page-segmentation mode (default 6)\n  upscale*: float            ## Lanczos upscale factor before OCR (default 1.0)\n  invert*: OcrInvert         ## dark-mode inversion policy (default oiAuto)\n  contrast*: bool            ## apply a light contrast stretch (default false)"
+  },
+  {
+    "name": "OcrWord",
+    "kind": "skType",
+    "code": "OcrWord = object\n  text*: string\n  confidence*: float\n  bbox*: array[4, int]       ## [x, y, w, h] in pixels\n  lineNum*: int\n  blockNum*: int"
+  },
+  {
+    "name": "autoInvertLumaThreshold",
+    "kind": "skConst",
+    "code": "autoInvertLumaThreshold = 110.0"
+  },
+  {
+    "name": "availableBackends",
+    "kind": "skProc",
+    "code": "proc availableBackends(): seq[OcrBackend] {.raises: [OSError],\n    tags: [ReadEnvEffect, ReadDirEffect, ReadIOEffect], forbids: [].}"
+  },
+  {
+    "name": "concatenatedText",
+    "kind": "skProc",
+    "code": "proc concatenatedText(words: seq[OcrWord]): string {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "detectElements",
+    "kind": "skProc",
+    "code": "proc detectElements(imagePath: string; backend: ElementBackend): seq[\n    DetectedElement] {.raises: [OcrBackendUnavailable], tags: [], forbids: [].}"
+  },
+  {
+    "name": "initOcrOptions",
+    "kind": "skProc",
+    "code": "proc initOcrOptions(psm = 6; upscale = 1.0; invert = oiAuto; contrast = false): OcrOptions {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "resolveAppleVisionHelper",
+    "kind": "skProc",
+    "code": "proc resolveAppleVisionHelper(): string {.raises: [OcrBackendUnavailable,\n    ValueError, OSError, IOError, OcrBackendUnavailable], tags: [ReadEnvEffect,\n    ReadDirEffect, ReadIOEffect, WriteDirEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "resolveTesseractBinary",
+    "kind": "skProc",
+    "code": "proc resolveTesseractBinary(): string {.raises: [OcrError, OSError], tags: [\n    ReadEnvEffect, ReadDirEffect, ReadIOEffect], forbids: [].}"
+  },
+  {
+    "name": "runOcr",
+    "kind": "skProc",
+    "code": "proc runOcr(imagePath: string): seq[OcrWord] {.\n    raises: [OcrError, OSError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "runOcrBestEffort",
+    "kind": "skProc",
+    "code": "proc runOcrBestEffort(imagePath: string; preferred: seq[OcrBackend];\n                      opts: OcrOptions = initOcrOptions()): seq[OcrWord] {.raises: [\n    OcrError, ImageMathError, MediaCompositionError, OSError, IOError,\n    ValueError, OcrBackendUnavailable], tags: [ReadDirEffect, ReadEnvEffect,\n    ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect, WriteIOEffect,\n    WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "runOcrEx",
+    "kind": "skProc",
+    "code": "proc runOcrEx(imagePath: string; opts: OcrOptions): seq[OcrWord] {.raises: [\n    OcrError, ImageMathError, MediaCompositionError, OSError, IOError,\n    ValueError, OcrError, OSError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect, WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "runOcrMultiPsm",
+    "kind": "skProc",
+    "code": "proc runOcrMultiPsm(imagePath: string; psms: seq[int]; opts: OcrOptions): seq[\n    OcrWord] {.raises: [OcrError, ImageMathError, MediaCompositionError,\n                        OSError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect, WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "runOcrWithBackend",
+    "kind": "skProc",
+    "code": "proc runOcrWithBackend(imagePath: string; backend: OcrBackend;\n                       opts: OcrOptions = initOcrOptions()): seq[OcrWord] {.raises: [\n    OcrError, ImageMathError, MediaCompositionError, OSError, IOError,\n    ValueError, OcrBackendUnavailable], tags: [ReadDirEffect, ReadEnvEffect,\n    ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect, WriteIOEffect,\n    WriteDirEffect], forbids: [].}"
+  }
+]

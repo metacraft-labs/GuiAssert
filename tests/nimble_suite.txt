@@ -1,0 +1,22 @@
+# The `nimble test` unit population. This preserves the package task's
+# pre-runner coverage while scripts/run-default-tests.sh supplies failure and
+# executed-case accounting.
+tnimcache_is_worktree_local
+tgui_assert
+tcapture
+tscreen_capture
+twindow_layout
+tinput
+tpacing
+tvideo_analysis
+tchange_detect
+tvision_windows
+tlayout_tree
+tvision_cli
+tocr_vision
+tocr_backends
+tcore_types
+tcore_contract
+tcore_png
+tcore_purity
+tcore_shims

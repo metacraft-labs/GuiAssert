@@ -1,0 +1,67 @@
+[
+  {
+    "name": "InputError",
+    "kind": "skType",
+    "code": "InputError = object of CatchableError"
+  },
+  {
+    "name": "KeyModifier",
+    "kind": "skType",
+    "code": "KeyModifier = enum\n  modCommand,               ## the Command (⌘) key  -> \"command down\"\n  modOption,                ## the Option/Alt (⌥) key -> \"option down\"\n  modControl,               ## the Control (⌃) key  -> \"control down\"\n  modShift                   ## the Shift (⇧) key    -> \"shift down\""
+  },
+  {
+    "name": "buildKeyCodeScript",
+    "kind": "skProc",
+    "code": "proc buildKeyCodeScript(code: int; modifiers: set[KeyModifier] = {}): string {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildKeyStrokeScript",
+    "kind": "skProc",
+    "code": "proc buildKeyStrokeScript(key: string; modifiers: set[KeyModifier] = {}): string {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildModifierClause",
+    "kind": "skProc",
+    "code": "proc buildModifierClause(modifiers: set[KeyModifier]): string {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildTypeTextScript",
+    "kind": "skProc",
+    "code": "proc buildTypeTextScript(text: string): string {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "keyCode",
+    "kind": "skProc",
+    "code": "proc keyCode(code: int; modifiers: set[KeyModifier] = {}) {.\n    raises: [OSError, InputError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "keyCodeFor",
+    "kind": "skProc",
+    "code": "proc keyCodeFor(name: string): int {.raises: [InputError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "keyNamed",
+    "kind": "skProc",
+    "code": "proc keyNamed(name: string; modifiers: set[KeyModifier] = {}) {.\n    raises: [OSError, InputError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "keyStroke",
+    "kind": "skProc",
+    "code": "proc keyStroke(key: string; modifiers: set[KeyModifier] = {}) {.\n    raises: [OSError, InputError, IOError, ValueError], tags: [ReadDirEffect,\n    ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "mouseClick",
+    "kind": "skProc",
+    "code": "proc mouseClick(x, y: int) {.raises: [InputError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "mouseMove",
+    "kind": "skProc",
+    "code": "proc mouseMove(x, y: int) {.raises: [InputError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "typeText",
+    "kind": "skProc",
+    "code": "proc typeText(text: string) {.raises: [OSError, InputError, IOError, ValueError], tags: [\n    ReadDirEffect, ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect], forbids: [].}"
+  }
+]
