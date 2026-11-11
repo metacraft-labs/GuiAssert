@@ -68,12 +68,9 @@ jobs:
       # Configures nix.conf unconditionally and verifies the experimental
       # features are live (cachix/install-nix-action silently no-ops on these
       # runner classes; see ci-workflow-standards.md, "Nix-Based Projects").
+      # setup-nix already configures the metacraft-labs cache as a substituter
+      # (its `substituters` default), so no separate cachix step is needed.
       - uses: metacraft-labs/devops-modules/.github/setup-nix@dev
-
-      - uses: cachix/cachix-action@v15
-        with:
-          name: metacraft-labs
-          skipPush: true
 
       - name: Lint
         shell: bash
