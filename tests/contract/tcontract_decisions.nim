@@ -598,7 +598,7 @@ suite "contract 1.0 decisions":
       let hostsAlive = sessionHostsOf(st)
       if hostsAlive != 0:
         echo "live session-host processes for ", st, ":"
-        echo execCmdEx("ps -ef | grep -F __session-host | grep -v grep")[0]
+        echo execCmdEx("pgrep -fl " & quoteShell("__session-host --state-dir " & st))[0]
       check hostsAlive == 0
     discard failure(@["session-start", "--kind", "headless"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "sometimes"}), 2, "invalid-value")
