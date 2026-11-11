@@ -278,7 +278,18 @@ when defined(linux):
     result.p = startProcess(exe, args = ["--session", "--nofork", "--print-address",
                                          "--address=" & address], options = {})
     var line = ""
-    doAssert result.p.outputStream.readLine(line), "dbus-daemon did not start"
+    let started = result.p.outputStream.readLine(line)
+    # A daemon that exits before printing its address writes the reason to
+    # stderr, which startProcess pipes rather than inherits. Read it here so
+    # the failure names the cause instead of only "did not start". The wait is
+    # bounded and the daemon is terminated first, so the read cannot block.
+    var why = ""
+    if not started:
+      if result.p.waitForExit(3000) < 0:
+        result.p.terminate()
+        discard result.p.waitForExit(3000)
+      why = result.p.errorStream.readAll().strip()
+    doAssert started, "dbus-daemon did not start: " & (if why.len > 0: why else: "no stderr")
 
   proc stop(d: var Daemon) =
     if d.p != nil:
