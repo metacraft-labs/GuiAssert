@@ -77,6 +77,19 @@ suite "plans":
     check planScroll(point(1, 2), 0, -25, suPixel).lines ==
       @["move 1 2", "scroll v -25 pixel"]
 
+  test "test_gesture_plan_turns_the_wheel_inside_held_keys":
+    # Shift+wheel: the key goes down, the wheel turns at its point, the key
+    # comes up — one script, so the application sees the wheel with Shift
+    let ops = planGesture(@[GestureStep(kind: gsKeyDown, combo: "shift"),
+                            GestureStep(kind: gsScroll, wheelAt: point(3, 4), dx: 0, dy: 2,
+                                        unit: suLine),
+                            GestureStep(kind: gsKeyUp, combo: "shift")])
+    check ops.lines == @["key 0x0000ffe1 down", "move 3 4", "scroll v 2 line",
+                         "key 0x0000ffe1 up"]
+    let r = gestureReport("s", @[GestureStep(kind: gsScroll, wheelAt: point(3, 4), dx: -1,
+                                             dy: 0, unit: suLine)])
+    check r.path == some(@[point(3, 4)])
+
   test "test_type_plan_is_keysyms_and_refuses_control_characters":
     check typedKeysyms("aZ é中") ==
       @[0x61'u32, 0x5a, 0x20, 0xe9, 0x0100_4e2d]

@@ -164,7 +164,7 @@ type
 
   GestureStepKind* = enum
     gsMove = "move", gsPress = "press", gsRelease = "release",
-    gsKeyDown = "key-down", gsKeyUp = "key-up", gsWait = "wait"
+    gsKeyDown = "key-down", gsKeyUp = "key-up", gsWait = "wait", gsScroll = "scroll"
 
   GestureStep* = object
     ## One step of a `gesture`.
@@ -175,6 +175,12 @@ type
       button*: MouseButton
     of gsKeyDown, gsKeyUp: combo*: string   ## normalized; a bare modifier is allowed
     of gsWait: ms*: int
+    of gsScroll:
+      ## the wheel turned at a point, as the `scroll` verb turns it; keys the
+      ## gesture holds are held for it (Shift+wheel)
+      wheelAt*: Point
+      dx*, dy*: int
+      unit*: ScrollUnit
 
   InputBackend* = object
     ## Synthesized input at desktop coordinates. Each operation reports what

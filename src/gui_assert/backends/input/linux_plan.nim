@@ -277,6 +277,7 @@ proc planGesture*(steps: seq[GestureStep]): seq[InputOp] =
       let ks = keysOfCombo(st.combo)
       for i in countdown(ks.high, 0): result.add key(ks[i], false)
     of gsWait: result.add wait(st.ms)
+    of gsScroll: result.add planScroll(st.wheelAt, st.dx, st.dy, st.unit)
 
 proc plannedMs*(ops: seq[InputOp]): int =
   ## The time the waits of a plan add up to.
@@ -397,6 +398,7 @@ proc gestureReport*(session: string, steps: seq[GestureStep]): InputReport =
     case st.kind
     of gsMove: pts.add st.to
     of gsPress, gsRelease: pts.add st.at
+    of gsScroll: pts.add st.wheelAt
     else: discard
   if pts.len > 0:
     result.at = some(pts[0])

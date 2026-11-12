@@ -87,6 +87,11 @@ proc newLinuxXtestInput*(cfg: LinuxInputConfig): InputBackend =
       cfg.runPlan(planDrag(path, button, steps, durationMs, modifiers))
       dragReport(session, path, button, modifiers)
     result.gesture = proc (session: string, steps: seq[GestureStep]): InputReport =
+      for st in steps:
+        if st.kind == gsScroll and st.unit == suPixel:
+          raise unavailableWith(linuxXtestName, "unsupported-option",
+            "a gesture's pixel scroll: the X core protocol scrolls in wheel notches only",
+            "scroll with the line unit on X11")
       cfg.runPlan(planGesture(steps))
       gestureReport(session, steps)
     result.scroll = proc (session: string, at: Point, dx, dy: int,
