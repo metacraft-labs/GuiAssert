@@ -28,6 +28,12 @@
 ##   no pixels of the covered part of a window, so `--own-pixels` is refused
 ##   (exit 4 / `unsupported-option`). XGetImage never includes the cursor.
 ##   The helper writes a PPM, which is encoded to PNG by the pure core.
+## * **The pointer's shape** (`x11PointerShape`): the server draws the
+##   pointer itself, so no capture shows it. The helper's `cursor` mode reads
+##   the cursor's image and name through the XFixes extension, and
+##   `pointerShapeOf` names its shape — by the name the client gave it when
+##   there is one (a themed cursor), else from the image's own form (the
+##   core cursor font's glyphs have no names).
 ## * **Recordings.** The helper grabs one XGetImage frame every 1/fps
 ##   seconds and pipes the raw frames into ffmpeg (H.264 in MP4); SIGINT
 ##   ends the grabbing, ffmpeg finalizes the file, and the helper's status
@@ -118,6 +124,160 @@ proc snapshot(cfg: LinuxCaptureConfig): X11Snapshot =
   let r = cfg.runTool(linuxX11Name, @[cfg.helperPath(linuxX11Name, "x11_probe"), "list"])
   if r.code != 0: raise probeFailure(r)
   try: parseX11List(r.output)
+  except ValueError as e: raise captureFailed(linuxX11Name, e.msg)
+
+type
+  PointerImage* = object
+    ## One `x11_probe cursor` answer: the pointer's image as the X server
+    ## draws it.
+    name*: string                ## the cursor's name, "" when it has none
+    serial*: int
+    width*, height*, xhot*, yhot*: int
+    at*: Point                   ## where the pointer is, screen pixels
+    mask*: seq[string]           ## the image's opaque pixels, `#` per pixel
+
+proc parsePointerImage*(text: string): PointerImage =
+  ## The image of an `x11_probe cursor` line. Raises `ValueError`.
+  var j: JsonNode
+  try: j = parseJson(text)
+  except JsonParsingError as e:
+    raise newException(ValueError, "x11_probe's cursor answer is not JSON: " & e.msg)
+  if j.kind != JObject or not j.hasKey("mask"):
+    raise newException(ValueError, "x11_probe's cursor answer has no image")
+  result = PointerImage(name: j{"name"}.getStr(""), serial: j{"serial"}.getInt,
+                        width: j{"width"}.getInt, height: j{"height"}.getInt,
+                        xhot: j{"xhot"}.getInt, yhot: j{"yhot"}.getInt,
+                        at: Point(x: j{"x"}.getInt, y: j{"y"}.getInt))
+  for row in j["mask"]: result.mask.add row.getStr
+
+const pointerNames = {
+  # CSS cursor names (the ones toolkits ask a theme for) and the X core
+  # cursor font's, as the shape a pointer-affordance check names them
+  "default": "default", "left_ptr": "default", "arrow": "default",
+  "top_left_arrow": "default", "left_arrow": "default",
+  "pointer": "pointer", "hand": "pointer", "hand1": "pointer", "hand2": "pointer",
+  "pointing_hand": "pointer",
+  "text": "text", "xterm": "text", "ibeam": "text", "vertical-text": "text",
+  "col-resize": "col-resize", "ew-resize": "col-resize", "sb_h_double_arrow": "col-resize",
+  "split_h": "col-resize", "h_double_arrow": "col-resize", "e-resize": "col-resize",
+  "w-resize": "col-resize",
+  "row-resize": "row-resize", "ns-resize": "row-resize", "sb_v_double_arrow": "row-resize",
+  "split_v": "row-resize", "v_double_arrow": "row-resize", "n-resize": "row-resize",
+  "s-resize": "row-resize",
+  "grab": "grab", "openhand": "grab", "fleur": "grab", "move": "grab", "all-scroll": "grab",
+  "grabbing": "grabbing", "closedhand": "grabbing", "dnd-move": "grabbing",
+  "not-allowed": "not-allowed", "crossed_circle": "not-allowed", "no-drop": "not-allowed",
+  "circle": "not-allowed",
+  "wait": "wait", "watch": "wait", "progress": "wait", "left_ptr_watch": "wait",
+  "crosshair": "crosshair", "cross": "crosshair", "tcross": "crosshair"}.toOrderedTable
+
+proc xcursorImage*(path: string; size: int): Option[PointerImage] =
+  ## The image an Xcursor file (a theme's `cursors/<name>`,
+  ## https://www.x.org/releases/current/doc/man/man3/Xcursor.3.xhtml) holds
+  ## at the nominal size nearest `size`: its mask (`#` where at least half
+  ## opaque) and hot spot, as `x11_probe cursor` reports a live one. none()
+  ## for a file that is not one.
+  var d: string
+  try: d = readFile(path)
+  except IOError: return none(PointerImage)
+  proc u32(at: int): int =
+    if at + 4 > d.len: return -1
+    int(uint32(ord(d[at])) or (uint32(ord(d[at + 1])) shl 8) or
+        (uint32(ord(d[at + 2])) shl 16) or (uint32(ord(d[at + 3])) shl 24))
+  if d.len < 16 or d[0 .. 3] != "Xcur": return none(PointerImage)
+  let ntoc = u32(8)
+  var best = -1
+  var bestSize = 0
+  for i in 0 ..< ntoc:
+    let e = 16 + 12 * i
+    if u32(e) == 0xfffd0002:
+      let sub = u32(e + 4)
+      if best < 0 or abs(sub - size) < abs(bestSize - size):
+        best = u32(e + 8)
+        bestSize = sub
+  if best < 0: return none(PointerImage)
+  let w = u32(best + 16)
+  let h = u32(best + 20)
+  if w <= 0 or h <= 0 or best + 36 + 4 * w * h > d.len: return none(PointerImage)
+  var r = PointerImage(width: w, height: h, xhot: u32(best + 24), yhot: u32(best + 28))
+  for y in 0 ..< h:
+    var row = newString(w)
+    for x in 0 ..< w:
+      row[x] = (if ord(d[best + 36 + 4 * (y * w + x) + 3]) >= 0x80: '#' else: '.')
+    r.mask.add row
+  some(r)
+
+proc pointerShapeOf*(img: PointerImage): string
+
+proc pointerShapeOf*(img: PointerImage; themeCursors: string): string =
+  ## The pointer's shape, told by the cursor theme it came from: the shape of
+  ## the theme cursor (`themeCursors`, the theme's `cursors` directory) whose
+  ## image and hot spot are the pointer's, in `pointerNames`' order — the
+  ## names a toolkit asks a theme for. A theme draws its own shapes (a column
+  ## resize need not look like any other theme's), so this is exact where
+  ## the image's form alone is a guess; with no theme, or no cursor of it
+  ## matching, it is `pointerShapeOf(img)`.
+  if img.name.len > 0 or themeCursors.len == 0 or not dirExists(themeCursors):
+    return pointerShapeOf(img)
+  for name, shape in pointerNames:
+    let c = xcursorImage(themeCursors / name, img.width)
+    if c.isSome and c.get.width == img.width and c.get.height == img.height and
+       c.get.xhot == img.xhot and c.get.yhot == img.yhot and c.get.mask == img.mask:
+      return shape
+  pointerShapeOf(img)
+
+proc pointerShapeOf*(img: PointerImage): string =
+  ## The pointer's shape: `default`, `pointer`, `text`, `col-resize`,
+  ## `row-resize`, `grab`, `grabbing`, `not-allowed`, `wait`, `crosshair`, or
+  ## "" when neither its name nor its form says. A named cursor is named by
+  ## its name. An unnamed one is told by its opaque pixels and its hot spot,
+  ## which is how the shapes differ in every cursor set: the text beam is a
+  ## narrow upright bar with the hot spot inside it; the arrow points up and
+  ## left with the hot spot at its tip (the opaque area's top-left corner);
+  ## the hand's hot spot is its fingertip, at the top but well inside the
+  ## width; the resize arrows are much wider than tall (or taller than wide)
+  ## with the hot spot in the middle.
+  if pointerNames.hasKey(img.name): return pointerNames[img.name]
+  var x0 = high(int)
+  var y0 = high(int)
+  var x1, y1 = -1
+  for y, row in img.mask:
+    for x, c in row:
+      if c == '#':
+        x0 = min(x0, x)
+        y0 = min(y0, y)
+        x1 = max(x1, x)
+        y1 = max(y1, y)
+  if x1 < 0: return ""
+  let w = x1 - x0 + 1
+  let h = y1 - y0 + 1
+  let hx = img.xhot - x0
+  let hy = img.yhot - y0
+  let centred = abs(hx - w div 2) <= max(2, w div 5) and abs(hy - h div 2) <= max(2, h div 5)
+  if w <= 9 and h >= 2 * w and centred: return "text"
+  if hx <= 2 and hy <= 2: return "default"
+  if w >= 2 * h and centred: return "col-resize"
+  if h >= 2 * w and centred: return "row-resize"
+  if hy <= h div 4 and hx > w div 5 and hx < w - w div 5: return "pointer"
+  if centred and abs(w - h) <= max(2, w div 4):
+    # a cross: its middle row and its middle column run (almost) across it
+    # (the X server's own `X`, the cursor of a window that set none, does not)
+    let my = y0 + h div 2
+    let mx = x0 + w div 2
+    var across, down = 0
+    for x in x0 .. x1:
+      if x < img.mask[my].len and img.mask[my][x] == '#': inc across
+    for y in y0 .. y1:
+      if mx < img.mask[y].len and img.mask[y][mx] == '#': inc down
+    if across * 5 >= w * 4 and down * 5 >= h * 4: return "crosshair"
+  ""
+
+proc x11PointerShape*(cfg: LinuxCaptureConfig): PointerImage =
+  ## The pointer's image on the display `cfg.env` names (module doc).
+  cfg.requireDisplay()
+  let r = cfg.runTool(linuxX11Name, @[cfg.helperPath(linuxX11Name, "x11_probe"), "cursor"])
+  if r.code != 0: raise probeFailure(r)
+  try: parsePointerImage(r.output)
   except ValueError as e: raise captureFailed(linuxX11Name, e.msg)
 
 type Target = object

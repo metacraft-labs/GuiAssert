@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # build.sh <out-dir> — compile GuiAssert's Linux helpers into <out-dir>:
 # `virtual_pointer` and `wm_probe` (the desktop-environment targets),
-# `x11_probe` (the linux-x11 capture backend's enumeration and its live
-# tests' fixture window), `portal_screencast` (the linux-portal-pipewire
+# `x11_probe` (the linux-x11 capture backend's enumeration, the pointer's
+# shape, and its live tests' fixture window), `portal_screencast` (the linux-portal-pipewire
 # capture backend) and `wlr_screencopy` (the linux-wlr capture backend's
 # recorder), and the input backends' `wayland_input` (linux-wlr-virtual,
 # and the keymap reader of linux-mutter), `xtest_input` (linux-xtest) and
@@ -11,7 +11,7 @@
 # Needs the dev shell (`nix develop`): `cc`, `pkg-config`, `wayland-scanner`,
 # libwayland-client, the protocol XML from wayland-protocols and
 # wlr-protocols (and the virtual-keyboard protocol, which no package ships,
-# vendored under protocols/), libxkbcommon, libX11 with libXres and libXtst,
+# vendored under protocols/), libxkbcommon, libX11 with libXres, libXfixes and libXtst,
 # GIO and libpipewire. `gui_assert/desktop_env/helpers`
 # calls this when a helper is missing or older than its source.
 set -euo pipefail
@@ -44,7 +44,7 @@ cc "${flags[@]}" -o "$out/virtual_pointer" "$here/virtual_pointer.c" \
   "$gen/wlr-virtual-pointer-unstable-v1-protocol.c" "${libs[@]}"
 cc "${flags[@]}" -o "$out/wm_probe" "$here/wm_probe.c" \
   "$gen/xdg-shell-protocol.c" "$gen/xdg-decoration-unstable-v1-protocol.c" "${libs[@]}"
-cc "${flags[@]}" -o "$out/x11_probe" "$here/x11_probe.c" $(pkg-config --cflags --libs x11 xres)
+cc "${flags[@]}" -o "$out/x11_probe" "$here/x11_probe.c" $(pkg-config --cflags --libs x11 xres xfixes)
 cc "${flags[@]}" -o "$out/portal_screencast" "$here/portal_screencast.c" \
   $(pkg-config --cflags --libs gio-unix-2.0 libpipewire-0.3) -lpthread
 cc "${flags[@]}" -o "$out/wlr_screencopy" "$here/wlr_screencopy.c" \
