@@ -124,9 +124,12 @@ proc pngSize(path: string): (int, int) =
 proc sessionHostsOf(stateDir: string): int =
   ## How many session-host processes of `stateDir` are alive (zombies excluded).
   when defined(posix):
-    let marker = "__session-host --state-dir " & stateDir
+    # Match the directory's basename: macOS spells /tmp as /private/tmp, so the
+    # host's command line can name the same directory by another path.
+    let stateName = extractFilename(stateDir)
     for row in psRows():
-      if marker in row.args and not row.stat.startsWith("Z"): inc result
+      if "__session-host" in row.args and stateName in row.args and
+         not row.stat.startsWith("Z"): inc result
 
 proc killHost(hostPid: int) =
   when defined(posix):
