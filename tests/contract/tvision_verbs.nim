@@ -599,6 +599,11 @@ suite "vision verbs":
     when defined(posix):
       sleep(300)
       let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      if left.len > 0:
+        # Name each child's state: a zombie (stat Z) is already dead and only
+        # waiting to be reaped, which is different from a live ffmpeg.
+        echo "ffmpeg children still listed after cancel (pid, ppid, stat, comm):"
+        echo execCmdEx("ps -o pid=,ppid=,stat=,comm= -p " & left.splitWhitespace().join(","))[0]
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
@@ -726,6 +731,11 @@ suite "vision verbs":
     when defined(posix):
       sleep(300)
       let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      if left.len > 0:
+        # Name each child's state: a zombie (stat Z) is already dead and only
+        # waiting to be reaped, which is different from a live ffmpeg.
+        echo "ffmpeg children still listed after cancel (pid, ppid, stat, comm):"
+        echo execCmdEx("ps -o pid=,ppid=,stat=,comm= -p " & left.splitWhitespace().join(","))[0]
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
