@@ -580,8 +580,7 @@ suite "vision verbs":
     sleep(600)
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
-      let kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let kids = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
       check kids.len > 0
     let cancelAt = getMonoTime()
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
@@ -599,8 +598,7 @@ suite "vision verbs":
     check c["envelope"]["data"]["state"].getStr == "cancelled"
     when defined(posix):
       sleep(300)
-      let left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
@@ -712,8 +710,7 @@ suite "vision verbs":
     # Control: the request is still running (28 800 frames at 1024 wide take
     # far longer than 700 ms), so the cancel below is what ends it.
     when defined(posix):
-      let kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let kids = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
       check kids.len > 0
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
@@ -728,8 +725,7 @@ suite "vision verbs":
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     when defined(posix):
       sleep(300)
-      let left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
