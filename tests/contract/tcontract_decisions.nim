@@ -594,12 +594,14 @@ suite "contract 1.0 decisions":
     check not fileExists(st / "sessions" / "r3.json")
     check ok(@["session-list"], env)["sessions"].len == 1      # host only
     when defined(posix):
-      # On failure, name the live processes so a runner-only leftover is visible in the log.
+      # The session-list check above keeps exactly one host, the one this test
+      # still uses, so exactly one session-host process must be alive here. Any
+      # other count is a leftover, and the log names the processes.
       let hostsAlive = sessionHostsOf(st)
-      if hostsAlive != 0:
+      if hostsAlive != 1:
         echo "live session-host processes for ", st, ":"
         echo execCmdEx("pgrep -fl " & quoteShell("__session-host --state-dir " & st))[0]
-      check hostsAlive == 0
+      check hostsAlive == 1
     discard failure(@["session-start", "--kind", "headless"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "sometimes"}), 2, "invalid-value")
 
