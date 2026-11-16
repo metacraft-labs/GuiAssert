@@ -447,3 +447,29 @@ proc everyVerbScenario*(work: string): seq[seq[string]] =
 proc prepareWork*(work: string) =
   ## The directories `everyVerbScenario` writes into.
   createDir(work / "frames")
+
+type PsRow* = object
+  pid*, ppid*: int
+  stat*, args*: string
+
+proc psRows*(): seq[PsRow] =
+  ## Every process as `ps` reports it. `ps` is used, not `pgrep`: the macOS
+  ## runner's shell has no `pgrep` on PATH, and its "command not found" text was
+  ## then counted as a process. Zombies (stat Z) are listed too, so a caller
+  ## that means "still running" filters them out itself.
+  when defined(posix):
+    let (output, _) = execCmdEx("ps -A -o pid=,ppid=,stat=,args=")
+    for line in output.splitLines:
+      let fields = line.strip.splitWhitespace
+      if fields.len < 4: continue
+      try:
+        result.add PsRow(pid: parseInt(fields[0]), ppid: parseInt(fields[1]),
+          stat: fields[2], args: fields[3 .. ^1].join(" "))
+      except ValueError:
+        discard
+
+proc liveChildrenNamed*(parent: int, name: string): seq[PsRow] =
+  ## Children of `parent` whose command names `name` and that are not zombies.
+  for row in psRows():
+    if row.ppid == parent and name in row.args and not row.stat.startsWith("Z"):
+      result.add row

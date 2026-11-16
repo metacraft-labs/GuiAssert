@@ -122,11 +122,11 @@ proc pngSize(path: string): (int, int) =
   (be(16), be(20))
 
 proc sessionHostsOf(stateDir: string): int =
-  ## How many session-host processes of `stateDir` are alive.
+  ## How many session-host processes of `stateDir` are alive (zombies excluded).
   when defined(posix):
-    let (o, _) = execCmdEx("pgrep -f " & quoteShell("__session-host --state-dir " & stateDir))
-    for l in o.splitLines:
-      if l.strip.len > 0: inc result
+    let marker = "__session-host --state-dir " & stateDir
+    for row in psRows():
+      if marker in row.args and not row.stat.startsWith("Z"): inc result
 
 proc killHost(hostPid: int) =
   when defined(posix):
@@ -600,7 +600,9 @@ suite "contract 1.0 decisions":
       let hostsAlive = sessionHostsOf(st)
       if hostsAlive != 1:
         echo "live session-host processes for ", st, ":"
-        echo execCmdEx("pgrep -fl " & quoteShell("__session-host --state-dir " & st))[0]
+        for row in psRows():
+          if ("__session-host --state-dir " & st) in row.args:
+            echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check hostsAlive == 1
     discard failure(@["session-start", "--kind", "headless"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "sometimes"}), 2, "invalid-value")

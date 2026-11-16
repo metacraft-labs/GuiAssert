@@ -580,7 +580,7 @@ suite "vision verbs":
     sleep(600)
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
-      let kids = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      let kids = liveChildrenNamed(d.p.processID, "ffmpeg")
       check kids.len > 0
     let cancelAt = getMonoTime()
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
@@ -598,12 +598,10 @@ suite "vision verbs":
     check c["envelope"]["data"]["state"].getStr == "cancelled"
     when defined(posix):
       sleep(300)
-      let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      let left = liveChildrenNamed(d.p.processID, "ffmpeg")
       if left.len > 0:
-        # Name each child's state: a zombie (stat Z) is already dead and only
-        # waiting to be reaped, which is different from a live ffmpeg.
-        echo "ffmpeg children still listed after cancel (pid, ppid, stat, comm):"
-        echo execCmdEx("ps -o pid=,ppid=,stat=,comm= -p " & left.splitWhitespace().join(","))[0]
+        echo "ffmpeg children still running after cancel (pid, ppid, stat, args):"
+        for row in left: echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
@@ -715,7 +713,7 @@ suite "vision verbs":
     # Control: the request is still running (28 800 frames at 1024 wide take
     # far longer than 700 ms), so the cancel below is what ends it.
     when defined(posix):
-      let kids = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      let kids = liveChildrenNamed(d.p.processID, "ffmpeg")
       check kids.len > 0
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
@@ -730,12 +728,10 @@ suite "vision verbs":
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     when defined(posix):
       sleep(300)
-      let left = execCmdEx("pgrep -P " & $d.p.processID & " ffmpeg")[0].strip
+      let left = liveChildrenNamed(d.p.processID, "ffmpeg")
       if left.len > 0:
-        # Name each child's state: a zombie (stat Z) is already dead and only
-        # waiting to be reaped, which is different from a live ffmpeg.
-        echo "ffmpeg children still listed after cancel (pid, ppid, stat, comm):"
-        echo execCmdEx("ps -o pid=,ppid=,stat=,comm= -p " & left.splitWhitespace().join(","))[0]
+        echo "ffmpeg children still running after cancel (pid, ppid, stat, args):"
+        for row in left: echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
