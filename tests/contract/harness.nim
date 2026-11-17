@@ -79,6 +79,15 @@ proc baseEnv*(): StringTableRef =
   for k, v in envPairs():
     if not k.startsWith("GUIASSERT_"): result[k] = v
 
+proc withoutDisplay*(env: StringTableRef): StringTableRef =
+  ## `env` without a display server to reach: the case a check of an X11 or
+  ## Wayland backend's unavailability is about. The suite's runner gives every
+  ## test a private Xvfb on headless Linux (scripts/run-test-in-display.sh),
+  ## so the caller's environment is not that case by itself.
+  result = newStringTable(modeCaseSensitive)
+  for k, v in env:
+    if k notin ["DISPLAY", "WAYLAND_DISPLAY"]: result[k] = v
+
 proc fixtureEnv*(stateDir: string, extra: openArray[(string, string)] = []): StringTableRef =
   ## An environment selecting the fixture backend and `stateDir`.
   result = baseEnv()

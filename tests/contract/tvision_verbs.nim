@@ -563,7 +563,7 @@ suite "vision verbs":
       $stillDecoding & ", its output held " & $quietBytes & " bytes"
     check stillDecoding
     check quietBytes == 0
-    # The one-shot CLI: a 400 ms deadline answers exit 7 within ~1 s.
+    # The one-shot CLI: a 400 ms deadline answers exit 7 before any frame.
     let start = getMonoTime()
     let r = runCli(@["--timeout-ms", "400", "vision-segment", video, "--fps", sparseFps],
                    baseEnv(), timeoutMs = 60_000, bin = bin)
@@ -573,8 +573,13 @@ suite "vision verbs":
     if r.exit == 7:
       let e = envelopeOf(r)
       check e.errorKind == "timeout" and e.errorReason == "deadline"
-    check elapsed < 1400
-    # Over serve: a cancel sent while ffmpeg is busy is answered within 1 s.
+    # The bound that tells "honoured promptly" from "honoured at the next
+    # frame" is the quiet span the control measured: no frame comes before
+    # it, so an answer inside it was not waiting for one. A tighter bound
+    # (it was 1.4 s) measures the machine: process start-up alone took
+    # longer than that at load 120.
+    check elapsed < sparseQuietMs
+    # Over serve: a cancel sent while ffmpeg is busy is answered before any frame.
     var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
     d.send(runReq("seg", @["vision-segment", video, "--fps", sparseFps]))
     sleep(600)
@@ -593,7 +598,7 @@ suite "vision verbs":
         elif m["id"].getStr == "c": c = m
     let cancelMs = msSince(cancelAt)
     checkpoint "the cancel was answered in " & $cancelMs & " ms"
-    check cancelMs < 1000
+    check cancelMs < sparseQuietMs     # the same bound, for the same reason
     check seg["exit"].getInt == 8
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     check c["envelope"]["data"]["state"].getStr == "cancelled"

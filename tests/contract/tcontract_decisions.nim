@@ -363,7 +363,7 @@ suite "contract 1.0 decisions":
     var rec = parseJson(original)
     rec["backends"] = %*{"capture": "linux-x11", "tree": "fixture", "input": "fixture"}
     writeFile(recPath, $rec)
-    let plain = baseEnv()
+    let plain = withoutDisplay(baseEnv())
     plain["GUIASSERT_STATE_DIR"] = st
     plain["GUIASSERT_TREE_BACKEND"] = "fixture"
     let sc = ok(@["--session", "caps", "capabilities"], plain)
@@ -394,7 +394,7 @@ suite "contract 1.0 decisions":
        "unsupported-option", "own-pixels-capture"),
       (@["ocr", "--image", shot, "--psm", "6"], env, 4, "unsupported-option", "ocr"),
       (@["--capture-backend", "linux-x11", "ocr", "--region", "0,0,10,10", "--out",
-         work / "b.png"], env, 4, "", "region-capture"),
+         work / "b.png"], withoutDisplay(env), 4, "", "region-capture"),
       (@["--ocr-backend", foreignOcrBackend, "ocr", "--region", "0,0,10,10", "--out",
          work / "c.png"], env, 4, "", "ocr"),
       (@["session-start", "--kind", "headless", "--vnc"], env, 4, "unsupported-option",
@@ -570,15 +570,27 @@ suite "contract 1.0 decisions":
                     "session-failed")
     check msSince(t0) < 5000
     check not fileExists(st / "sessions" / "r2.json")
-    # A host that never reports ready: exit 5 (not 7) within --timeout-ms.
+    # A host that never reports ready: exit 5 (not 7), the wait bounded by
+    # --timeout-ms (less its margin), not by the 10 s readiness bound. The
+    # wait itself ends 250 ms before the deadline, so it cannot end before
+    # 1000 ms; the ceiling is generous because starting the binary and
+    # undoing the start take what the machine's load makes them take.
     let t1 = getMonoTime()
     discard failure(@["--timeout-ms", "1500", "session-start", "--kind", "headless",
                       "--name", "r3"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "never-ready"}), 5,
                     "session-failed")
     let took = msSince(t1)
-    check took >= 1000 and took < 1500
+    check took >= 1000 and took < 8000
     check not fileExists(st / "sessions" / "r3.json")
+    # An undo slower than that margin, as a loaded machine makes it (here a
+    # deterministic 600 ms): still the readiness failure, not a timeout.
+    discard failure(@["--timeout-ms", "1500", "session-start", "--kind", "headless",
+                      "--name", "r4"],
+                    fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "never-ready",
+                                    "GUIASSERT_FIXTURE_DELAY_MS": "session-start.undo:600"}),
+                    5, "session-failed")
+    check not fileExists(st / "sessions" / "r4.json")
     check ok(@["session-list"], env)["sessions"].len == 1      # host only
     when defined(posix):
       check sessionHostsOf(st) == 0
