@@ -343,6 +343,31 @@ proc capture(cfg: LinuxCaptureConfig, req: CaptureRequest): ImageRef =
     removeQuietly(tmpPpm)
     removeQuietly(tmpPng)
 
+proc x11GrabRgb*(cfg: LinuxCaptureConfig, rect: Rect): RgbImage =
+  ## The screen's pixels in `rect` (root-window coordinates), as one
+  ## `x11_probe grab` reads them: for a caller that knows the rectangle (a
+  ## window it already found) and compares frames, without `capture`'s window
+  ## listing to resolve a target and its PNG file. An adapter polling a window
+  ## for a settled screen grabs many times a second; the listing and the PNG
+  ## round trip were most of each grab's cost.
+  cfg.requireDisplay()
+  cfg.token.checkpoint()
+  let tmpPpm = outputTemp(linuxX11Name, cfg.stateDir / "grab.ppm", $getCurrentProcessId(), ".ppm")
+  try:
+    let r = cfg.runTool(linuxX11Name, @[cfg.helperPath(linuxX11Name, "x11_probe"), "grab",
+      "--geometry", x11Geometry(rect), "--out", tmpPpm])
+    if r.code != 0: raise probeFailure(r)
+    try:
+      result = decodePpmRgb(readFileCapped(tmpPpm, maxImageFileBytes))
+    except IOError, ValueError:
+      raise captureFailed(linuxX11Name, "the grabbed frame cannot be read: " &
+        getCurrentExceptionMsg())
+    if result.width != rect.width or result.height != rect.height:
+      raise captureFailed(linuxX11Name, "the grabbed frame is " & $result.width & "x" &
+        $result.height & ", not the " & $rect.width & "x" & $rect.height & " asked for")
+  finally:
+    removeQuietly(tmpPpm)
+
 proc record(cfg: LinuxCaptureConfig, req: RecordRequest): Recording =
   let t = cfg.resolveTarget(req.session, req.target, false)
   let probe = cfg.helperPath(linuxX11Name, "x11_probe")

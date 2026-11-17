@@ -186,22 +186,33 @@ proc tesseractBinary*(): string =
   result = findExe("tesseract")
   if result.len == 0: raise missingTool("tesseract is not on PATH")
 
-proc engineEnv(exe: string): StringTableRef =
+proc engineEnv*(exe: string): StringTableRef =
   ## The environment for a nix-provided tesseract: without the
   ## `DYLD_*LIBRARY_PATH` of the caller, which would make it load foreign
-  ## dylibs.
+  ## dylibs. One OpenMP thread unless the caller chose otherwise: a read is
+  ## one small image, and on a loaded machine tesseract's OpenMP threads
+  ## spin against each other (one read of a 1280x800 window took 8 s with
+  ## the default thread count, 2.4 s with one, measured at load 120).
   result = newStringTable(modeCaseSensitive)
   for k, v in envPairs():
     if exe.startsWith("/nix/") and k in ["DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH"]:
       continue
     result[k] = v
+  if not result.hasKey("OMP_THREAD_LIMIT"): result["OMP_THREAD_LIMIT"] = "1"
 
 proc timeoutOf(cfg: TesseractConfig): int =
   if cfg.timeoutMs > 0: cfg.timeoutMs else: defaultTesseractTimeoutMs
 
+var languagesSeen: Table[string, seq[string]]
+  ## The languages each tesseract program (with its TESSDATA_PREFIX) was
+  ## found to have, asked once per process: every recognition checked them,
+  ## so every read ran tesseract twice.
+
 proc installedLanguages*(cfg: TesseractConfig): seq[string] =
   ## The languages the installed tesseract has traineddata for.
   let exe = tesseractBinary()
+  let key = exe & "\0" & getEnv("TESSDATA_PREFIX")
+  if languagesSeen.hasKey(key): return languagesSeen[key]
   # `--list-langs` prints to stdout, merged into the diagnostics pipe; it
   # carries no captured content. The listing is short (one code per line,
   # 130 codes with every language pack), so the diagnostics cap is raised.
@@ -210,6 +221,7 @@ proc installedLanguages*(cfg: TesseractConfig): seq[string] =
   if run.code != 0:
     raise failed("tesseract --list-langs exited with " & $run.code & ": " & run.diagnostics)
   result = parseTesseractLanguages(run.diagnostics)
+  languagesSeen[key] = result
 
 proc validateTesseractRequest*(req: OcrRequest) =
   ## Refuse what tesseract cannot honour, running nothing
