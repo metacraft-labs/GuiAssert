@@ -40,10 +40,13 @@ $pins = @(
         Bin    = "mingw64\bin"
     },
     @{
-        Name   = "ffmpeg-7.1.1-essentials"
-        Url    = "https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-essentials_build.zip"
-        Sha256 = "04861d3339c5ebe38b56c19a15cf2c0cc97f5de4fa8910e4d47e5e6404e4a2d4"
-        Bin    = "ffmpeg-7.1.1-essentials_build\bin"
+        # ffmpeg 8.0, not 7.1.1: GuiAssert's rgbToGray reproduces ffmpeg 8.0's
+        # fixed-point range expansion. 7.1.1's libswscale uses different constants
+        # and gives the 150,542 grey-conversion mismatches in tcore_png.nim.
+        Name   = "ffmpeg-8.0-essentials"
+        Url    = "https://github.com/GyanD/codexffmpeg/releases/download/8.0/ffmpeg-8.0-essentials_build.zip"
+        Sha256 = "647e467caf82b9fa200a562769b5ff4d736aaf725804ed2c64ea9752106fa569"
+        Bin    = "ffmpeg-8.0-essentials_build\bin"
     }
 )
 
