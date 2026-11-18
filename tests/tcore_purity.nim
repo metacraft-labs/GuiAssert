@@ -34,7 +34,7 @@
 ##
 ## NO MOCKS: the real compiler, the real linker, the real binaries.
 
-import std/[algorithm, os, sets, strutils, unittest]
+import std/[algorithm, os, osproc, sets, streams, strutils, unittest]
 
 import ./probe_compiler
 
@@ -237,11 +237,21 @@ proc globalState(dir: string, files: seq[string]): seq[string] =
   let (binary, output, code) = compileProbe(dir, "globalstate", src)
   if code != 0:
     raise newException(OSError, "the global-state probe did not build:\n" & output)
-  let (runOut, runCode) = run(binary, @[])
+  # Bounded: a probe that stops after its first line must not hold the whole
+  # job until the runner's limit. On timeout it is killed, and its output so far
+  # and the fact of the timeout are the failure, not a silent cancellation.
+  let p = startProcess(binary, options = {poStdErrToStdOut})
+  discard p.waitForExit(60_000)
+  let timedOut = p.running
+  if timedOut: p.kill()
+  let runOut = p.outputStream.readAll()
+  let runCode = p.waitForExit()
+  p.close()
   let b = runOut.find("BEGIN\n")
   let e = runOut.find("END")
-  if runCode != 0 or b < 0 or e < b:
-    raise newException(OSError, "the global-state probe failed:\n" & runOut)
+  if timedOut or runCode != 0 or b < 0 or e < b:
+    raise newException(OSError, "the global-state probe failed (exit " &
+      $runCode & (if timedOut: ", killed after 60 s" else: "") & "):\n" & runOut)
   for line in runOut[b + "BEGIN\n".len ..< e].splitLines:
     if line.strip.len > 0: result.add line.strip
 
