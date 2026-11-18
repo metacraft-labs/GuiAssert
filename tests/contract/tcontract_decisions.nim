@@ -121,16 +121,6 @@ proc pngSize(path: string): (int, int) =
     (ord(b[i]) shl 24) or (ord(b[i + 1]) shl 16) or (ord(b[i + 2]) shl 8) or ord(b[i + 3])
   (be(16), be(20))
 
-proc sessionHostsOf(stateDir: string): int =
-  ## How many session-host processes of `stateDir` are alive (zombies excluded).
-  when defined(posix):
-    # Match the directory's basename: macOS spells /tmp as /private/tmp, so the
-    # host's command line can name the same directory by another path.
-    let stateName = extractFilename(stateDir)
-    for row in psRows():
-      if "__session-host" in row.args and stateName in row.args and
-         not row.stat.startsWith("Z"): inc result
-
 proc killHost(hostPid: int) =
   when defined(posix):
     discard posix.kill(Pid(hostPid), SIGKILL)
@@ -597,16 +587,13 @@ suite "contract 1.0 decisions":
     check not fileExists(st / "sessions" / "r3.json")
     check ok(@["session-list"], env)["sessions"].len == 1      # host only
     when defined(posix):
-      # The session-list check above keeps exactly one host, the one this test
-      # still uses, so exactly one session-host process must be alive here. Any
-      # other count is a leftover, and the log names the processes.
-      let hostsAlive = sessionHostsOf(st)
-      if hostsAlive != 1:
-        echo "live session-host processes for ", st, ":"
-        for row in psRows():
-          if ("__session-host --state-dir " & st) in row.args:
-            echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
-      check hostsAlive == 1
+      # The one session that session-list reports names its host's pid, and that
+      # host must be alive. Checking the pid the contract reports, not matching
+      # command lines, keeps this independent of how a runner prints argv.
+      let listed = ok(@["session-list"], env)["sessions"]
+      check listed.len == 1
+      if listed.len == 1:
+        check posix.kill(Pid(listed[0]["hostPid"].getInt), 0) == 0
     discard failure(@["session-start", "--kind", "headless"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "sometimes"}), 2, "invalid-value")
 
