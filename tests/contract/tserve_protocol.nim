@@ -38,6 +38,21 @@ proc readUntilShutdown(d: var Daemon): seq[JsonNode] =
     result.add m
     if m["type"].getStr == "shutdown": return
 
+proc restoreState(snap, st: string) =
+  ## Put the state directory `st` back as `snap` holds it while a session
+  ## host lives on it: every file replaced by a rename (a host reading its
+  ## record never sees it missing or half-written; a record missing for a
+  ## moment is a stopped session, and the host exits), and the files `snap`
+  ## does not have removed. Removing `st` and copying `snap` back did both,
+  ## and on a loaded machine the host saw the gap and exited.
+  for f in walkDirRec(st, relative = true):
+    if not fileExists(snap / f): removeFile(st / f)
+  for f in walkDirRec(snap, relative = true):
+    createDir((st / f).parentDir)
+    let tmp = (st / f).parentDir / (".restore-" & (st / f).extractFilename)
+    copyFile(snap / f, tmp)
+    moveFile(tmp, st / f)
+
 proc maskHostPid(line: string): string =
   ## Spec §6.1: a session's host process is a new process each time it is
   ## started, so its pid is the one value of `session-start` that cannot be
@@ -116,6 +131,26 @@ suite "serve protocol":
     check tail[^1]["data"]["cancelled"].getInt == 0
     check d.finish() == 0
 
+  test "the parity test's state restore keeps a live session's host":
+    # The control: a gap in the record, as removing the state directory and
+    # copying it back made, ends a session's host (it reads a missing record
+    # as a stopped session). The same restore by renames does not.
+    let st = freshDir("restore")
+    let snap = freshDir("restore-snap")
+    let env = fixtureEnv(st)
+    check cli(@["session-start", "--kind", "headless", "--name", "s1"], env).exit == 0
+    removeDir(snap)
+    copyDir(st, snap)
+    restoreState(snap, st)
+    sleep(400)
+    check cli(@["session-info", "s1"], env).line.contains("\"state\":\"running\"")
+    removeDir(st)
+    sleep(400)                       # a loaded machine's copy, slowed on purpose
+    copyDir(snap, st)
+    sleep(400)
+    check cli(@["session-info", "s1"], env).line.contains("host-exited")
+    discard cli(@["session-stop", "s1", "--force"], env)
+
   test "test_serve_cli_byte_parity_for_every_verb":
     let st = freshDir("parity")
     let snap = freshDir("parity-snap")
@@ -135,8 +170,7 @@ suite "serve protocol":
       copyDir(st, snap)
       let r = runCli(argv, env)
       let cliLine = r.stdout.strip(leading = false, chars = {'\n'})
-      removeDir(st)
-      copyDir(snap, st)
+      restoreState(snap, st)
       inc n
       let id = "p" & $n
       d.send(runReq(id, argv))
