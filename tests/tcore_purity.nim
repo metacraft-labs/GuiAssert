@@ -23,9 +23,10 @@
 ## * `test_core_binary_links_no_platform_libraries` compiles a program that
 ##   imports all of `core/` and reads the libraries the binary links with the
 ##   platform tool (`otool -L` on macOS; `readelf -d`, `objdump -p` or `ldd`
-##   on Linux; `objdump -p` on Windows). Its control is the same probe on a
-##   program that links a platform library: `gui_assert/input` on macOS (the
-##   ApplicationServices and CoreFoundation frameworks), and a program that
+##   on Linux; the PE import table, read in-process, on Windows). Its control
+##   is the same probe on a program that links a platform library:
+##   `gui_assert/input` on macOS (the ApplicationServices and CoreFoundation
+##   frameworks), and a program that
 ##   calls into libstdc++ (Linux) or user32 (Windows), where GuiAssert itself
 ##   links nothing yet. If the control reports no extra library, the probe
 ##   is blind and the test fails saying so.
@@ -37,6 +38,7 @@
 import std/[algorithm, os, osproc, sets, streams, strutils, unittest]
 
 import ./probe_compiler
+import ./pe_imports
 
 const
   coreDir = currentSourcePath().parentDir.parentDir / "src" / "gui_assert" / "core"
@@ -269,16 +271,11 @@ proc linkedLibraries(binary: string): tuple[tool: string, libs: seq[string]] =
       let l = line.strip
       if l.len > 0: result.libs.add l.split(" (")[0]
   elif defined(windows):
-    let objdump = findExe("objdump", followSymlinks = false)
-    if objdump.len == 0:
-      raise newException(OSError, "no objdump on PATH to read the DLL imports")
-    let (output, code) = run(objdump, @["-p", binary])
-    if code != 0: raise newException(OSError, "objdump -p failed:\n" & output)
-    result.tool = "objdump -p"
-    for line in output.splitLines:
-      let l = line.strip
-      if l.startsWith("DLL Name:"):
-        result.libs.add l["DLL Name:".len .. ^1].strip
+    # Read in-process rather than through `objdump -p`: that call hung for
+    # 90 minutes on the CI runner, so the test could not finish or say why.
+    # The reader follows the PE format (tests/pe_imports.nim).
+    result.tool = "PE import table"
+    result.libs = peImportNames(readFile(binary))
   else:
     for (tool, args, marker) in [("readelf", @["-d", binary], "(NEEDED)"),
                                  ("objdump", @["-p", binary], "NEEDED")]:
