@@ -469,7 +469,17 @@ proc psRows*(): seq[PsRow] =
         discard
 
 proc liveChildrenNamed*(parent: int, name: string): seq[PsRow] =
-  ## Children of `parent` whose command names `name` and that are not zombies.
-  for row in psRows():
-    if row.ppid == parent and name in row.args and not row.stat.startsWith("Z"):
-      result.add row
+  ## Live processes below `parent` whose command names `name`. Searched through
+  ## every descendant, not only direct children: the serve worker may run the
+  ## encoder through a helper, so the encoder is a grandchild on some runners.
+  let rows = psRows()
+  var frontier = @[parent]
+  var seen: seq[int] = @[]
+  while frontier.len > 0:
+    let p = frontier.pop()
+    for row in rows:
+      if row.ppid == p and row.pid notin seen:
+        seen.add row.pid
+        frontier.add row.pid
+        if name in row.args and not row.stat.startsWith("Z"):
+          result.add row

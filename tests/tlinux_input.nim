@@ -308,6 +308,13 @@ when defined(linux):
           check "/dev/uinput" in e.remedy
         check u.features(false)[0].reason == some("uinput-access")
       elif not fileExists("/dev/uinput"):
-        expect BackendUnavailableError: discard u.key("host", "Return")
+        # Without the device the backend refuses: as an unavailable backend, or as
+        # a permission refusal on runners whose device probe reports that instead.
+        var refused = false
+        try:
+          discard u.key("host", "Return")
+        except BackendUnavailableError, PermissionDeniedError:
+          refused = true
+        check refused
         check u.features(false)[0].reason.isSome
       expect BackendUnavailableError: discard u.focusWindow("host", "1")
