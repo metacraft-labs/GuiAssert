@@ -282,7 +282,6 @@ suite "serve protocol":
     while n < 2:
       if d.recv()["type"].getStr == "result": inc n
     let parallel = msUntil(start)
-    check parallel < 1150
     # ... and the same session does not (the control).
     start = getMonoTime()
     d.send(runReq("d3", @["--session", "sa", "displays"]))
@@ -292,6 +291,11 @@ suite "serve protocol":
       if d.recv()["type"].getStr == "result": inc n
     let serial = msUntil(start)
     check serial >= 1200
+    # Overlapped, the two 600 ms verbs end at least most of one delay sooner
+    # than the same pair in series: compared with the series measured here,
+    # on the same machine at the same moment, not with a fixed 1150 ms that
+    # a loaded machine's start-up alone can pass.
+    check parallel + 400 < serial
     checkpoint "parallel " & $parallel & " ms, serial " & $serial & " ms"
     d.closeInput()
     discard d.readUntilShutdown()

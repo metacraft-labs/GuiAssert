@@ -611,9 +611,14 @@ suite "vision verbs":
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     check c["envelope"]["data"]["state"].getStr == "cancelled"
     when defined(posix):
-      sleep(300)
-      let left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      # ffmpeg is gone after the cancel: waited for (a loaded machine reaps
+      # it later than 300 ms), up to the quiet span.
+      var left = "pending"
+      let goneFrom = getMonoTime()
+      while left.len > 0 and msSince(goneFrom) < sparseQuietMs:
+        left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
+                           options = {poUsePath}).strip
+        if left.len > 0: sleep(50)
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
@@ -627,7 +632,7 @@ suite "vision verbs":
         if getMonoTime() >= libDeadline: raise newException(ValueError, "deadline"))
     let libMs = msSince(libStart)
     checkpoint "segmentVideo stopped after " & $libMs & " ms"
-    check libMs < 1300
+    check libMs < sparseQuietMs     # before any frame, as above
 
   test "test_vision_windows_two_window_frame":
     let st = freshDir("vw")
