@@ -146,7 +146,9 @@ template checkSegmentsEqual(reported: JsonNode, expected: seq[Segment]) =
       check reported[i]["index"].getInt == i
       check reported[i]["tStart"].getFloat == s.tStart
       check reported[i]["tEnd"].getFloat == s.tEnd
-      check reported[i]["changeScore"].getFloat == s.changeScore
+      # The CLI's JSON round-trips the score through its text form, which can move
+      # the last digit (0.6890168044868447 against ...448); compare to 1e-12.
+      check abs(reported[i]["changeScore"].getFloat - s.changeScore) < 1e-12
 
 proc mediaBin(): string =
   ## The build with the media backend.
@@ -581,6 +583,12 @@ suite "vision verbs":
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
       let kids = liveChildrenNamed(d.p.processID, "ffmpeg")
+      if kids.len == 0:
+        # Name what is there, so a missing encoder is seen rather than guessed at.
+        echo "serve pid ", d.p.processID, " has no live ffmpeg below it; its tree:"
+        for row in psRows():
+          if row.pid == d.p.processID or row.ppid == d.p.processID or "ffmpeg" in row.args:
+            echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check kids.len > 0
     let cancelAt = getMonoTime()
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
