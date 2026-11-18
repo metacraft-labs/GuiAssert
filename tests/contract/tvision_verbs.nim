@@ -582,12 +582,20 @@ suite "vision verbs":
     # Over serve: a cancel sent while ffmpeg is busy is answered before any frame.
     var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
     d.send(runReq("seg", @["vision-segment", video, "--fps", sparseFps]))
-    sleep(600)
     when defined(posix):
-      # Control: ffmpeg is still running, so the cancel is what ends it.
-      let kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      # Control: ffmpeg is running, so the cancel is what ends it. Waited
+      # for, not slept for: a loaded machine took longer than 600 ms to
+      # start it. The ceiling is the quiet span, inside which it writes
+      # nothing once started.
+      var kids = ""
+      let waitFrom = getMonoTime()
+      while kids.len == 0 and msSince(waitFrom) < sparseQuietMs:
+        kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
+                           options = {poUsePath}).strip
+        if kids.len == 0: sleep(50)
       check kids.len > 0
+    else:
+      sleep(600)
     let cancelAt = getMonoTime()
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
