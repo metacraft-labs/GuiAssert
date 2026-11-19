@@ -235,27 +235,37 @@ type
     reader*: LineReader
     ready*: JsonNode
     watcher*: Process   ## ProcDump on this serve (Windows CI), or nil
+    watchLog*: string   ## where ProcDump's own output goes, or ""
 
-proc watchForCrash(serve: Process): Process =
+proc watchForCrash(serve: Process): tuple[watcher: Process, log: string] =
   ## Windows CI only: attach ProcDump to `serve`, so that an unhandled
   ## exception in it writes a full dump into test-logs/ (the job uploads that
   ## folder). ProcDump comes from ci/windows/provision-procdump.ps1; without
   ## GUIASSERT_PROCDUMP there is nothing to attach, and this returns nil.
+  ##
+  ## ProcDump runs through `cmd` with its output sent to a file in test-logs/,
+  ## so its messages and exit code survive a test that fails before it can
+  ## print them. `-e 1` catches first-chance exceptions and `-n 2` caps the
+  ## dumps, so a fault that is handled and retried cannot fill the disk.
   when defined(windows):
     let exe = getEnv("GUIASSERT_PROCDUMP")
-    if exe.len == 0: return nil
-    createDir("test-logs")
-    # `-e` alone dumps on an unhandled exception, not on every first-chance one.
-    result = startProcess(exe, args = @["-accepteula", "-e", "-ma",
-      $serve.processID, getCurrentDir() / "test-logs"], options = {poStdErrToStdOut})
+    if exe.len == 0: return (nil, "")
+    let dir = getCurrentDir() / "test-logs"
+    createDir(dir)
+    let log = dir / ("procdump-" & $serve.processID & ".log")
+    let line = "\"\"" & exe & "\" -accepteula -e 1 -n 2 -ma " & $serve.processID &
+      " \"" & dir & "\" > \"" & log & "\" 2>&1\""
+    result = (startProcess(line, options = {poEvalCommand}), log)
   else:
-    result = nil
+    result = (nil, "")
 
-proc stopWatching(watcher: Process) =
-  ## Let ProcDump end (it ends with serve), print what it said, and release it.
+proc stopWatching(watcher: Process, log: string) =
+  ## Let ProcDump end (it ends with serve), then print its exit code and what
+  ## it wrote to the log file, and release it.
   if watcher == nil: return
   let code = watcher.waitForExit(30_000)
-  echo "procdump exit ", code, ": ", watcher.outputStream.readAll()
+  let said = if fileExists(log): readFile(log) else: "(no log)"
+  echo "procdump exit ", code, " (log ", log, "):\n", said
   watcher.close()
 
 proc startServe*(args: seq[string], env: StringTableRef, bin = ""): Daemon =
@@ -263,7 +273,7 @@ proc startServe*(args: seq[string], env: StringTableRef, bin = ""): Daemon =
   ## its ready line.
   result.p = startProcess(if bin.len > 0: bin else: contractBin(), args = args,
                           env = env, options = {})
-  result.watcher = watchForCrash(result.p)
+  (result.watcher, result.watchLog) = watchForCrash(result.p)
   result.reader = initLineReader(result.p)
   let first = result.reader.readLine(30_000)
   result.ready = parseJson(first)
@@ -294,7 +304,7 @@ proc finish*(d: var Daemon, timeoutMs = 30_000): int =
     d.p.kill()
     result = -1
   d.p.close()
-  stopWatching(d.watcher)
+  stopWatching(d.watcher, d.watchLog)
 
 proc runReq*(id: string, argv: seq[string]): JsonNode =
   %*{"v": 1, "id": id, "op": "run", "argv": argv}
