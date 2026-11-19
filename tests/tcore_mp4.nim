@@ -17,7 +17,7 @@ proc tool(name: string): string =
   ## ffmpeg, or the ffprobe beside it.
   let ff = resolveFfmpegBinary()
   if name == "ffmpeg": return ff
-  result = ff.parentDir / ("ffprobe" & ExeExt)
+  result = ff.parentDir / "ffprobe".addFileExt(ExeExt)
   if not fileExists(result): result = findExe("ffprobe")
   doAssert result.len > 0, "ffprobe not found next to " & ff & " or on PATH"
 

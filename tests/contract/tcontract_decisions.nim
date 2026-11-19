@@ -92,8 +92,8 @@ template ocrWords(vars: StringTableRef, work, name: string): JsonNode =
 proc ffprobeTool(): string =
   ## The pinned ffprobe (beside FFMPEG_BIN, else on PATH).
   let ff = getEnv("FFMPEG_BIN")
-  if ff.len > 0 and fileExists(ff.parentDir / ("ffprobe" & ExeExt)):
-    return ff.parentDir / ("ffprobe" & ExeExt)
+  if ff.len > 0 and fileExists(ff.parentDir / "ffprobe".addFileExt(ExeExt)):
+    return ff.parentDir / "ffprobe".addFileExt(ExeExt)
   result = findExe("ffprobe")
   doAssert result.len > 0, "ffprobe is needed to measure recordings independently"
 

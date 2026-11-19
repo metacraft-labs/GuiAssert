@@ -43,7 +43,7 @@ proc contractBin*(): string =
   ## The binary under test. Fails loudly when it has not been built.
   result = getEnv("GUIASSERT_CONTRACT_BIN")
   if result.len == 0:
-    result = repoRootDir / "build" / "bin" / ("guiassert" & ExeExt)
+    result = repoRootDir / "build" / "bin" / "guiassert".addFileExt(ExeExt)
   if not fileExists(result):
     raise newException(IOError, "the guiassert binary " & result &
       " does not exist; run `just build-cli` (or set GUIASSERT_CONTRACT_BIN)")
@@ -96,7 +96,7 @@ proc siblingBin*(name: string): string =
   ## The built binary `name` (`guiassert` or `guiassert-fixture`) beside the
   ## binary under test, for the tests that need one particular build whichever
   ## build the suite runs against. Fails loudly when it has not been built.
-  result = contractBin().parentDir / (name & ExeExt)
+  result = contractBin().parentDir / name.addFileExt(ExeExt)
   if not fileExists(result):
     raise newException(IOError, "the " & name & " binary " & result &
       " does not exist; run `just build-cli`")
