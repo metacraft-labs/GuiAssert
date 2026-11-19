@@ -122,10 +122,21 @@ proc pngSize(path: string): (int, int) =
   (be(16), be(20))
 
 proc killHost(hostPid: int) =
+  ## Kill a session host and wait until it has gone, so that the verbs the
+  ## test sends next see a dead host. Windows had no branch here, so its
+  ## host was never killed and the dead-session test saw a live session.
   when defined(posix):
     discard posix.kill(Pid(hostPid), SIGKILL)
     let start = getMonoTime()
     while posix.kill(Pid(hostPid), 0) == 0 and msSince(start) < 5000: sleep(20)
+  else:
+    discard execCmdEx("taskkill /F /PID " & $hostPid)
+    let start = getMonoTime()
+    while msSince(start) < 5000:
+      # tasklist prints the pid, quoted, only while the process is listed.
+      let (listed, _) = execCmdEx("tasklist /FI \"PID eq " & $hostPid & "\" /FO CSV /NH")
+      if ("\"" & $hostPid & "\"") notin listed: break
+      sleep(20)
 
 suite "contract 1.0 decisions":
   test "test_node_bounds_are_desktop_coordinates":
