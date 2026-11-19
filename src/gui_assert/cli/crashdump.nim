@@ -24,7 +24,9 @@ when defined(windows):
     invalidHandle = cast[pointer](-1)
 
   type
-    UnhandledFilter = proc (info: pointer): clong {.stdcall.}
+    ExceptionPointers {.importc: "EXCEPTION_POINTERS", header: "<windows.h>",
+                        final, pure.} = object
+    UnhandledFilter = proc (info: ptr ExceptionPointers): clong {.stdcall.}
 
   proc setUnhandledExceptionFilter(f: UnhandledFilter): pointer
     {.importc: "SetUnhandledExceptionFilter", stdcall, header: "<windows.h>".}
@@ -44,7 +46,7 @@ when defined(windows):
 
   var crashDumpDir: string
 
-  proc writeDump(info: pointer): clong {.stdcall.} =
+  proc writeDump(info: ptr ExceptionPointers): clong {.stdcall.} =
     # Returning 0 (EXCEPTION_CONTINUE_SEARCH) hands the fault on, so the
     # process still ends with the exception's own exit code.
     {.cast(gcsafe).}:
