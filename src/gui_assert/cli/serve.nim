@@ -42,7 +42,7 @@ else:
 
 import ../core/[contract, desktop_types]
 import ../cancel
-import ./[args, context, registry, run, state]
+import ./[args, context, crashdump, registry, run, state]
 
 const
   maxLineBytes* = 1 shl 20
@@ -869,6 +869,10 @@ proc serveMain*(argv: seq[string], ctx: RunContext, processToken: CancelToken): 
   ## the ready line. `processToken` is cancelled by the caller's signal
   ## handler (SIGTERM / SIGINT), which shuts the daemon down.
   var d = Daemon(ctx: ctx, processToken: processToken, listenFd: -1)
+  # Only when asked (GUIASSERT_CRASH_DUMP_DIR): a dump of a crash, for the
+  # CI job that reproduces one. A normal run installs nothing.
+  let dumpDir = ctx.env.getOrDefault("GUIASSERT_CRASH_DUMP_DIR", "")
+  if dumpDir.len > 0: installCrashDump(dumpDir)
   try:
     d.opts = parseServeArgs(argv, ctx)
     when defined(posix):

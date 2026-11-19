@@ -402,6 +402,11 @@ suite "serve protocol":
     # for the connection's owner sessions only.
     let st = freshDir("sstate")
     let env = fixtureEnv(st)
+    # The Windows job uploads test-logs/, so a crash of serve here leaves its
+    # minidump where CI can fetch it. Only Windows writes dumps.
+    when defined(windows):
+      createDir("test-logs")
+      env["GUIASSERT_CRASH_DUMP_DIR"] = getCurrentDir() / "test-logs"
     var d = startServe(@["serve"], env)
     var hostPids = initTable[string, int]()
     for (id, name, lifetime) in [("a", "own-a", "owner"), ("b", "own-b", "owner"),
