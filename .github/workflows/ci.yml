@@ -154,6 +154,10 @@ jobs:
             Tee-Object -FilePath test-logs/test-core.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Provision procdump (job-scoped, SHA-256 verified)
+        shell: pwsh
+        run: ./ci/windows/provision-procdump.ps1
+
       - name: Test contract
         shell: pwsh
         run: |
