@@ -110,13 +110,17 @@ proc runCli*(args: seq[string], env: StringTableRef, workDir = "",
                        env = env, options = {})
   try:
     p.inputStream.close()
+    # Drain the output before waiting. An anonymous pipe on Windows holds only
+    # a few kilobytes, so a child whose envelope is larger blocks on its write
+    # until someone reads; waiting first would wait for a child that cannot
+    # exit. The exit wait is still bounded by `timeoutMs`.
+    result.stdout = p.outputStream.readAll()
+    result.stderr = p.errorStream.readAll()
     result.exit = p.waitForExit(timeoutMs)
     if p.running:
       p.kill()
       raise newException(IOError, "guiassert " & args.join(" ") & " did not exit within " &
         $timeoutMs & " ms")
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
   finally:
     p.close()
 
