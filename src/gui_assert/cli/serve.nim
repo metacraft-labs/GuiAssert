@@ -33,7 +33,7 @@
 ## request whose argv names `serve` is refused: a daemon never starts a
 ## nested daemon.
 
-import std/[json, options, os, sets, strutils, tables, typedthreads]
+import std/[json, locks, options, os, sets, strutils, tables, typedthreads]
 
 when defined(posix):
   import std/posix
@@ -42,7 +42,7 @@ else:
 
 import ../core/[contract, desktop_types]
 import ../cancel
-import ./[args, context, crashdump, registry, run, state]
+import ./[args, context, registry, run, state]
 
 const
   maxLineBytes* = 1 shl 20
@@ -71,7 +71,40 @@ type
     exit: int
     fd: int           ## mkConnected: the accepted socket
 
-  Chan = ptr Channel[Msg]
+  # A string that lives in the shared heap, owned by whoever holds it. The
+  # channel carries these, never a GC string: under ORC, a receiver that
+  # copies a GC string out of a channel buffer frees memory from the shared
+  # heap with its local allocator, which crashes on Windows (see `takeShared`).
+  SharedStr = object
+    data: ptr UncheckedArray[char]
+    len: int
+
+  # What the channel carries: a `Msg` with its strings in shared memory and
+  # no GC references at all, so a copy through the channel is a plain copy.
+  WireMsg = object
+    kind: MsgKind
+    conn: int
+    text: SharedStr
+    reqId: SharedStr
+    event: SharedStr
+    exit: int
+    fd: int
+
+  # A message queue that lives in the C runtime's heap: a message's strings and
+  # its queue node are allocated with malloc and freed with free, which are
+  # thread-safe and may be called from any thread. Nim's own allocator is not
+  # used across threads: under ORC, `allocShared` is the calling thread's local
+  # heap, and freeing its blocks from another thread faults (see `cMalloc`).
+  QNode = object
+    next: ptr QNode
+    msg: WireMsg
+
+  ChanQ = object
+    lock: Lock
+    head: ptr QNode
+    tail: ptr QNode
+
+  Chan = ptr ChanQ
 
   WorkerArg = object
     argv: seq[string]
@@ -155,6 +188,65 @@ type
 # Threads
 # ---------------------------------------------------------------------------
 
+proc cMalloc(n: csize_t): pointer {.importc: "malloc", header: "<stdlib.h>".}
+proc cCalloc(n, size: csize_t): pointer {.importc: "calloc", header: "<stdlib.h>".}
+proc cFree(p: pointer) {.importc: "free", header: "<stdlib.h>".}
+
+proc toShared(s: string): SharedStr =
+  ## A copy of `s` in the shared heap. The caller owns it until `takeShared`.
+  if s.len == 0: return SharedStr()
+  result.data = cast[ptr UncheckedArray[char]](cMalloc(csize_t(s.len)))
+  result.len = s.len
+  copyMem(result.data, unsafeAddr s[0], s.len)
+
+proc takeShared(x: var SharedStr): string =
+  ## The text of `x` as an ordinary string, and `x` is released. A GC string
+  ## made here is only ever freed by the thread that holds it.
+  if x.data != nil:
+    result = newString(x.len)
+    copyMem(addr result[0], x.data, x.len)
+    cFree(x.data)
+  x = SharedStr()
+
+proc toWire(m: Msg): WireMsg =
+  WireMsg(kind: m.kind, conn: m.conn, text: toShared(m.text),
+          reqId: toShared(m.reqId), event: toShared(m.event),
+          exit: m.exit, fd: m.fd)
+
+proc fromWire(w: WireMsg): Msg =
+  var text = w.text
+  var reqId = w.reqId
+  var event = w.event
+  Msg(kind: w.kind, conn: w.conn, text: takeShared(text),
+      reqId: takeShared(reqId), event: takeShared(event),
+      exit: w.exit, fd: w.fd)
+
+proc enqueue(c: Chan, w: WireMsg) =
+  ## Append `w` to the queue. Any thread may call this.
+  let n = cast[ptr QNode](cMalloc(csize_t(sizeof(QNode))))
+  n[] = QNode(next: nil, msg: w)
+  acquire(c[].lock)
+  if c[].tail == nil: c[].head = n
+  else: c[].tail[].next = n
+  c[].tail = n
+  release(c[].lock)
+
+proc dequeue(c: Chan): tuple[got: bool, w: WireMsg] =
+  ## Take the oldest message, if any. The node is released by the caller's
+  ## thread, which is the only one that takes it.
+  acquire(c[].lock)
+  let n = c[].head
+  if n != nil:
+    c[].head = n[].next
+    if c[].head == nil: c[].tail = nil
+  release(c[].lock)
+  if n != nil:
+    result = (true, n[].msg)
+    cFree(n)
+
+proc sendMsg(c: Chan, m: Msg) =
+  enqueue(c, toWire(m))
+
 proc workerMain(a: WorkerArg) {.thread.} =
   var env = initTable[string, string]()
   for (k, v) in a.env: env[k] = v
@@ -184,7 +276,7 @@ proc workerMain(a: WorkerArg) {.thread.} =
         text = $data
       except ContractError:
         text = $(%*{"error": "event data could not be serialized"})
-      chan[].send(Msg(kind: mkEvent, conn: conn, reqId: reqId, event: event,
+      sendMsg(chan, Msg(kind: mkEvent, conn: conn, reqId: reqId, event: event,
                       text: text)),
     owner: some(a.owner), defaults: defaults, nested: true)
   # The backend interfaces are objects of closures, whose types carry no
@@ -195,7 +287,7 @@ proc workerMain(a: WorkerArg) {.thread.} =
   var o: Outcome
   {.cast(gcsafe).}:
     o = runInvocation(a.argv, ctx)
-  chan[].send(Msg(kind: mkResult, conn: conn, reqId: reqId, exit: o.exit,
+  sendMsg(chan, Msg(kind: mkResult, conn: conn, reqId: reqId, exit: o.exit,
                   text: o.line))
 
 proc probeMain(a: ProbeArg) {.thread.} =
@@ -213,10 +305,10 @@ proc probeMain(a: ProbeArg) {.thread.} =
     # GC-safe for the reason given in `workerMain`.
     {.cast(gcsafe).}:
       o = runInvocation(@["session-info", id], ctx)
-    a.chan[].send(Msg(kind: mkProbed, conn: conn, reqId: id, exit: o.exit,
+    sendMsg(a.chan, Msg(kind: mkProbed, conn: conn, reqId: id, exit: o.exit,
                       text: o.line))
   free(token)
-  a.chan[].send(Msg(kind: mkProbeDone))
+  sendMsg(a.chan, Msg(kind: mkProbeDone))
 
 proc readerMain(a: ReaderArg) {.thread.} =
   ## Post every line of the input, a too-long marker for each oversized
@@ -242,18 +334,18 @@ proc readerMain(a: ReaderArg) {.thread.} =
       let c = buf[i]
       if c == '\n':
         if not discarding:
-          a.chan[].send(Msg(kind: mkLine, conn: a.conn, text: line))
+          sendMsg(a.chan, Msg(kind: mkLine, conn: a.conn, text: line))
         line.setLen(0)
         discarding = false
       elif not discarding:
         line.add c
         if line.len > maxLineBytes:
-          a.chan[].send(Msg(kind: mkTooLong, conn: a.conn))
+          sendMsg(a.chan, Msg(kind: mkTooLong, conn: a.conn))
           line.setLen(0)
           discarding = true
   if line.len > 0 and not discarding:
-    a.chan[].send(Msg(kind: mkLine, conn: a.conn, text: line))
-  a.chan[].send(Msg(kind: mkEof, conn: a.conn))
+    sendMsg(a.chan, Msg(kind: mkLine, conn: a.conn, text: line))
+  sendMsg(a.chan, Msg(kind: mkEof, conn: a.conn))
 
 when defined(posix):
   when defined(macosx) or defined(bsd):
@@ -298,7 +390,7 @@ when defined(posix):
         stderr.writeLine("guiassert serve: refused a connection from another user")
         discard posix.close(cint(fd))
         continue
-      a.chan[].send(Msg(kind: mkConnected, fd: int(fd)))
+      sendMsg(a.chan, Msg(kind: mkConnected, fd: int(fd)))
 
 # ---------------------------------------------------------------------------
 # Output
@@ -869,10 +961,6 @@ proc serveMain*(argv: seq[string], ctx: RunContext, processToken: CancelToken): 
   ## the ready line. `processToken` is cancelled by the caller's signal
   ## handler (SIGTERM / SIGINT), which shuts the daemon down.
   var d = Daemon(ctx: ctx, processToken: processToken, listenFd: -1)
-  # Only when asked (GUIASSERT_CRASH_DUMP_DIR): a dump of a crash, for the
-  # CI job that reproduces one. A normal run installs nothing.
-  let dumpDir = ctx.env.getOrDefault("GUIASSERT_CRASH_DUMP_DIR", "")
-  if dumpDir.len > 0: installCrashDump(dumpDir)
   try:
     d.opts = parseServeArgs(argv, ctx)
     when defined(posix):
@@ -889,8 +977,8 @@ proc serveMain*(argv: seq[string], ctx: RunContext, processToken: CancelToken): 
   when defined(posix):
     # A peer that disconnects mid-write must not kill the daemon.
     signal(SIGPIPE, SIG_IGN)
-  d.chan = cast[Chan](allocShared0(sizeof(Channel[Msg])))
-  d.chan[].open()
+  d.chan = cast[Chan](cCalloc(1, csize_t(sizeof(ChanQ))))
+  initLock(d.chan[].lock)
   stdout.writeLine(d.readyLine())
   stdout.flushFile()
   if d.opts.transport == "stdio":
@@ -902,9 +990,9 @@ proc serveMain*(argv: seq[string], ctx: RunContext, processToken: CancelToken): 
   while true:
     if processToken.reason != crNone and not d.shuttingDown:
       d.beginShutdown(drain = false)
-    let (got, m) = d.chan[].tryRecv()
+    let (got, w) = dequeue(d.chan)
     if got:
-      d.handle(m)
+      d.handle(fromWire(w))
       continue
     d.finishClosedConns()
     if not d.shuttingDown:

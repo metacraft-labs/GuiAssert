@@ -5,8 +5,8 @@
 ## GUIASSERT_FIXTURE_DELAY_MS makes a verb slow enough to cancel, time out or
 ## overlap, which no real backend can be made to do on demand.
 
-import std/[json, os, osproc, sequtils, sets, streams, strtabs, strutils, tables,
-            unittest, times, monotimes]
+import std/[json, os, osproc, sequtils, sets, strtabs, strutils, tables, unittest,
+            times, monotimes]
 
 when defined(posix):
   import std/posix
@@ -135,15 +135,7 @@ suite "serve protocol":
       copyDir(st, snap)
       let r = runCli(argv, env)
       let cliLine = r.stdout.strip(leading = false, chars = {'\n'})
-      try:
-        removeDir(st)
-      except OSError:
-        # Windows refuses to delete a file another process holds open. The
-        # process list shows which one (the serve daemon, a session host).
-        when defined(windows):
-          echo "processes at the failure:\n" &
-            execCmdEx("tasklist /FO CSV /NH").output
-        raise
+      removeDir(st)
       copyDir(snap, st)
       inc n
       let id = "p" & $n
@@ -287,16 +279,9 @@ suite "serve protocol":
     d.send(runReq("d1", @["--session", "sa", "displays"]))
     d.send(runReq("d2", @["--session", "sb", "displays"]))
     var n = 0
-    var arrivals: seq[string]
     while n < 2:
-      let m = d.recv()
-      if m["type"].getStr == "result":
-        inc n
-        arrivals.add m["id"].getStr & " at " & $msUntil(start) & " ms"
+      if d.recv()["type"].getStr == "result": inc n
     let parallel = msUntil(start)
-    # Each result's arrival: one near 600 ms means the calls overlapped and
-    # were slow; the second near 1200 ms means they were serialized.
-    echo "arrivals: " & arrivals.join(", ")
     check parallel < 1150
     # ... and the same session does not (the control).
     start = getMonoTime()
@@ -402,11 +387,6 @@ suite "serve protocol":
     # for the connection's owner sessions only.
     let st = freshDir("sstate")
     let env = fixtureEnv(st)
-    # The Windows job uploads test-logs/, so a crash of serve here leaves its
-    # minidump where CI can fetch it. Only Windows writes dumps.
-    when defined(windows):
-      createDir("test-logs")
-      env["GUIASSERT_CRASH_DUMP_DIR"] = getCurrentDir() / "test-logs"
     var d = startServe(@["serve"], env)
     var hostPids = initTable[string, int]()
     for (id, name, lifetime) in [("a", "own-a", "owner"), ("b", "own-b", "owner"),
@@ -439,14 +419,7 @@ suite "serve protocol":
     var pv: seq[JsonNode]
     d.send(runReq("w", @["wait", "--element", "--role", "dialog", "--wait-ms", "100",
                          "--interval-ms", "50"]))
-    try:
-      discard d.resultFor("w", pv)
-    except EOFError:
-      # serve's stdout closed before its result: report how it exited, since
-      # its stderr goes to the job log.
-      echo "serve exited with code " & $d.p.waitForExit(10_000) &
-        " before the wait result"
-      raise
+    discard d.resultFor("w", pv)
     check pv.len == 3 and pv[0]["seq"].getInt == 0
     # Shutdown stops both owner sessions: one event each, before the
     # shutdown line, continuing the connection's seq.
