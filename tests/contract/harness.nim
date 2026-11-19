@@ -234,12 +234,36 @@ type
     p*: Process
     reader*: LineReader
     ready*: JsonNode
+    watcher*: Process   ## ProcDump on this serve (Windows CI), or nil
+
+proc watchForCrash(serve: Process): Process =
+  ## Windows CI only: attach ProcDump to `serve`, so that an unhandled
+  ## exception in it writes a full dump into test-logs/ (the job uploads that
+  ## folder). ProcDump comes from ci/windows/provision-procdump.ps1; without
+  ## GUIASSERT_PROCDUMP there is nothing to attach, and this returns nil.
+  when defined(windows):
+    let exe = getEnv("GUIASSERT_PROCDUMP")
+    if exe.len == 0: return nil
+    createDir("test-logs")
+    # `-e` alone dumps on an unhandled exception, not on every first-chance one.
+    result = startProcess(exe, args = @["-accepteula", "-e", "-ma",
+      $serve.processID, getCurrentDir() / "test-logs"], options = {poStdErrToStdOut})
+  else:
+    result = nil
+
+proc stopWatching(watcher: Process) =
+  ## Let ProcDump end (it ends with serve), print what it said, and release it.
+  if watcher == nil: return
+  let code = watcher.waitForExit(30_000)
+  echo "procdump exit ", code, ": ", watcher.outputStream.readAll()
+  watcher.close()
 
 proc startServe*(args: seq[string], env: StringTableRef, bin = ""): Daemon =
   ## Start `guiassert serve …` (`bin`, else the binary under test) and read
   ## its ready line.
   result.p = startProcess(if bin.len > 0: bin else: contractBin(), args = args,
                           env = env, options = {})
+  result.watcher = watchForCrash(result.p)
   result.reader = initLineReader(result.p)
   let first = result.reader.readLine(30_000)
   result.ready = parseJson(first)
@@ -270,6 +294,7 @@ proc finish*(d: var Daemon, timeoutMs = 30_000): int =
     d.p.kill()
     result = -1
   d.p.close()
+  stopWatching(d.watcher)
 
 proc runReq*(id: string, argv: seq[string]): JsonNode =
   %*{"v": 1, "id": id, "op": "run", "argv": argv}

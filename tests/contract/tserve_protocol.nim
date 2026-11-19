@@ -46,28 +46,6 @@ proc maskHostPid(line: string): string =
   if n{"data", "session", "hostPid"} != nil: n["data"]["session"]["hostPid"] = %0
   $n
 
-proc watchForCrash(serve: Daemon): Process =
-  ## Windows CI only: attach ProcDump to `serve`, so that an exception in it
-  ## writes a full dump into test-logs/ (the job uploads that folder). ProcDump
-  ## comes from ci/windows/provision-procdump.ps1. Nil when it is not set up.
-  when defined(windows):
-    let exe = getEnv("GUIASSERT_PROCDUMP")
-    if exe.len == 0: return nil
-    createDir("test-logs")
-    # `-e` alone dumps on an unhandled exception, not on every first-chance one.
-    result = startProcess(exe, args = @["-accepteula", "-e", "-ma",
-      $serve.p.processID, getCurrentDir() / "test-logs"], options = {poStdErrToStdOut})
-    echo "procdump attached to serve pid ", serve.p.processID
-  else:
-    result = nil
-
-proc stopWatching(watcher: Process) =
-  ## Let ProcDump end (it ends with serve), print what it said, and release it.
-  if watcher == nil: return
-  let code = watcher.waitForExit(30_000)
-  echo "procdump exit ", code, ": ", watcher.outputStream.readAll()
-  watcher.close()
-
 suite "serve protocol":
   test "test_contract_flag_and_hello_reject_unknown_major":
     let st = freshDir("hello")
@@ -388,7 +366,6 @@ suite "serve protocol":
     let st = freshDir("eof")
     let env = fixtureEnv(st, {"GUIASSERT_FIXTURE_DELAY_MS": "displays:20000"})
     var d = startServe(@["serve"], env)
-    let watcher = watchForCrash(d)
     d.send(runReq("o", @["session-start", "--kind", "headless", "--name", "own",
                          "--lifetime", "owner"]))
     let (om, _) = d.resultFor("o")
@@ -401,7 +378,6 @@ suite "serve protocol":
     d.closeInput()
     let msgs = d.readUntilShutdown()
     check d.finish() == 0
-    stopWatching(watcher)
     var slowResult: JsonNode
     for m in msgs:
       if m["type"].getStr == "result" and m["id"].getStr == "slow": slowResult = m
@@ -432,7 +408,6 @@ suite "serve protocol":
       createDir("test-logs")
       env["GUIASSERT_CRASH_DUMP_DIR"] = getCurrentDir() / "test-logs"
     var d = startServe(@["serve"], env)
-    let watcher = watchForCrash(d)
     var hostPids = initTable[string, int]()
     for (id, name, lifetime) in [("a", "own-a", "owner"), ("b", "own-b", "owner"),
                                  ("c", "kept-c", "detached")]:
@@ -478,7 +453,6 @@ suite "serve protocol":
     d.closeInput()
     let msgs = d.readUntilShutdown()
     check d.finish() == 0
-    stopWatching(watcher)
     check msgs.len == 3
     var stopped: seq[string]
     for i, m in msgs[0 ..< ^1]:
