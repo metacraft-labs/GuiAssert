@@ -434,8 +434,18 @@ suite "vision verbs":
     let probe = startProcess(ffmpegTool(), args = @["-hide_banner", "-loglevel", "error",
       "-nostdin", "-i", damaged, "-vf", "fps=2,scale=320:240", "-f", "null", "-"],
       options = {poStdErrToStdOut})
-    let diagnostics = probe.outputStream.readAll()
-    discard probe.waitForExit()
+    # The whole output is read with the library's pipe reader: Nim's
+    # `readAll` on a Windows child's pipe returned a truncated copy, which
+    # left ffmpeg blocked on a full pipe while this test waited for it to
+    # exit. The wait is bounded too, so a child that stops making progress
+    # fails the test instead of hanging the suite.
+    let diagnostics = media_ffmpeg.readChildStdout(probe)
+    discard probe.waitForExit(60_000)
+    if probe.running:
+      probe.kill()
+      discard probe.waitForExit()
+      checkpoint "the ffmpeg control did not exit within 60 s"
+      check false
     probe.close()
     check diagnostics.len > 65536
     let bin = mediaBin()

@@ -294,7 +294,7 @@ when defined(windows):
                    ov: pointer): int32
     {.importc: "ReadFile", stdcall, header: "<windows.h>".}
 
-  proc readChildStdout(p: Process): string =
+  proc readChildStdout*(p: Process): string =
     ## The whole of the child's stdout, read from its pipe.
     var buf: array[4096, char]
     let h = cast[pointer](p.outputHandle)
@@ -305,7 +305,7 @@ when defined(windows):
         for i in 0 ..< int(got): result.add buf[i]
       if ok == 0 or got == 0: break
 else:
-  proc readChildStdout(p: Process): string =
+  proc readChildStdout*(p: Process): string =
     p.outputStream.readAll()
 
 proc runCollecting(bin: string, args: seq[string]):
