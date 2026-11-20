@@ -16,9 +16,12 @@
 ##      fill (never one recursion per pixel: frames are large),
 ##   3. keeps components whose pixel area *and* bounding-box area exceed a
 ##      minimum fraction of the frame and whose aspect ratio is plausible for
-##      a window, and rejects a component whose box spans essentially the
-##      whole frame (the background, which is also what makes a blank frame
-##      yield no windows although Otsu degenerates on a unimodal histogram),
+##      a window. A component whose box spans essentially the whole frame is
+##      either the background or a maximised window: it is split along its
+##      interior separators and its panes are kept, and when it has no
+##      separator it is the background and yields nothing (which is also what
+##      makes a blank frame yield no windows although Otsu degenerates on a
+##      unimodal histogram),
 ##   4. merges boxes that coincide or nest (keeping the outer box),
 ##   5. returns the surviving rectangles from top-left to bottom-right.
 ##
@@ -320,13 +323,186 @@ proc componentCount*(mask: Mask, connectivity8: bool = true): int =
   ## `labelComponentsMask`).
   labelComponentsMask(mask, connectivity8).len
 
+# ---------------------------------------------------------------------------
+# A full-bleed window subdivided into panes
+# ---------------------------------------------------------------------------
+#
+# A maximised application window covers the whole frame, so its foreground
+# component is as large as the background blob of a blank frame, and the size
+# rule alone cannot tell them apart. What tells them apart is STRUCTURE: an
+# application that tiles panes paints separators between them — runs of rows or
+# columns in a darker tone than the panes on either side. A blank frame has no
+# such run; a subdivided window does. So instead of dropping every component
+# over `maxAreaFrac`, `detectWindowRects` subdivides it along its separators and
+# reports the panes; a component with no separator is still background.
+
+const
+  SeparatorDarkFraction* = 0.95
+    ## A line inside a rectangle is a separator when at least this fraction of
+    ## it is background-dark. A median (0.50) is wrong: a line that is a
+    ## separator for half the rectangle and pane for the other half is not a
+    ## separator of the whole rectangle, and it is one of the half where it is
+    ## dark, which recursion reaches. 1.0 is brittle: one antialiased pixel on a
+    ## true separator rejects it.
+
+proc separatorTones*(img: GrayImage,
+                     minShare: float = 0.002): tuple[threshold, separatorTone: int] =
+  ## The threshold that splits a frame's dominant GROUND tone from the darker
+  ## tone its separators are painted in, and that separator tone.
+  ##
+  ## Otsu answers a different question on a dark-themed application frame: its
+  ## histogram is ink against ground, so Otsu separates the text from the
+  ## panes and leaves the panes and their separators in one class. Here the
+  ## ground is the histogram's MODE, the separator tone is the most frequent
+  ## tone darker than the ground (at least `minShare` of the frame's pixels,
+  ## and more than two levels away so antialiasing at the ground's own edges
+  ## is not taken for it), and the threshold is their midpoint.
+  ##
+  ## Answers `(-1, -1)` when the frame has no darker population — a light
+  ## window on a dark desktop, or a uniform frame — and callers then fall back
+  ## to `otsuThreshold`.
+  let n = img.width * img.height
+  if n <= 0 or img.pixels.len < n:
+    return (-1, -1)
+  var hist: array[256, int]
+  for i in 0 ..< n:
+    inc hist[ord(img.pixels[i])]
+  var ground = 0
+  for t in 1 .. 255:
+    if hist[t] > hist[ground]: ground = t
+  let floorCount = max(1, int(minShare * float(n)))
+  var sep = -1
+  for t in 0 .. ground - 3:
+    if hist[t] >= floorCount and (sep < 0 or hist[t] > hist[sep]):
+      sep = t
+  if sep < 0:
+    return (-1, -1)
+  ((ground + sep) div 2, sep)
+
+proc darkFraction(img: GrayImage, r: array[4, int], vertical: bool,
+                  index, threshold: int): float =
+  ## Fraction of one line (column `index` if `vertical`, else row `index`)
+  ## inside `r` that is background (`<= threshold`), sampled every 2 px.
+  var dark = 0
+  var total = 0
+  if vertical:
+    var y = r[1]
+    while y < r[1] + r[3]:
+      if ord(img.pixels[y * img.width + index]) <= threshold: inc dark
+      inc total
+      y += 2
+  else:
+    var x = r[0]
+    while x < r[0] + r[2]:
+      if ord(img.pixels[index * img.width + x]) <= threshold: inc dark
+      inc total
+      x += 2
+  if total == 0: 0.0 else: dark / total
+
+proc lineMedian(img: GrayImage, r: array[4, int], row: int): int =
+  var vals: seq[int] = @[]
+  var x = r[0]
+  while x < r[0] + r[2]:
+    vals.add ord(img.pixels[row * img.width + x])
+    x += 2
+  if vals.len == 0: return 0
+  vals.sort()
+  vals[vals.len div 2]
+
+proc separatorsIn*(img: GrayImage, r: array[4, int], vertical: bool,
+                   threshold: int, minSeparator: int = 3,
+                   separatorFloor: int = -1): seq[tuple[first, last: int]] =
+  ## Interior separators of `r` along one axis: runs of at least `minSeparator`
+  ## lines that are each `SeparatorDarkFraction` dark inside `r`, not touching
+  ## `r`'s own edge (that is its border, not a split).
+  ##
+  ## A HORIZONTAL run must also CONNECT `r`'s sides — a core of `minSeparator`
+  ## consecutive rows dark at both its left and right edge pixel. An inset
+  ## rule (a search box's border) can be dark along 95% of a wide pane without
+  ## reaching either side, and it is furniture, not a split.
+  ##
+  ## `separatorFloor`, when `>= 0`, rejects a horizontal run with a row whose
+  ## median is darker than it. A separator is painted in one tone and
+  ## rasterising only blends it toward the lighter ground beside it; a SHADOW
+  ## (black composited over the ground) is darker than any separator and
+  ## spans the pane just the same.
+  let n = if vertical: r[2] else: r[3]
+  let origin = if vertical: r[0] else: r[1]
+  var frac = newSeq[float](n)
+  for i in 0 ..< n:
+    frac[i] = darkFraction(img, r, vertical, origin + i, threshold)
+  var i = 0
+  while i < n:
+    if frac[i] < SeparatorDarkFraction:
+      inc i
+      continue
+    var j = i
+    while j < n and frac[j] >= SeparatorDarkFraction: inc j
+    if j - i >= minSeparator and i > 0 and j < n:
+      var ok = vertical
+      if not vertical:
+        var sideRun = 0
+        for row in origin + i ..< origin + j:
+          if ord(img.pixels[row * img.width + r[0]]) <= threshold and
+             ord(img.pixels[row * img.width + r[0] + r[2] - 1]) <= threshold:
+            inc sideRun
+            if sideRun >= minSeparator: ok = true
+          else:
+            sideRun = 0
+        if ok and separatorFloor >= 0:
+          for row in origin + i ..< origin + j:
+            if lineMedian(img, r, row) < separatorFloor:
+              ok = false
+              break
+      if ok:
+        result.add((first: origin + i, last: origin + j - 1))
+    i = j
+
+proc subdivideRect*(img: GrayImage, r: array[4, int], threshold: int,
+                    minSeparator: int = 3, minCell: int = 24,
+                    separatorFloor: int = -1,
+                    depth: int = 0, maxDepth: int = 6): seq[array[4, int]] =
+  ## Split `r` recursively along its interior separators (`separatorsIn`) and
+  ## return the leaf cells, in the order the recursion meets them.
+  ##
+  ## RECURSIVE, MEASURED ONLY INSIDE THE RECT BEING SPLIT, because a tiled
+  ## layout is not a grid: a column can run the full height while its
+  ## neighbour is split in two, and a global scan would cut the full-height
+  ## column with the neighbour's split. Columns are tried first, then rows; a
+  ## rect with no split in one axis recurses on the other. A band thinner than
+  ## `minCell` is a separator's sliver, not a cell, and is dropped.
+  if depth > maxDepth or r[2] < minCell or r[3] < minCell:
+    return @[r]
+  for vertical in [true, false]:
+    let seps = separatorsIn(img, r, vertical, threshold, minSeparator,
+                            if vertical: -1 else: separatorFloor)
+    if seps.len == 0: continue
+    let lo = if vertical: r[0] else: r[1]
+    let extent = if vertical: r[2] else: r[3]
+    var cursor = lo
+    var bands: seq[tuple[a, b: int]] = @[]
+    for s in seps:
+      if s.first - cursor >= minCell: bands.add((cursor, s.first))
+      cursor = s.last + 1
+    if lo + extent - cursor >= minCell: bands.add((cursor, lo + extent))
+    for b in bands:
+      let sub = if vertical: [b.a, r[1], b.b - b.a, r[3]]
+                else: [r[0], b.a, r[2], b.b - b.a]
+      result.add subdivideRect(img, sub, threshold, minSeparator, minCell,
+                               separatorFloor, depth + 1, maxDepth)
+    return
+  @[r]
+
 proc detectWindowRects*(img: GrayImage,
                         threshold: int = -1,
                         minAreaFrac: float = 0.015,
                         maxAreaFrac: float = 0.98,
                         maxAspect: float = 12.0,
                         connectivity8: bool = true,
-                        morphCloseK: int = 0): seq[array[4, int]] =
+                        morphCloseK: int = 0,
+                        subdivideFullBleed: bool = true,
+                        minSeparator: int = 3,
+                        separatorFloor: int = -1): seq[array[4, int]] =
   ## Detect top-level window rectangles from a decoded `GrayImage` using only
   ## pixels (no OS API). Returns `[x, y, w, h]` rectangles sorted top-left to
   ## bottom-right.
@@ -339,10 +515,18 @@ proc detectWindowRects*(img: GrayImage,
   ##   must each exceed this fraction of the frame. Default `0.015` (1.5%): far
   ##   below any real window yet well above icon/cursor/text specks.
   ## * `maxAreaFrac` — reject a component whose bbox covers more than this
-  ##   fraction of the frame; that blob is the background (or a unimodal frame's
-  ##   whole-image mask), not a window. Default `0.98`. (A truly 100%-maximised
-  ##   full-bleed window is therefore treated as background — an accepted
-  ##   trade-off for making blank frames yield zero windows.)
+  ##   fraction of the frame AS ONE WINDOW. Default `0.98`. Such a blob is
+  ##   either the background (or a unimodal frame's whole-image mask) or a
+  ##   maximised, full-bleed window; see `subdivideFullBleed`.
+  ## * `subdivideFullBleed` — when true (default), a blob over `maxAreaFrac` is
+  ##   split along its interior separators (`subdivideRect`) and its panes are
+  ##   reported, each subject to the size and aspect rules below. A blob with
+  ##   no separator yields nothing, so blank and uniform frames still yield
+  ##   zero windows. When false, every such blob is dropped (the VU4 rule).
+  ## * `minSeparator` — the thinnest run of dark lines that splits a full-bleed
+  ##   blob. Default `3`: a one- or two-pixel rule inside a pane is furniture.
+  ## * `separatorFloor` — when `>= 0`, a horizontal run with a row whose median
+  ##   is darker than this is a shadow, not a separator (`separatorsIn`).
   ## * `maxAspect` — reject slivers whose longer side is more than this multiple
   ##   of the shorter side. Default `12.0`.
   ## * `connectivity8` — 8-connectivity when true (default), else 4.
@@ -374,13 +558,23 @@ proc detectWindowRects*(img: GrayImage,
     # Minimum size: both the filled area and the bbox area must be substantial.
     if float(c.area) < minAreaFrac * frameArea: continue
     if bboxArea < minAreaFrac * frameArea: continue
-    # Reject the background / whole-frame blob.
-    if bboxArea > maxAreaFrac * frameArea: continue
-    # Reject thin slivers (task bars, separators, scrollbars, ...).
-    let longSide = float(max(bw, bh))
-    let shortSide = float(min(bw, bh))
-    if shortSide <= 0.0: continue
-    if longSide / shortSide > maxAspect: continue
+    let plausible = proc (b: array[4, int]): bool =
+      # Reject thin slivers (task bars, separators, scrollbars, ...).
+      let longSide = float(max(b[2], b[3]))
+      let shortSide = float(min(b[2], b[3]))
+      shortSide > 0.0 and longSide / shortSide <= maxAspect
+    # The whole-frame blob: background, or a full-bleed window to subdivide.
+    if bboxArea > maxAreaFrac * frameArea:
+      if not subdivideFullBleed: continue
+      let cells = subdivideRect(img, [c.minx, c.miny, bw, bh], thr,
+                                minSeparator = minSeparator,
+                                separatorFloor = separatorFloor)
+      if cells.len < 2: continue   # no structure: it is the background
+      for cell in cells:
+        if float(cell[2] * cell[3]) < minAreaFrac * frameArea: continue
+        if plausible(cell): boxes.add(cell)
+      continue
+    if not plausible([c.minx, c.miny, bw, bh]): continue
     boxes.add([c.minx, c.miny, bw, bh])
 
   result = mergeBoxes(boxes)
