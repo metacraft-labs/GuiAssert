@@ -417,6 +417,7 @@ proc decodeGray*(path: string): GrayImage =
   let (buffer, code, diag) = runCollecting(ffmpegPath, @[
       "-hide_banner",
       "-loglevel", "error",
+      "-nostdin",
       "-i", ffmpegInputUrl(path),
       "-vframes", "1",
       "-f", "rawvideo",
