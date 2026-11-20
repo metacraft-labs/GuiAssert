@@ -393,7 +393,9 @@ suite "serve protocol":
                                  ("c", "kept-c", "detached")]:
       d.send(runReq(id, @["session-start", "--kind", "headless", "--name", name,
                           "--lifetime", lifetime]))
-      let (m, _) = d.resultFor(id)
+      let (m, line) = d.resultFor(id)
+      # A failure names its error here, so it is never a bare exit code.
+      if m["exit"].getInt != 0: checkpoint "session-start " & name & " answered: " & line
       check m["exit"].getInt == 0
       hostPids[name] = m["envelope"]["data"]["session"]["hostPid"].getInt
     # Nothing is sent while nothing changes.

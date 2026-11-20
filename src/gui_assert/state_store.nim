@@ -138,6 +138,25 @@ proc ensurePrivateDir*(dir: string) =
     raise newException(StoreError, "cannot create the state directory " &
       dir & ": " & e.msg)
 
+proc moveFileRetry(src, dst: string) =
+  ## `moveFile`, retried a few times with growing pauses when Windows refuses
+  ## the replace with a sharing violation (32) or access denied (5): another
+  ## process (an indexer, an antivirus scan, a reader that opened the record
+  ## without share-delete) holds the record for a moment. Any other error, or
+  ## a refusal that persists, is raised unchanged, so nothing is hidden.
+  var attempt = 0
+  while true:
+    try:
+      moveFile(src, dst)
+      return
+    except OSError as e:
+      when defined(windows):
+        if e.errorCode in [32'i32, 5'i32] and attempt < 10:
+          inc attempt
+          sleep(10 * attempt)
+          continue
+      raise
+
 proc writePrivateFile*(path, content: string) =
   ## Write `content` to `path` atomically: a temporary file in the same
   ## directory, created mode 0600 (POSIX), then renamed over `path`.
@@ -162,7 +181,7 @@ proc writePrivateFile*(path, content: string) =
         raise newException(OSError, osErrorMsg(osLastError()))
     else:
       writeFile(tmp, content)
-    moveFile(tmp, path)
+    moveFileRetry(tmp, path)
   except OSError, IOError:
     let msg = getCurrentExceptionMsg()
     try: removeFile(tmp) except OSError: discard
