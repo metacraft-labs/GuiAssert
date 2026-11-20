@@ -44,30 +44,88 @@ const
     ## The largest PNG file GuiAssert reads (the decoder bounds the pixels
     ## separately, `core/png.maxPngPixels`).
 
-proc readFileCapped*(path: string, maxBytes: int): string =
-  ## The whole file at `path`, refusing one larger than `maxBytes` so that
-  ## no input a caller names can make GuiAssert read without bound. Raises
-  ## `FileTooLargeError` for a file over the limit (or one that grows past
-  ## its size while it is read), and `IOError` (as `readFile` does) when the
-  ## file cannot be opened or read.
-  var f: File
-  if not open(f, path, fmRead):
-    raise newException(IOError, "cannot open " & path)
-  try:
-    let size = getFileSize(f)
-    if size > maxBytes:
-      raise newException(FileTooLargeError, path & " is " & $size &
-        " bytes, larger than the limit of " & $maxBytes)
-    result = newString(int(size))
-    if size > 0 and readBuffer(f, addr result[0], int(size)) != int(size):
-      raise newException(IOError, "short read from " & path)
-    # A file that grew after its size was taken is refused rather than
-    # silently truncated.
-    var probe: char
-    if readBuffer(f, addr probe, 1) != 0:
-      raise newException(FileTooLargeError, path & " grew while it was read")
-  finally:
-    close(f)
+when defined(windows):
+  # Nim's `open` (CreateFile without FILE_SHARE_DELETE) keeps a record that is
+  # being read from being removed or replaced by another process: a delete or
+  # a rename of the record fails with a sharing violation until the read ends.
+  # The record reads here share read, write and delete, so a reader never
+  # blocks a delete, a replacing rename, or another reader.
+  import std/widestrs
+  const
+    genericRead = 0x80000000'u32
+    fileShareRead = 0x1'u32
+    fileShareWrite = 0x2'u32
+    fileShareDelete = 0x4'u32
+    openExisting = 3'u32
+    fileAttributeNormal = 0x80'u32
+  proc createFileW(name: WideCString, access, share: uint32, sa: pointer,
+                   disposition, flags: uint32, tmpl: pointer): pointer
+    {.importc: "CreateFileW", stdcall, header: "<windows.h>".}
+  proc readFileShared(h: pointer, buf: pointer, n: uint32, got: pointer,
+                      ov: pointer): int32
+    {.importc: "ReadFile", stdcall, header: "<windows.h>".}
+  proc fileSizeShared(h: pointer, size: pointer): int32
+    {.importc: "GetFileSizeEx", stdcall, header: "<windows.h>".}
+  proc closeShared(h: pointer): int32
+    {.importc: "CloseHandle", stdcall, header: "<windows.h>".}
+
+  proc readFileCapped*(path: string, maxBytes: int): string =
+    ## The whole file at `path`, refusing one larger than `maxBytes`, opened
+    ## for shared read, write and delete (see the note above). Raises
+    ## `FileTooLargeError` over the limit (or one that grows while it is
+    ## read), and `IOError` when the file cannot be opened or read.
+    let h = createFileW(newWideCString(path), genericRead,
+      fileShareRead or fileShareWrite or fileShareDelete, nil, openExisting,
+      fileAttributeNormal, nil)
+    if h == cast[pointer](-1):
+      raise newException(IOError, "cannot open " & path)
+    try:
+      var size: int64
+      if fileSizeShared(h, cast[pointer](addr size)) == 0:
+        raise newException(IOError, "cannot size " & path)
+      if size > int64(maxBytes):
+        raise newException(FileTooLargeError, path & " is " & $size &
+          " bytes, larger than the limit of " & $maxBytes)
+      result = newString(int(size))
+      var total = 0
+      while total < int(size):
+        var got: uint32
+        if readFileShared(h, addr result[total], uint32(int(size) - total),
+                          cast[pointer](addr got), nil) == 0 or got == 0:
+          raise newException(IOError, "short read from " & path)
+        total += int(got)
+      # A file that grew after its size was taken is refused, not truncated.
+      var probe: char
+      var extra: uint32
+      if readFileShared(h, addr probe, 1, cast[pointer](addr extra), nil) != 0 and extra != 0:
+        raise newException(FileTooLargeError, path & " grew while it was read")
+    finally:
+      discard closeShared(h)
+else:
+  proc readFileCapped*(path: string, maxBytes: int): string =
+    ## The whole file at `path`, refusing one larger than `maxBytes` so that
+    ## no input a caller names can make GuiAssert read without bound. Raises
+    ## `FileTooLargeError` for a file over the limit (or one that grows past
+    ## its size while it is read), and `IOError` (as `readFile` does) when the
+    ## file cannot be opened or read.
+    var f: File
+    if not open(f, path, fmRead):
+      raise newException(IOError, "cannot open " & path)
+    try:
+      let size = getFileSize(f)
+      if size > maxBytes:
+        raise newException(FileTooLargeError, path & " is " & $size &
+          " bytes, larger than the limit of " & $maxBytes)
+      result = newString(int(size))
+      if size > 0 and readBuffer(f, addr result[0], int(size)) != int(size):
+        raise newException(IOError, "short read from " & path)
+      # A file that grew after its size was taken is refused rather than
+      # silently truncated.
+      var probe: char
+      if readBuffer(f, addr probe, 1) != 0:
+        raise newException(FileTooLargeError, path & " grew while it was read")
+    finally:
+      close(f)
 
 proc ensurePrivateDir*(dir: string) =
   ## Create `dir` (and missing parents) and make it mode 0700 on POSIX.
