@@ -465,10 +465,22 @@ proc psRows*(): seq[PsRow] =
     let (output, _) = execCmdEx("ps -A -o pid=,ppid=,stat=,args=")
     for line in output.splitLines:
       let fields = line.strip.splitWhitespace
-      if fields.len < 4: continue
+      if fields.len < 3: continue
+      # The macOS runner's `ps` can print an empty stat column, so the
+      # executable path lands where the stat is expected (seen on the
+      # aarch64 leg, afd8a87). A stat is a short token of state letters
+      # such as `S+`, `Ss` or `Z`; anything with a path separator is the
+      # start of the command, not a stat.
+      # A real stat starts with an uppercase state letter (S, R, Z, U, ...)
+      # and is at most four characters; a lowercase command name is not one.
+      let hasStat = fields[2].len in 1 .. 4 and fields[2][0] in {'A' .. 'Z'} and
+        fields[2].allCharsInSet({'A' .. 'Z', 'a' .. 'z', '+', '<', '>'})
+      let argStart = if hasStat: 3 else: 2
+      if fields.len <= argStart: continue
       try:
         result.add PsRow(pid: parseInt(fields[0]), ppid: parseInt(fields[1]),
-          stat: fields[2], args: fields[3 .. ^1].join(" "))
+          stat: (if hasStat: fields[2] else: ""),
+          args: fields[argStart .. ^1].join(" "))
       except ValueError:
         discard
 
