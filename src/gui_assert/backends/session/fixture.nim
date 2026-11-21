@@ -264,13 +264,19 @@ proc newFixtureSession*(cfg: FixtureConfig): SessionBackend =
     removeRecord(marker)
     if why.len > 0:
       # Undo the start: no record, no desktop, no host.
+      let undoDelay = cfg.env.delays.getOrDefault("session-start.undo", 0)
+      if undoDelay > 0: sleep(undoDelay)
       if processAlive(pid):
         signalProcess(pid, true)
         discard waitProcessGone(pid, 2000)
       cfg.transact(t):
         removeRecord(sessionRecordPath(cfg.stateDir, result.id))
         cfg.removeDesktop(result.id)
-      cfg.token.checkpoint()
+      # The answer is the readiness failure even when undoing the start ran
+      # past the deadline (a loaded machine): the deadline left the margin
+      # for the undo, it does not turn a failed start into a timeout. Only a
+      # cancellation outranks it.
+      if cfg.token.reason != crNone: raise cancelledError(cfg.token.reason)
       raise failed("session-failed", "session '" & result.id & "': " & why)
     result.state = ssRunning
     cfg.withFixtureLock:

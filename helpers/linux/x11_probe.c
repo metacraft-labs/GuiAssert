@@ -45,6 +45,18 @@
  *     input) one XGetImage grab of the rectangle every 1/F seconds until
  *     SIGINT or SIGTERM; see `record` below.
  *
+ *   x11_probe cursor
+ *     Prints one JSON line describing the pointer's current image, as the
+ *     XFixes extension reports it (XFixesGetCursorImage: the cursor the
+ *     server draws, which no window capture contains):
+ *       {"name":S|null,"serial":N,"width":W,"height":H,"xhot":X,"yhot":Y,
+ *        "x":X,"y":Y,"mask":["..##..", ...]}
+ *     `name` is the cursor's name when its client set one
+ *     (XFixesSetCursorName; libXcursor does for a themed cursor), else
+ *     null. `mask` is the image's alpha, one string per row: `#` where the
+ *     pixel is at least half opaque, `.` elsewhere. `x`,`y` is where the
+ *     pointer is on the screen. Exit 4 when the server has no XFixes.
+ *
  * Strings are JSON-escaped; bytes that are not valid UTF-8 are passed as
  * U+FFFD so the output is always valid JSON.
  */
@@ -53,6 +65,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XRes.h>
+#include <X11/extensions/Xfixes.h>
 #include <errno.h>
 #include <poll.h>
 #include <stdint.h>
@@ -551,6 +564,41 @@ static int grab(Display *d, int argc, char **argv) {
   return ok ? 0 : 5;
 }
 
+/* cursor: the pointer's image and name (XFixesGetCursorImage). */
+static int cursor(Display *d) {
+  int ev, er;
+  if (!XFixesQueryExtension(d, &ev, &er)) {
+    fprintf(stderr, "x11_probe cursor: the X server has no XFixes extension\n");
+    return 4;
+  }
+  XFixesCursorImage *ci = XFixesGetCursorImage(d);
+  if (!ci) {
+    fprintf(stderr, "x11_probe cursor: XFixesGetCursorImage failed\n");
+    return 4;
+  }
+  printf("{\"name\":");
+  if (ci->name && ci->name[0])
+    put_json_string((const unsigned char *)ci->name, strlen(ci->name));
+  else
+    printf("null");
+  printf(",\"serial\":%lu,\"width\":%d,\"height\":%d,\"xhot\":%d,\"yhot\":%d,"
+         "\"x\":%d,\"y\":%d,\"mask\":[",
+         (unsigned long)ci->cursor_serial, ci->width, ci->height, ci->xhot, ci->yhot, ci->x,
+         ci->y);
+  for (int row = 0; row < ci->height; row++) {
+    printf(row ? ",\"" : "\"");
+    for (int col = 0; col < ci->width; col++) {
+      /* pixels are 32-bit ARGB, stored in unsigned longs */
+      unsigned long p = ci->pixels[row * ci->width + col];
+      putchar(((p >> 24) & 0xff) >= 0x80 ? '#' : '.');
+    }
+    putchar('"');
+  }
+  printf("]}\n");
+  XFree(ci);
+  return 0;
+}
+
 static const char *report_path;
 static void write_report(const char *state, long child, long frames, int code,
                           const char *message) {
@@ -686,16 +734,16 @@ static int record(Display *d, int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-  const char *modes[] = {"list", "window", "grab", "record"};
+  const char *modes[] = {"list", "window", "grab", "record", "cursor"};
   int mode = -1;
-  for (int i = 0; argc >= 2 && i < 4; i++)
+  for (int i = 0; argc >= 2 && i < 5; i++)
     if (strcmp(argv[1], modes[i]) == 0)
       mode = i;
   if (mode < 0) {
     fprintf(stderr, "usage: %s list | window --geometry WxH+X+Y (--rgb RRGGBB | --image PPM) "
                     "[--title T] [--class C] [--hold MS] | grab --geometry WxH+X+Y "
                     "--out FILE | record --geometry WxH+X+Y --fps F --report FILE "
-                    "-- ARGV...\n", argv[0]);
+                    "-- ARGV... | cursor\n", argv[0]);
     return 2;
   }
   Display *d = XOpenDisplay(NULL);
@@ -725,6 +773,9 @@ int main(int argc, char **argv) {
     return open_window(d, argc, argv);
   case 2:
     rc = grab(d, argc, argv);
+    break;
+  case 4:
+    rc = cursor(d);
     break;
   default:
     rc = record(d, argc, argv);

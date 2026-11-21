@@ -226,9 +226,28 @@ proc readRecord*(path, schema: string): Option[JsonNode] =
   n.delete("schema")
   some(n)
 
+proc removeFileRetry(path: string) =
+  ## `removeFile`, retried like `moveFileRetry` when Windows refuses the
+  ## delete with a sharing violation (32) or access denied (5): a scanner or
+  ## an indexer holds a just-written record for a moment (seen on a Windows
+  ## host whose real-time scanning covers %TEMP%). Any other error, or a
+  ## refusal that persists, is raised unchanged.
+  var attempt = 0
+  while true:
+    try:
+      removeFile(path)
+      return
+    except OSError as e:
+      when defined(windows):
+        if e.errorCode in [32'i32, 5'i32] and attempt < 10:
+          inc attempt
+          sleep(10 * attempt)
+          continue
+      raise
+
 proc removeRecord*(path: string) =
   ## Delete a record; a missing one is not an error.
-  try: removeFile(path)
+  try: removeFileRetry(path)
   except OSError as e:
     raise newException(StoreError, "cannot remove " & path & ": " & e.msg)
 
@@ -251,7 +270,14 @@ proc processAlive*(pid: int): bool =
     const synchronize = 0x00100000'i32
     const queryLimited = 0x1000'i32
     let h = openProcess(synchronize or queryLimited, 0, DWORD(pid))
-    if h == 0: return false
+    if h == 0:
+      # Only "no such process" (ERROR_INVALID_PARAMETER) proves the process is
+      # gone. Any other failure to open it, such as access denied on a live
+      # process, is not evidence of a death: reporting one made serve say a
+      # live session host had exited while the CLI, reading a moment later,
+      # saw it running (the liveness mismatch in GuiAssert-pm).
+      const errInvalidParameter = 87'i32
+      return int32(osLastError()) != errInvalidParameter
     var code: int32
     let ok = getExitCodeProcess(h, code)
     discard closeHandle(h)

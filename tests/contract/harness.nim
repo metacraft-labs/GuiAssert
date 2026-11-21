@@ -14,6 +14,7 @@
 ## CLI, the daemon and the serializers under test.
 
 import std/[json, os, osproc, streams, strtabs, strutils, tables, times, monotimes]
+import ../../src/gui_assert/backends/media/ffmpeg as media_ffmpeg
 
 when defined(posix):
   import std/posix
@@ -79,6 +80,15 @@ proc baseEnv*(): StringTableRef =
   for k, v in envPairs():
     if not k.startsWith("GUIASSERT_"): result[k] = v
 
+proc withoutDisplay*(env: StringTableRef): StringTableRef =
+  ## `env` without a display server to reach: the case a check of an X11 or
+  ## Wayland backend's unavailability is about. The suite's runner gives every
+  ## test a private Xvfb on headless Linux (scripts/run-test-in-display.sh),
+  ## so the caller's environment is not that case by itself.
+  result = newStringTable(modeCaseSensitive)
+  for k, v in env:
+    if k notin ["DISPLAY", "WAYLAND_DISPLAY"]: result[k] = v
+
 proc fixtureEnv*(stateDir: string, extra: openArray[(string, string)] = []): StringTableRef =
   ## An environment selecting the fixture backend and `stateDir`.
   result = baseEnv()
@@ -114,8 +124,10 @@ proc runCli*(args: seq[string], env: StringTableRef, workDir = "",
     # a few kilobytes, so a child whose envelope is larger blocks on its write
     # until someone reads; waiting first would wait for a child that cannot
     # exit. The exit wait is still bounded by `timeoutMs`.
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
+    # Read the pipes whole with the Windows-safe readers: Nim's readAll on a
+    # Windows child pipe returns a truncated copy (see ffmpeg.nim).
+    result.stdout = media_ffmpeg.readChildStdout(p)
+    result.stderr = media_ffmpeg.readChildStderr(p)
     result.exit = p.waitForExit(timeoutMs)
     if p.running:
       p.kill()

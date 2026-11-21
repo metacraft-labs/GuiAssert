@@ -147,7 +147,7 @@ static GtkWidget *labelled_entry(const char *label, gboolean password) {
  *   press <button> <n> <x> <y> <mods>   n: 1 single, 2 double, 3 triple
  *   release <button> <x> <y>
  *   trail <x> <y>                       motion with button 1 held
- *   scroll <dx> <dy>                    deltas, positive down / right
+ *   scroll <dx> <dy> <mods>             deltas, positive down / right
  *   key <keyval name> <U+XXXX|-> <mods>  the lower-case keyval's name, its
  *                                        character (or -), and the modifiers
  *
@@ -213,9 +213,10 @@ static void pad_motion(GtkEventControllerMotion *m, double x, double y, gpointer
   if (st & GDK_BUTTON1_MASK) lab_log("trail %.0f %.0f", x, y);
 }
 static gboolean pad_scroll(GtkEventControllerScroll *s, double dx, double dy, gpointer d) {
-  (void)s;
   (void)d;
-  lab_log("scroll %.2f %.2f", dx, dy);
+  char mods[8];
+  GdkModifierType st = gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(s));
+  lab_log("scroll %.2f %.2f %s", dx, dy, mods_text(st, mods));
   return TRUE;
 }
 static void keylog_pressed(GtkGestureClick *g, int n, double x, double y, gpointer d) {
@@ -261,7 +262,8 @@ static gboolean pad_scroll(GtkWidget *w, GdkEventScroll *e, gpointer d) {
   default: gdk_event_get_scroll_deltas((GdkEvent *)e, &dx, &dy); break;
   }
   if (e->direction == GDK_SCROLL_SMOOTH && dx == 0 && dy == 0) return TRUE; /* scroll stop */
-  lab_log("scroll %.2f %.2f", dx, dy);
+  char mods[8];
+  lab_log("scroll %.2f %.2f %s", dx, dy, mods_text(e->state, mods));
   return TRUE;
 }
 static gboolean keylog_button(GtkWidget *w, GdkEventButton *e, gpointer d) {
