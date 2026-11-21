@@ -1,0 +1,102 @@
+[
+  {
+    "name": "AxisLine",
+    "kind": "skType",
+    "code": "AxisLine = tuple[pos, start, len: int]"
+  },
+  {
+    "name": "DetectedWindow",
+    "kind": "skType",
+    "code": "DetectedWindow = object\n  bbox*: array[4, int]       ## [x, y, w, h] in frame pixels\n  titleText*: string         ## OCR of the top title-bar band of the region\n  text*: string              ## OCR of the whole window region\n  confidence*: float         ## detector confidence in [0, 1]"
+  },
+  {
+    "name": "Mask",
+    "kind": "skType",
+    "code": "Mask = object\n  width*, height*: int\n  data*: seq[bool]"
+  },
+  {
+    "name": "Region",
+    "kind": "skType",
+    "code": "Region = object\n  bbox*: array[4, int]       ## [x, y, w, h]\n  children*: seq[Region]"
+  },
+  {
+    "name": "VisionWindowError",
+    "kind": "skType",
+    "code": "VisionWindowError = object of CatchableError"
+  },
+  {
+    "name": "buildCropArgv",
+    "kind": "skProc",
+    "code": "proc buildCropArgv(framePath: string; x, y, w, h: int; outPng: string): seq[\n    string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildRegionTree",
+    "kind": "skProc",
+    "code": "proc buildRegionTree(rects: seq[array[4, int]]; containFrac: float = 0.9): seq[\n    Region] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "colProfile",
+    "kind": "skProc",
+    "code": "proc colProfile(img: GrayImage; threshold: int = -1): seq[int] {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "componentCount",
+    "kind": "skProc",
+    "code": "proc componentCount(mask: Mask; connectivity8: bool = true): int {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "detectAxisLines",
+    "kind": "skProc",
+    "code": "proc detectAxisLines(img: GrayImage; minRun: int; gradThreshold: int = 32;\n                     posGap: int = 2): tuple[hLines, vLines: seq[AxisLine]] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "detectWindowRects",
+    "kind": "skProc",
+    "code": "proc detectWindowRects(img: GrayImage; threshold: int = -1;\n                       minAreaFrac: float = 0.015; maxAreaFrac: float = 0.98;\n                       maxAspect: float = 12.0; connectivity8: bool = true;\n                       morphCloseK: int = 0): seq[array[4, int]] {.raises: [],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "detectWindows",
+    "kind": "skProc",
+    "code": "proc detectWindows(framePath: string): seq[DetectedWindow] {.raises: [\n    VisionWindowError, ImageMathError, MediaCompositionError, OSError, IOError,\n    ValueError, OSError, IOError, ValueError, VisionWindowError, OcrError], tags: [\n    ReadDirEffect, ReadEnvEffect, ReadIOEffect, ExecIOEffect, RootEffect,\n    TimeEffect, WriteIOEffect, WriteDirEffect], forbids: [].}"
+  },
+  {
+    "name": "dilate",
+    "kind": "skProc",
+    "code": "proc dilate(mask: Mask; k: int): Mask {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "erode",
+    "kind": "skProc",
+    "code": "proc erode(mask: Mask; k: int): Mask {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "labelComponentsMask",
+    "kind": "skProc",
+    "code": "proc labelComponentsMask(mask: Mask; connectivity8: bool): seq[Component] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "maskFromImage",
+    "kind": "skProc",
+    "code": "proc maskFromImage(img: GrayImage; threshold: int): Mask {.raises: [], tags: [],\n    forbids: [].}"
+  },
+  {
+    "name": "morphClose",
+    "kind": "skProc",
+    "code": "proc morphClose(mask: Mask; k: int): Mask {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "morphOpen",
+    "kind": "skProc",
+    "code": "proc morphOpen(mask: Mask; k: int): Mask {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "otsuThreshold",
+    "kind": "skProc",
+    "code": "proc otsuThreshold(img: GrayImage): int {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "rowProfile",
+    "kind": "skProc",
+    "code": "proc rowProfile(img: GrayImage; threshold: int = -1): seq[int] {.raises: [],\n    tags: [], forbids: [].}"
+  }
+]

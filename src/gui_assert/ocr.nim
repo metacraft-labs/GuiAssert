@@ -16,81 +16,18 @@
 ## `brew install tesseract` (macOS), `nix-env -iA nixpkgs.tesseract` (Nix
 ## hosts), or distro packages on Linux.
 
-import std/[os, osproc, strtabs, strutils, streams, math, tempfiles, times]
+import std/[os, osproc, strtabs, strutils, streams, math, tempfiles]
 
-import ./media
+import ./ffmpeg_tools
 import ./image_math
+import ./core/[ocr_types, interfaces]
+import ./backends/ocr/apple_vision
 
-type
-  OcrError* = object of CatchableError
-    ## Raised when Tesseract is missing, exits non-zero, or its TSV output
-    ## cannot be parsed.
-
-  OcrBackendUnavailable* = object of CatchableError
-    ## Raised when an OPTIONAL OCR/element backend cannot be used on this host
-    ## (wrong platform, missing toolchain, or unconfigured). Distinct from
-    ## `OcrError` so callers can catch it and fall back to the reproducible
-    ## Tesseract default (see `runOcrBestEffort`) instead of treating it as a
-    ## hard failure. The default (`obTesseract`) backend NEVER raises this.
-
-  OcrBackend* = enum
-    ## Selects which OCR engine `runOcrWithBackend` dispatches to.
-    obTesseract    ## Tesseract via `runOcrEx` — the reproducible DEFAULT.
-    obAppleVision  ## macOS Vision (`VNRecognizeTextRequest`) via bundled helper.
-    obRapidOcr     ## RapidOCR / PP-OCR ONNX runner (external, opt-in).
-
-  ElementBackend* = enum
-    ## Selects a semantic UI-element detector for `detectElements`. Only the
-    ## no-op `ebNone` ships by default; `ebOmniParser` is a documented,
-    ## intentionally-unimplemented stub (see `detectElements`).
-    ebNone        ## No element detection; returns an empty seq.
-    ebOmniParser  ## OmniParser-class ONNX detector (requires pinned weights).
-
-  DetectedElement* = object
-    ## A semantic UI element produced by an element backend (OmniParser-class).
-    ## Populated only by ML backends; the shipped code returns none of these.
-    label*: string          ## semantic label, e.g. "Save button"
-    kind*: string           ## coarse element kind, e.g. "button" / "text"
-    confidence*: float      ## detector confidence (0..100)
-    bbox*: array[4, int]    ## [x, y, w, h] in pixels
-
-  OcrWord* = object
-    ## A single recognised word.
-    text*: string
-    confidence*: float
-    bbox*: array[4, int]  ## [x, y, w, h] in pixels
-    lineNum*: int
-    blockNum*: int
-
-  OcrInvert* = enum
-    ## Dark-mode inversion policy for `runOcrEx`. Tesseract expects
-    ## dark-on-light text; light-on-dark UI frames must be inverted first.
-    oiAuto     ## decide from region mean luma (invert dark backgrounds)
-    oiNever    ## never invert
-    oiAlways   ## always invert (`ffmpeg negate`)
-
-  OcrOptions* = object
-    ## Preprocessing knobs for `runOcrEx` / `runOcrMultiPsm` (VU9).
-    psm*: int         ## tesseract page-segmentation mode (default 6)
-    upscale*: float   ## Lanczos upscale factor before OCR (default 1.0)
-    invert*: OcrInvert  ## dark-mode inversion policy (default oiAuto)
-    contrast*: bool   ## apply a light contrast stretch (default false)
-
-const
-  ## Auto-invert luma threshold: a decoded grayscale whose MEAN pixel value is
-  ## below this (0-255 scale) is treated as a dark background and inverted
-  ## before OCR. 110 sits below a neutral mid-gray (128) so ordinary
-  ## light/white document backgrounds (mean ~200+) are never touched, while
-  ## typical dark editor/terminal chrome (mean ~20-70) is caught.
-  autoInvertLumaThreshold* = 110.0
-
-proc initOcrOptions*(psm = 6, upscale = 1.0, invert = oiAuto,
-                     contrast = false): OcrOptions =
-  ## Construct `OcrOptions` with the VU9 defaults (psm 6, no upscale, auto
-  ## inversion, no contrast stretch). Prefer this over a raw object
-  ## constructor so omitted fields get the intended defaults rather than
-  ## Nim's zero values (`psm=0` is tesseract's orientation-only mode).
-  OcrOptions(psm: psm, upscale: upscale, invert: invert, contrast: contrast)
+# The OCR types (`OcrWord`, `OcrOptions`, the backend enums, the two error
+# types) and the pure helpers (`initOcrOptions`, `concatenatedText`,
+# `wordsToReadingOrderText`) live in the pure core; they are re-exported here
+# so `import gui_assert/ocr` keeps offering them.
+export ocr_types
 
 proc resolveTesseractBinary*(): string =
   ## Locate the Tesseract binary. Honors `TESSERACT_BIN`, then `$PATH`.
@@ -272,7 +209,7 @@ proc preprocessToPng(imagePath: string, opts: OcrOptions,
     command = ffmpegBin,
     args = @[
       "-hide_banner", "-loglevel", "error", "-y",
-      "-i", imagePath,
+      "-i", ffmpegInputUrl(imagePath),
       "-vf", filter,
       "-frames:v", "1",
       tmpPath
@@ -374,15 +311,6 @@ proc runOcrMultiPsm*(imagePath: string, psms: seq[int],
       if not dup:
         result.add(w)
 
-proc concatenatedText*(words: seq[OcrWord]): string =
-  ## Join all detected words with spaces. Convenience helper for substring
-  ## matching used by `waitForText`.
-  var pieces: seq[string] = @[]
-  for w in words:
-    if w.text.len > 0:
-      pieces.add(w.text)
-  result = pieces.join(" ")
-
 # ---------------------------------------------------------------------------
 # VU11: pluggable OCR backends (Tesseract DEFAULT; Apple Vision / RapidOCR
 # optional & graceful-degrading) + a documented OmniParser-class element stub.
@@ -429,96 +357,24 @@ proc parsePixelTsv(output: string): seq[OcrWord] =
 
 # --- Apple Vision (macOS) --------------------------------------------------
 
-proc resolveSwiftc(): string =
-  ## Locate `swiftc`. Honors `SWIFTC`, then `$PATH`, then the standard Xcode
-  ## command-line-tools location. Returns "" when unavailable.
-  let envBin = getEnv("SWIFTC")
-  if envBin.len > 0:
-    return (if fileExists(envBin): envBin else: "")
-  result = findExe("swiftc")
-  if result.len == 0 and fileExists("/usr/bin/swiftc"):
-    result = "/usr/bin/swiftc"
-
-proc appleVisionHelperSource(): string =
-  ## Path to the bundled Swift helper source. Honors
-  ## `GUIASSERT_VISION_HELPER_SRC`; otherwise resolves relative to this module.
-  let envSrc = getEnv("GUIASSERT_VISION_HELPER_SRC")
-  if envSrc.len > 0:
-    return envSrc
-  result = currentSourcePath().parentDir / "helpers" / "vision_ocr.swift"
-
 proc appleVisionProbablyAvailable(): bool =
-  ## Cheap probe (no compilation): macOS + a resolvable swiftc + the helper
-  ## source (or a prebuilt binary via `GUIASSERT_VISION_HELPER`).
-  when hostOS != "macosx":
-    return false
-  else:
-    let prebuilt = getEnv("GUIASSERT_VISION_HELPER")
-    if prebuilt.len > 0 and fileExists(prebuilt):
-      return true
-    return resolveSwiftc().len > 0 and fileExists(appleVisionHelperSource())
+  ## Cheap probe (no compilation): macOS and a prebuilt helper
+  ## (`GUIASSERT_VISION_HELPER`) or a `swiftc` to build one.
+  visionHelperProbablyAvailable()
 
 proc resolveAppleVisionHelper*(): string =
-  ## macOS-only. Return the path to a compiled Apple Vision OCR helper binary,
-  ## compiling the bundled Swift source on demand with `swiftc` into a cache dir
-  ## (recompiled only when missing or older than the source). Honors
+  ## macOS-only. Return the path to a compiled Apple Vision OCR helper binary.
+  ## The helper is the one the `apple-vision` engine of the `guiassert`
+  ## program runs (`backends/ocr/apple_vision.visionHelperBinary`): it honors
   ## `GUIASSERT_VISION_HELPER` (prebuilt binary), `GUIASSERT_VISION_HELPER_SRC`
-  ## (source override) and `SWIFTC`. Raises `OcrBackendUnavailable` when the
-  ## platform, toolchain, or source is missing — never `OcrError`.
-  when hostOS != "macosx":
-    raise newException(OcrBackendUnavailable,
-      "Apple Vision backend is macOS-only")
-  else:
-    let prebuilt = getEnv("GUIASSERT_VISION_HELPER")
-    if prebuilt.len > 0:
-      if fileExists(prebuilt): return prebuilt
-      raise newException(OcrBackendUnavailable,
-        "GUIASSERT_VISION_HELPER points at " & prebuilt &
-        " but no file exists there.")
-    let src = appleVisionHelperSource()
-    if not fileExists(src):
-      raise newException(OcrBackendUnavailable,
-        "Apple Vision helper source not found: " & src &
-        " (set GUIASSERT_VISION_HELPER_SRC or GUIASSERT_VISION_HELPER).")
-    let swiftc = resolveSwiftc()
-    if swiftc.len == 0:
-      raise newException(OcrBackendUnavailable,
-        "swiftc not found (set SWIFTC or install the Xcode command line tools).")
-    let cacheDir = getTempDir() / "gui_assert_vision_helper"
-    try:
-      createDir(cacheDir)
-    except OSError as e:
-      raise newException(OcrBackendUnavailable,
-        "cannot create Apple Vision helper cache dir " & cacheDir & ": " & e.msg)
-    let bin = cacheDir / "vision_ocr"
-    var needCompile = true
-    if fileExists(bin):
-      try:
-        if getLastModificationTime(bin) >= getLastModificationTime(src):
-          needCompile = false
-      except OSError:
-        discard
-    if needCompile:
-      # Sanitize the environment for swiftc: a nix profile often exports
-      # SDKROOT / DEVELOPER_DIR pointing at a nix-provided Apple SDK whose Swift
-      # version does not match the system /usr/bin/swiftc, which makes the
-      # compile fail ("no such module 'SwiftShims'"). Dropping them lets the
-      # system compiler find its own matching bundled SDK. (No-op when unset.)
-      let cenv = newStringTable(modeCaseSensitive)
-      for k, v in envPairs():
-        if swiftc.startsWith("/usr/") and (k == "SDKROOT" or k == "DEVELOPER_DIR"):
-          continue
-        cenv[k] = v
-      let p = startProcess(command = swiftc, args = @["-O", src, "-o", bin],
-                           env = cenv, options = {poStdErrToStdOut})
-      let output = p.outputStream().readAll()
-      let code = p.waitForExit()
-      p.close()
-      if code != 0:
-        raise newException(OcrBackendUnavailable,
-          "swiftc failed to compile the Apple Vision helper (" & $code &
-          "):\n" & output)
-    return bin
+  ## (source override) and `SWIFTC`, and otherwise builds the source embedded
+  ## at build time, caching the binary. This path runs the helper's original
+  ## line-level mode. Raises `OcrBackendUnavailable` when the platform,
+  ## toolchain, or source is missing — never `OcrError`.
+  try:
+    return visionHelperBinary()
+  except BackendUnavailableError as e:
+    raise newException(OcrBackendUnavailable, e.msg)
 
 proc runAppleVision(imagePath: string, opts: OcrOptions): seq[OcrWord] =
   ## Run the macOS Apple Vision helper on `imagePath`. `opts` is accepted for API

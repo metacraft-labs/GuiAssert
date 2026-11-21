@@ -1,0 +1,22 @@
+# The default unit suite. scripts/run-default-tests.sh requires exactly 20
+# entries and runs tests/<name>.nim in this order.
+tnimcache_is_worktree_local
+tcapture
+tappium
+twindow_layout
+tinput
+tpacing
+tcancel
+tdesktop_env
+tcore_types
+tcore_contract
+tcore_secret_guard
+tcore_png
+tcore_mp4
+tcore_shims
+tmacos_capture
+tlinux_capture
+tlinux_tree
+tlinux_input
+tlinux_session
+tswift_helper_cache

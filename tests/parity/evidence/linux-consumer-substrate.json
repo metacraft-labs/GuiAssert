@@ -1,0 +1,1754 @@
+{
+  "schema": "ah-guiassert-parity/1",
+  "milestone": "GS13/GS15 (GuiAssert) / GA5a",
+  "platform": "linux",
+  "arch": "x86_64",
+  "kernel": "6.18.55",
+  "measuredAt": "2026-10-24T06:58:51Z",
+  "agentHarbor": {
+    "commit": "v0.6.16-446-g30fa43d34a"
+  },
+  "guiassert": {
+    "guiassert": "0.1.0",
+    "contract": {
+      "name": "guiassert-desktop",
+      "major": 1,
+      "minor": 0
+    },
+    "platform": "linux",
+    "arch": "amd64",
+    "compiled": {
+      "capture": [
+        "linux-wlr",
+        "linux-gnome",
+        "linux-portal-pipewire",
+        "linux-x11",
+        "fixture"
+      ],
+      "ocr": ["tesseract", "fixture"],
+      "tree": ["linux-atspi", "fixture"],
+      "input": [
+        "linux-wlr-virtual",
+        "linux-mutter",
+        "linux-xtest",
+        "linux-uinput",
+        "fixture"
+      ],
+      "session": [
+        "linux-host",
+        "linux-sway",
+        "linux-gnome",
+        "linux-xvfb",
+        "fixture"
+      ],
+      "media": ["ffmpeg"]
+    }
+  },
+  "display": [1280, 800],
+  "rows": [
+    {
+      "session": "linux-sway",
+      "id": "G1",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session new",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session new reports the session ready on the GuiAssert substrate",
+          "ok": true,
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16cb221ab\"}"
+        },
+        {
+          "check": "GuiAssert runs it: running, on linux-sway, 1280x800",
+          "ok": true,
+          "observed": "{\"state\":\"running\",\"backend\":\"linux-sway\",\"d\":[0,0,1280,800]}"
+        },
+        {
+          "check": "its lifecycle host (Agent Harbor's policy) runs",
+          "ok": true,
+          "observed": "pid 218192"
+        },
+        {
+          "check": "displayHandle comes from Session.env",
+          "ok": true,
+          "observed": "wayland-1"
+        },
+        {
+          "check": "the same name again is refused (negative control)",
+          "ok": true,
+          "observed": "Error: desktop session name is already in use: parity-sway-217280"
+        },
+        {
+          "check": "and starts no second GuiAssert session",
+          "ok": true,
+          "observed": "2 -> 2"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list and info",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session list --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the list has the session, ready, joined with GuiAssert's record",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session info by friendly name succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the name resolves to the session",
+          "ok": true,
+          "observed": "{\"id\":\"d-01a16cb221ab\",\"state\":\"ready\",\"degradedFeatures\":null}"
+        },
+        {
+          "check": "an unknown session is not found, exit 69 (negative control)",
+          "ok": true,
+          "observed": "exit 69"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A7",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "wait for a timer-driven dialog",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the timer the wait times out (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop wait resolves on the dialog",
+          "ok": true,
+          "observed": "[\"Timer Dialog\"]"
+        },
+        {
+          "check": "it resolves after the timer",
+          "ok": true,
+          "observed": "3026 ms"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A0",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "launch and tree contract",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop launch reports success and the pid",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "tree without --app is the focused application",
+          "ok": true,
+          "observed": "application"
+        },
+        {
+          "check": "the fixture window has role \"frame\"",
+          "ok": true,
+          "observed": "frame"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
+          "observed": "application",
+          "disposition": "native-specific"
+        },
+        {
+          "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
+          "observed": "[\"app\",\"app_id\",\"app_name\",\"args\",\"launch_method\",\"launched\",\"pid\",\"window\"]",
+          "disposition": "native-specific"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A1",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click, scroll and drag roundtrip",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no Logged in status before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the coordinate click activates Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop scroll reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the scroll moves the list",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "no Slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop drag reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the drag moves the slider",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the semantic click activates Login a second time",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
+          "observed": "\"injected\"",
+          "disposition": "native-specific"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "A2",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "find by role, name and state",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role \"push button\" finds Login and the disabled button",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "both buttons, each with path and role \"push button\"",
+          "ok": true,
+          "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --role button (GuiAssert's spelling) finds none of them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --state enabled",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every element found by state enabled has it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the disabled button is not among them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --name (substring, any case)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "name filter finds Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A3",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "form fill, submit and status readback",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role text --state editable",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the first editable entry is found by role text and state, and is not protected",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "the password entry is a \"password text\"",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop focus on it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "focus reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry reports focused, and nothing else does",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "desktop type",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type reports success and only the length",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry holds the typed text",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status does not read \"Status: Logged in 3\" before the submit (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click on Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status label reads the next sign-in after submit",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop key Tab",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "key reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "after Tab one element reports focused, and it is not the entry",
+          "ok": true,
+          "observed": "[\"\"]"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A4",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "capability report",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop doctor --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "host, executionMode and capabilities present",
+          "ok": true,
+          "observed": "{\"host\":\"linux\",\"executionMode\":\"guiassert 0.1.0 (guiassert-desktop 1.0)\"}"
+        },
+        {
+          "check": "every entry has a valid state, a requires array, and a reasonCode exactly when not usable (supported or available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every entry that is not available carries a reasonCode, and no available one does",
+          "ok": true,
+          "observed": "[]"
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe: tree.read available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "tree.read is derived from GuiAssert's tree-read",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "doctor reports feature \"tree.read\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"tree.write\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screenshot\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"degraded\"]"
+        },
+        {
+          "check": "doctor reports feature \"recording\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"ocr\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screen_reader\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"remote_view\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A5",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "OCR of a canvas-drawn fixture",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the canvas, OCR does not read its words (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop ocr with no target (the native test's call) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "at least 4 of the 5 painted words are read",
+          "ok": true,
+          "observed": "5/5"
+        },
+        {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the region OCR of the whole display reads the same words",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "boxes are in desktop coordinates inside the session display",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A6",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "screenshot and recording pipeline",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop screenshot --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the PNG is the session's display, as the manifest reports",
+          "ok": true,
+          "observed": "1280x800"
+        },
+        {
+          "check": "desktop screenshot --region succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a region capture is the region's size (300x150), not the display's (negative control)",
+          "ok": true,
+          "observed": "300x150"
+        },
+        {
+          "check": "desktop record --duration 3 succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 has the display's width and at least 2 s",
+          "ok": true,
+          "observed": "1280 px, 3.000000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A8",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "tree-then-OCR fallback trace",
+      "result": "n/a",
+      "checks": [],
+      "gaps": [
+        {
+          "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
+          "observed": "For more information, try '--help'.",
+          "disposition": "open"
+        }
+      ]
+    },
+    {
+      "session": "linux-sway",
+      "id": "G4",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "record-start",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "record-stop with nothing recording is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "record-start reports a recording id in the session",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it as recording",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G5",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "record-stop",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "record-stop succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 is finalized: the display's width and about 3 s",
+          "ok": true,
+          "observed": "1280 px, 3.500000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it stopped",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G7",
+      "consumerScenario": "-",
+      "scenario": "run-script",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the status does not read \"Status: Logged in 4\" before the script (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "run-script succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the script reports success",
+          "ok": true,
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-5EMHnRprqf/g7-artifacts/g7.png\"}"
+        },
+        {
+          "check": "its click signed in once more",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its screenshot is the display (ffprobe)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an XPath query is refused with a clear error (negative control)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G8",
+      "consumerScenario": "-",
+      "scenario": "type --cadence",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "clear the entry",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an invalid --cadence is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "and typed nothing",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type --cadence succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every character was its own keystroke, typos corrected, text never echoed",
+          "ok": true,
+          "observed": "{\"length\":10,\"keystrokes\":16,\"typos\":6}"
+        },
+        {
+          "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
+          "ok": true,
+          "observed": "2649 ms"
+        },
+        {
+          "check": "the entry holds exactly the text",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G9",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click --motion",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the status does not read \"Status: Logged in 5\" before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "click --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the curved approach ends in the click on Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G10",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "drag --motion",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no low slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "drag --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "it was one drag through a curved path",
+          "ok": true,
+          "observed": "30"
+        },
+        {
+          "check": "the drag moves the slider down",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the focused window is smaller than the display, so a display capture fails the size check (precondition)",
+          "ok": true,
+          "observed": "640x800, beside a second window"
+        },
+        {
+          "check": "capture-pass succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "one screen, titled as the focused window",
+          "ok": true,
+          "observed": "[\"Parity Spacer\"]"
+        },
+        {
+          "check": "the capture is the focused window's size (ffprobe)",
+          "ok": true,
+          "observed": "640x800 vs 640x800"
+        },
+        {
+          "check": "the manifest names it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a session that does not exist is refused as display-gone, storing nothing (negative control)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "G3",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session kill",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the kill GuiAssert runs the session (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "ah desktop session kill succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "Agent Harbor no longer lists it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its lifecycle host has exited",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-sway",
+      "id": "A9",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session teardown",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "every process launched into the session is gone",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's runtime directory is gone",
+          "ok": true,
+          "observed": "guienv-36f8fa9e5b86e574"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G1",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session new",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session new reports the session ready on the GuiAssert substrate",
+          "ok": true,
+          "observed": "{\"state\":\"ready\",\"backend\":\"guiassert\",\"guiassertSession\":\"d-01a16cb2b63e\"}"
+        },
+        {
+          "check": "GuiAssert runs it: running, on linux-xvfb, 1280x800",
+          "ok": true,
+          "observed": "{\"state\":\"running\",\"backend\":\"linux-xvfb\",\"d\":[0,0,1280,800]}"
+        },
+        {
+          "check": "its lifecycle host (Agent Harbor's policy) runs",
+          "ok": true,
+          "observed": "pid 230682"
+        },
+        {
+          "check": "displayHandle comes from Session.env",
+          "ok": true,
+          "observed": ":0"
+        },
+        {
+          "check": "the same name again is refused (negative control)",
+          "ok": true,
+          "observed": "Error: desktop session name is already in use: parity-xvfb-217280"
+        },
+        {
+          "check": "and starts no second GuiAssert session",
+          "ok": true,
+          "observed": "2 -> 2"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G2",
+      "consumerScenario": "-",
+      "scenario": "session list and info",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "session list --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the list has the session, ready, joined with GuiAssert's record",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "session info by friendly name succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the name resolves to the session",
+          "ok": true,
+          "observed": "{\"id\":\"d-01a16cb2b63e\",\"state\":\"ready\",\"degradedFeatures\":null}"
+        },
+        {
+          "check": "an unknown session is not found, exit 69 (negative control)",
+          "ok": true,
+          "observed": "exit 69"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A7",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "wait for a timer-driven dialog",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the timer the wait times out (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop wait resolves on the dialog",
+          "ok": true,
+          "observed": "[\"Timer Dialog\"]"
+        },
+        {
+          "check": "it resolves after the timer",
+          "ok": true,
+          "observed": "3006 ms"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A0",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "launch and tree contract",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop launch reports success and the pid",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the tree carries the fixture contract (window, Username, Password, Login, Status: Ready)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "tree without --app is the focused application",
+          "ok": true,
+          "observed": "application"
+        },
+        {
+          "check": "the fixture window has role \"frame\"",
+          "ok": true,
+          "observed": "frame"
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "tree root role is \"desktop frame\" (no --app reads the focused application)",
+          "observed": "application",
+          "disposition": "native-specific"
+        },
+        {
+          "assertion": "launch reports .data.launch_method == \"swaymsg\" (native launcher detail)",
+          "observed": "[\"app\",\"app_id\",\"app_name\",\"args\",\"launch_method\",\"launched\",\"pid\",\"window\"]",
+          "disposition": "native-specific"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A1",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click, scroll and drag roundtrip",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no Logged in status before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the coordinate click activates Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop scroll reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the scroll moves the list",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "no Slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop drag reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the drag moves the slider",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the semantic click activates Login a second time",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": [
+        {
+          "assertion": "click reports .data.provider == \"wlrctl\" (native provider name)",
+          "observed": "\"injected\"",
+          "disposition": "native-specific"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A2",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "find by role, name and state",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role \"push button\" finds Login and the disabled button",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "both buttons, each with path and role \"push button\"",
+          "ok": true,
+          "observed": "[\"Login\",\"Disabled Action\"]"
+        },
+        {
+          "check": "find --role button (GuiAssert's spelling) finds none of them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --state enabled",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every element found by state enabled has it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the disabled button is not among them (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "find --name (substring, any case)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "name filter finds Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A3",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "form fill, submit and status readback",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "find --role text --state editable",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the first editable entry is found by role text and state, and is not protected",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "the password entry is a \"password text\"",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop focus on it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "focus reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry reports focused, and nothing else does",
+          "ok": true,
+          "observed": "[\"\"]"
+        },
+        {
+          "check": "desktop type",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type reports success and only the length",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the entry holds the typed text",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status does not read \"Status: Logged in 3\" before the submit (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop action click on Login",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the status label reads the next sign-in after submit",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop key Tab",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "key reports success",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "after Tab one element reports focused, and it is not the entry",
+          "ok": true,
+          "observed": "[\"\"]"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A4",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "capability report",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop doctor --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "host, executionMode and capabilities present",
+          "ok": true,
+          "observed": "{\"host\":\"linux\",\"executionMode\":\"guiassert 0.1.0 (guiassert-desktop 1.0)\"}"
+        },
+        {
+          "check": "every entry has a valid state, a requires array, and a reasonCode exactly when not usable (supported or available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every entry that is not available carries a reasonCode, and no available one does",
+          "ok": true,
+          "observed": "[]"
+        },
+        {
+          "check": "the session's tree reading is usable (the zero-touch doctor probe: tree.read available)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "tree.read is derived from GuiAssert's tree-read",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "doctor reports feature \"tree.read\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"tree.write\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screenshot\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"degraded\"]"
+        },
+        {
+          "check": "doctor reports feature \"recording\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"ocr\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"screen_reader\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        },
+        {
+          "check": "doctor reports feature \"remote_view\" exactly once (Agent Harbor's stable feature keys)",
+          "ok": true,
+          "observed": "[\"available\"]"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A5",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "OCR of a canvas-drawn fixture",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the canvas, OCR does not read its words (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "desktop ocr with no target (the native test's call) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "at least 4 of the 5 painted words are read",
+          "ok": true,
+          "observed": "5/5"
+        },
+        {
+          "check": "desktop ocr --region (the display) succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the region OCR of the whole display reads the same words",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "boxes are in desktop coordinates inside the session display",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A6",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "screenshot and recording pipeline",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "desktop screenshot --json succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the PNG is the session's display, as the manifest reports",
+          "ok": true,
+          "observed": "1280x800"
+        },
+        {
+          "check": "desktop screenshot --region succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a region capture is the region's size (300x150), not the display's (negative control)",
+          "ok": true,
+          "observed": "300x150"
+        },
+        {
+          "check": "desktop record --duration 3 succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 has the display's width and at least 2 s",
+          "ok": true,
+          "observed": "1280 px, 3.100000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A8",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "tree-then-OCR fallback trace",
+      "result": "n/a",
+      "checks": [],
+      "gaps": [
+        {
+          "assertion": "ah desktop get-text --fallback --trace (no such verb on either substrate)",
+          "observed": "For more information, try '--help'.",
+          "disposition": "open"
+        }
+      ]
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G4",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "record-start",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "record-stop with nothing recording is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "record-start reports a recording id in the session",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it as recording",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G5",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "record-stop",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "record-stop succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the MP4 is finalized: the display's width and about 3 s",
+          "ok": true,
+          "observed": "1280 px, 3.300000 s"
+        },
+        {
+          "check": "the manifest's duration is the measured one",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert lists it stopped",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G7",
+      "consumerScenario": "-",
+      "scenario": "run-script",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the status does not read \"Status: Logged in 4\" before the script (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "run-script succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the script reports success",
+          "ok": true,
+          "observed": "{\"buttons\":1,\"shot\":\"<repo>/target/test-logs/computer-use-guiassert-parity/run-5EMHnRprqf/g7-artifacts/g7.png\"}"
+        },
+        {
+          "check": "its click signed in once more",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its screenshot is the display (ffprobe)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an XPath query is refused with a clear error (negative control)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G8",
+      "consumerScenario": "-",
+      "scenario": "type --cadence",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "clear the entry",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "an invalid --cadence is refused (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "and typed nothing",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "type --cadence succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "every character was its own keystroke, typos corrected, text never echoed",
+          "ok": true,
+          "observed": "{\"length\":10,\"keystrokes\":14,\"typos\":4}"
+        },
+        {
+          "check": "at Agent Harbor's pace (9 gaps of 100 ms at least)",
+          "ok": true,
+          "observed": "2172 ms"
+        },
+        {
+          "check": "the entry holds exactly the text",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G9",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "click --motion",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the status does not read \"Status: Logged in 5\" before the click (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "click --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the curved approach ends in the click on Login",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G10",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "drag --motion",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "no low slider status before the drag (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "drag --motion succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "it was one drag through a curved path",
+          "ok": true,
+          "observed": "22"
+        },
+        {
+          "check": "the drag moves the slider down",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G6",
+      "consumerScenario": "-",
+      "scenario": "capture-pass",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "the focused window is smaller than the display, so a display capture fails the size check (precondition)",
+          "ok": true,
+          "observed": "800x638"
+        },
+        {
+          "check": "capture-pass succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "one screen, titled as the focused window",
+          "ok": true,
+          "observed": "[\"Agent Harbor Test Fixture\"]"
+        },
+        {
+          "check": "the capture is the focused window's size (ffprobe)",
+          "ok": true,
+          "observed": "800x638 vs 800x638"
+        },
+        {
+          "check": "the manifest names it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "a session that does not exist is refused as display-gone, storing nothing (negative control)",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "G3",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session kill",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "before the kill GuiAssert runs the session (negative control)",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "ah desktop session kill succeeds",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "GuiAssert no longer finds it (exit 3)",
+          "ok": true,
+          "observed": "exit 3"
+        },
+        {
+          "check": "Agent Harbor no longer lists it",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "its lifecycle host has exited",
+          "ok": true,
+          "observed": ""
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "linux-xvfb",
+      "id": "A9",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "session teardown",
+      "result": "pass",
+      "checks": [
+        {
+          "check": "every process launched into the session is gone",
+          "ok": true,
+          "observed": ""
+        },
+        {
+          "check": "the session's runtime directory is gone",
+          "ok": true,
+          "observed": "gaxv-dba7152929d69266"
+        }
+      ],
+      "gaps": []
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_doctor_reports_capabilities",
+      "scenario": "native e2e script, unchanged",
+      "result": "pass",
+      "checks": [],
+      "gaps": [],
+      "observed": "PASS: Linux desktop doctor capability schema is valid"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_zero_touch_session_bootstrap",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "error: production desktop session cleanup leaked owned resources"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_click_scroll_drag_roundtrip",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "error: production desktop session cleanup leaked owned resources"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_find_elements_filters_role_name_and_state",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_form_fill_submit_and_status_readback",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_wait_observes_timer_driven_dialog",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: Appium is not running at http://127.0.0.1:4723"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_ocr_extracts_text_from_canvas_fixture",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "FAIL: OCR returned no text; left behind after its own cleanup: 6 process(es): dbus-daemon sway ah dbus-daemon sway ruby"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_screenshot_recording_pipeline",
+      "scenario": "native e2e script, unchanged",
+      "result": "fail",
+      "checks": [],
+      "gaps": [],
+      "observed": "FAIL: record output is not valid JSON; left behind after its own cleanup: 6 process(es): dbus-daemon sway ah dbus-daemon sway ruby"
+    },
+    {
+      "session": "native",
+      "id": "N",
+      "consumerScenario": "e2e_linux_visual_fallback_trace_shows_tree_then_ocr",
+      "scenario": "native e2e script, unchanged",
+      "result": "skip",
+      "checks": [],
+      "gaps": [],
+      "observed": "SKIP: ah desktop get-text --fallback --trace is not implemented (on either substrate)"
+    }
+  ]
+}

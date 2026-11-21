@@ -23,11 +23,11 @@
 * Milestones
 
 ** VU1: Video segmentation by visual change
-   :PROPERTIES:
-   :status: completed
-   :status_note: Independently verified: video_analysis.nim + tvideo_analysis.nim landed; 4/4 VU1 tests green against real ffmpeg (real 2-state mp4 fixture generated at test time, boundary at ~1.5s). segmentByChange defaults sampleFps=2.0, scaleW=320, ssimThreshold=0.12. Pure procs + effectful probe/segment reviewed as genuine (no stubs/skips).
-   :depends_on:
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Independently verified: video_analysis.nim + tvideo_analysis.nim landed; 4/4 VU1 tests green against real ffmpeg (real 2-state mp4 fixture generated at test time, boundary at ~1.5s). segmentByChange defaults sampleFps=2.0, scaleW=320, ssimThreshold=0.12. Pure procs + effectful probe/segment reviewed as genuine (no stubs/skips).
+    :depends_on:
+    :END:
 
 *** Deliverables
     - [X] =gui_assert/video_analysis.nim= with the =VideoInfo= /
@@ -53,11 +53,11 @@
       1.5s. Real ffmpeg; no committed media.
 
 ** VU2: Frame OCR + timeline assembly
-   :PROPERTIES:
-   :status: completed
-   :status_note: Independently verified & committed. Extended video_analysis.nim with pure extractUrls (masks full http(s):// matches, then bare host:port/path via IPv4/dotted-domain regex requiring a port and/or path so version strings like 1.55.0 and bare words are rejected; de-duped, order-preserving), wordsToReadingOrderText (group by (blockNum,lineNum), order lines by top-y then words by x), toJson/toDigest, and effectful analyzeVideo (probe → segmentByChange → one full-res keyframe per state at its midpoint → runOcr → reading-order text → URLs; keyframe PNGs left in a temp dir, paths returned in imagePath). VU2 additions reviewed as genuine (no stubs/skips/weakened asserts). Full suite 8/8 green (VU1's 4 + VU2's 4) against real ffmpeg + tesseract 5.5.2; e2e_analyze_fixture_video OCRs genuine ALPHA/BETA drawtext labels off a 2-state fixture generated at test time.
-   :depends_on: VU1
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Independently verified & committed. Extended video_analysis.nim with pure extractUrls (masks full http(s):// matches, then bare host:port/path via IPv4/dotted-domain regex requiring a port and/or path so version strings like 1.55.0 and bare words are rejected; de-duped, order-preserving), wordsToReadingOrderText (group by (blockNum,lineNum), order lines by top-y then words by x), toJson/toDigest, and effectful analyzeVideo (probe → segmentByChange → one full-res keyframe per state at its midpoint → runOcr → reading-order text → URLs; keyframe PNGs left in a temp dir, paths returned in imagePath). VU2 additions reviewed as genuine (no stubs/skips/weakened asserts). Full suite 8/8 green (VU1's 4 + VU2's 4) against real ffmpeg + tesseract 5.5.2; e2e_analyze_fixture_video OCRs genuine ALPHA/BETA drawtext labels off a 2-state fixture generated at test time.
+    :depends_on: VU1
+    :END:
 
 *** Deliverables
     - [X] =analyzeVideo(path, opts): VideoAnalysis= — segment, extract one
@@ -79,11 +79,11 @@
       the OCR text of each state contains its drawtext label.
 
 ** VU3: Query / assertion API
-   :PROPERTIES:
-   :status: completed
-   :status_note: Extended video_analysis.nim with pure query API: containsText (text-level substring over each frame's reading-order text, case-insensitive by default, multi-word phrases match across words), locateText (word-level substring over individual OcrWord.text → seq of (frame index, OcrWord); multi-word needles only match a single word), seenUrl (substring over frame urls), distinctStateCount (= frames.len), textInRegion (word-level match restricted to words whose [x,y,w,h] bbox has standard half-open axis-aligned intersection with the query rect; out-of-range frame → false). All pure; no subprocess/mocks. Added vu3 suite (3 tests) to tvideo_analysis.nim with hand-built VideoAnalysis fixtures. Full suite 11/11 green (4 VU1 + 4 VU2 + 3 VU3) with real ffmpeg + tesseract for the e2e tests.
-   :depends_on: VU2
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Extended video_analysis.nim with pure query API: containsText (text-level substring over each frame's reading-order text, case-insensitive by default, multi-word phrases match across words), locateText (word-level substring over individual OcrWord.text → seq of (frame index, OcrWord); multi-word needles only match a single word), seenUrl (substring over frame urls), distinctStateCount (= frames.len), textInRegion (word-level match restricted to words whose [x,y,w,h] bbox has standard half-open axis-aligned intersection with the query rect; out-of-range frame → false). All pure; no subprocess/mocks. Added vu3 suite (3 tests) to tvideo_analysis.nim with hand-built VideoAnalysis fixtures. Full suite 11/11 green (4 VU1 + 4 VU2 + 3 VU3) with real ffmpeg + tesseract for the e2e tests.
+    :depends_on: VU2
+    :END:
 
 *** Deliverables
     - [X] Pure queries over =VideoAnalysis=: =containsText= (case-insensitive),
@@ -98,17 +98,17 @@
       the region.
 
 ** VU4: Window detection from pixels only (pure CV)
-   :PROPERTIES:
-   :status: completed
-   :status_note: vision_windows.nim landed with DetectedWindow + pure detectWindowRects (Otsu threshold → iterative stack flood-fill connected components → min-area/aspect filtering → nested-box merge → top-left→bottom-right sort) and effectful detectWindows (decode → detect → ffmpeg crop per rect + top band → runOcr; confidence = bbox fill ratio; honors FFMPEG/FFMPEG_BIN/PATH/TESSERACT_BIN; temp files cleaned). NO OS window API. Tuned defaults: minAreaFrac=0.015 (windows ≫ this, specks ≪), maxAreaFrac=0.98 (rejects the whole-frame background blob — this is what makes a unimodal/blank frame yield 0 windows since Otsu degenerates to threshold 0 on it), maxAspect=12.0 (rejects slivers), 8-connectivity. Tests in tests/tvision_windows.nim: test_detect_window_rects_synthetic (pure, in-memory GrayImage, exactly 2 rects ±6px + blank/black → 0) and e2e_windows_two_window_frame (real ffmpeg-rendered 1000x700 desktop PNG, real tesseract; exactly 2 windows at expected positions, per-window OCR contains its distinct ALPHA/BETA label and not the other's) both green; optional GUIASSERT_SUBSTRATE_MP4 block is genuinely conditional. Full suite: tvideo_analysis 11/11 + tvision_windows 2 required (+1 optional) green with real ffmpeg + tesseract 5.5.2.
-   :depends_on: VU2
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: vision_windows.nim landed with DetectedWindow + pure detectWindowRects (Otsu threshold → iterative stack flood-fill connected components → min-area/aspect filtering → nested-box merge → top-left→bottom-right sort) and effectful detectWindows (decode → detect → ffmpeg crop per rect + top band → runOcr; confidence = bbox fill ratio; honors FFMPEG/FFMPEG_BIN/PATH/TESSERACT_BIN; temp files cleaned). NO OS window API. Tuned defaults: minAreaFrac=0.015 (windows ≫ this, specks ≪), maxAreaFrac=0.98 (rejects the whole-frame background blob — this is what makes a unimodal/blank frame yield 0 windows since Otsu degenerates to threshold 0 on it), maxAspect=12.0 (rejects slivers), 8-connectivity. Tests in tests/tvision_windows.nim: test_detect_window_rects_synthetic (pure, in-memory GrayImage, exactly 2 rects ±6px + blank/black → 0) and e2e_windows_two_window_frame (real ffmpeg-rendered 1000x700 desktop PNG, real tesseract; exactly 2 windows at expected positions, per-window OCR contains its distinct ALPHA/BETA label and not the other's) both green; optional GUIASSERT_SUBSTRATE_MP4 block is genuinely conditional. Full suite: tvideo_analysis 11/11 + tvision_windows 2 required (+1 optional) green with real ffmpeg + tesseract 5.5.2.
+    :depends_on: VU2
+    :END:
 
-   Scope: PURE computer vision — answer "how many top-level windows + their
-   text" from a single decoded frame with NO OS API. The OS-driven / appium
-   window enumeration (CGWindowList / EnumWindows / wmctrl) is a SEPARATE,
-   already-partially-existing capability set (window_layout.nim, appium.nim)
-   and is explicitly NOT part of this initiative.
+    Scope: PURE computer vision — answer "how many top-level windows + their
+    text" from a single decoded frame with NO OS API. The OS-driven / appium
+    window enumeration (CGWindowList / EnumWindows / wmctrl) is a SEPARATE,
+    already-partially-existing capability set (window_layout.nim, appium.nim)
+    and is explicitly NOT part of this initiative.
 
 *** Deliverables
     - [X] =gui_assert/vision_windows.nim= with =DetectedWindow= (bbox,
@@ -141,15 +141,15 @@
       that env var points at a real recording.)
 
 ** VU5: Token-efficient agent index + CLI (grep the video → extract frames)
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU3
-   :note: Implemented in video_analysis.nim (pure textDiff/buildIndex/findInIndex + effectful extractFrameTo/contactSheet) and the new src/gui_assert_vision.nim CLI (analyze/find/extract-frame/contact-sheet/describe/windows/--help; pure parseVisionArgs). 3-level index (summary+segments+textIndex). Tests in tests/tvision_cli.nim (5): all pass; tvideo_analysis (11) + tvision_windows (3) still green. Justfile `analyze` recipe added; nimble test task + gitignore updated. Real ffmpeg+tesseract e2e (compiles the CLI, runs on a generated 2-state fixture); no committed media, no stubs.
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU3
+    :note: Implemented in video_analysis.nim (pure textDiff/buildIndex/findInIndex + effectful extractFrameTo/contactSheet) and the new src/gui_assert_vision.nim CLI (analyze/find/extract-frame/contact-sheet/describe/windows/--help; pure parseVisionArgs). 3-level index (summary+segments+textIndex). Tests in tests/tvision_cli.nim (5): all pass; tvideo_analysis (11) + tvision_windows (3) still green. Justfile `analyze` recipe added; nimble test task + gitignore updated. Real ffmpeg+tesseract e2e (compiles the CLI, runs on a generated 2-state fixture); no committed media, no stubs.
+    :END:
 
-   THE priority milestone for agent token-efficiency (DrVideo/VideoAgent
-   video→document + retrieval pattern). Emit a compact hierarchical index so an
-   agent explores via text and pulls only 1-3 frames on demand.
+    THE priority milestone for agent token-efficiency (DrVideo/VideoAgent
+    video→document + retrieval pattern). Emit a compact hierarchical index so an
+    agent explores via text and pulls only 1-3 frames on demand.
 
 *** Deliverables
     - [X] Index builder (extend video_analysis.nim): =buildIndex(a: VideoAnalysis)=
@@ -180,40 +180,40 @@
       one PNG. Real ffmpeg + tesseract.
 
 ** VU8: Change-detection hardening (tiled SSIM + pHash dedup + ECR)
-   :PROPERTIES:
-   :status: completed
-   :status_note: Added three pure-CV signals to image_math.nim —
-     tiledSsim(a,b,gridX=4,gridY=4)->(minLocal,meanLocal) (per-cell SSIM over a
-     4x4 grid; minLocal = most-changed cell), dctHash(img)->uint64 (32x32
-     area-downscale -> separable 2D DCT-II -> top-left 8x8 low-freq block ->
-     bit=coeff>median-of-63-AC-coeffs) with hammingDistance(a,b)=popcount(xor),
-     and edgeChangeRatio(a,b,threshold=32) (|edges(a) XOR edges(b)| / union of
-     forward-difference-gradient edge maps). Wired into video_analysis.nim:
-     segmentByChange now DEFAULTS to the local detector (useLocal=true) —
-     boundary when 1-tiledSsim.minLocal > localThreshold (default 0.35, grid
-     4x4); useLocal=false restores the exact legacy global-SSIM path
-     (ssimThreshold=0.12). segmentBoundaries is unchanged and is fed the
-     local-min-derived series. analyzeVideo now extracts+pHashes each keyframe
-     BEFORE OCR and collapses consecutive near-duplicate states via the new
-     pure dedupeConsecutive(a, hashes, maxDist=6) (extends kept tEnd,
-     reindexes) so redundant frames don't bloat OCR/index; phashDupThreshold
-     param (default 6, <0 disables). Tuned honestly: with the default local
-     detector AND dedup the real-ffmpeg 2-state fixture still yields exactly 2
-     states (e2e_segment_two_state_video + e2e_analyze_fixture_video both green;
-     ALPHA vs BETA keyframes are far apart in pHash so are NOT merged). New
-     tests/tchange_detect.nim (5 pure tests, no ffmpeg): test_tiled_ssim_local_
-     change (128x128 textured pair, one bright rect in a corner cell -> global
-     SSIM 0.91 stays high / would NOT fire, minLocal 0.23 DOES fire),
-     test_phash_hamming (identical=0, tiny 10x10 patch=4 <=6, checkerboard=32;
-     small<big) + dedup collapse/keep + radius-0 no-merge, test_edge_change_
-     ratio (added box ECR=1.0 high, uniform +20 shift ECR=0.0 low). Full run:
-     tchange_detect 5, tvideo_analysis 11, tvision_windows 3, tvision_cli 5,
-     tocr_vision 5 — all green (29/29).
-   :depends_on: VU1
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :status_note: Added three pure-CV signals to image_math.nim —
+      tiledSsim(a,b,gridX=4,gridY=4)->(minLocal,meanLocal) (per-cell SSIM over a
+      4x4 grid; minLocal = most-changed cell), dctHash(img)->uint64 (32x32
+      area-downscale -> separable 2D DCT-II -> top-left 8x8 low-freq block ->
+      bit=coeff>median-of-63-AC-coeffs) with hammingDistance(a,b)=popcount(xor),
+      and edgeChangeRatio(a,b,threshold=32) (|edges(a) XOR edges(b)| / union of
+      forward-difference-gradient edge maps). Wired into video_analysis.nim:
+      segmentByChange now DEFAULTS to the local detector (useLocal=true) —
+      boundary when 1-tiledSsim.minLocal > localThreshold (default 0.35, grid
+      4x4); useLocal=false restores the exact legacy global-SSIM path
+      (ssimThreshold=0.12). segmentBoundaries is unchanged and is fed the
+      local-min-derived series. analyzeVideo now extracts+pHashes each keyframe
+      BEFORE OCR and collapses consecutive near-duplicate states via the new
+      pure dedupeConsecutive(a, hashes, maxDist=6) (extends kept tEnd,
+      reindexes) so redundant frames don't bloat OCR/index; phashDupThreshold
+      param (default 6, <0 disables). Tuned honestly: with the default local
+      detector AND dedup the real-ffmpeg 2-state fixture still yields exactly 2
+      states (e2e_segment_two_state_video + e2e_analyze_fixture_video both green;
+      ALPHA vs BETA keyframes are far apart in pHash so are NOT merged). New
+      tests/tchange_detect.nim (5 pure tests, no ffmpeg): test_tiled_ssim_local_
+      change (128x128 textured pair, one bright rect in a corner cell -> global
+      SSIM 0.91 stays high / would NOT fire, minLocal 0.23 DOES fire),
+      test_phash_hamming (identical=0, tiny 10x10 patch=4 <=6, checkerboard=32;
+      small<big) + dedup collapse/keep + radius-0 no-merge, test_edge_change_
+      ratio (added box ECR=1.0 high, uniform +20 shift ECR=0.0 low). Full run:
+      tchange_detect 5, tvideo_analysis 11, tvision_windows 3, tvision_cli 5,
+      tocr_vision 5 — all green (29/29).
+    :depends_on: VU1
+    :END:
 
-   Global SSIM misses small-but-important UI changes and over-keeps
-   near-duplicates. Add pure-CV signals per the SOTA survey.
+    Global SSIM misses small-but-important UI changes and over-keeps
+    near-duplicates. Add pure-CV signals per the SOTA survey.
 
 *** Deliverables
     - [X] Tiled/local SSIM in =segmentByChange= (grid of local SSIM; trigger on
@@ -234,46 +234,46 @@
       colour-only change → low ECR.
 
 ** VU9: OCR quality (upscale + dark-mode inversion + per-region PSM + confidence)
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU2
-   :status_note: Implemented in src/gui_assert/ocr.nim WITHOUT changing the
-     legacy runOcr contract (bboxes stay in original space; existing suites
-     green). Added OcrOptions{psm, upscale, invert(oiAuto|oiNever|oiAlways),
-     contrast}, initOcrOptions() (defaults psm=6, upscale=1.0, oiAuto, no
-     contrast), runOcrEx (ffmpeg preprocess: Lanczos scale=iw*U:ih*U:flags=
-     lanczos with bboxes divided back by U to ORIGINAL space; negate for
-     dark-mode; light eq=contrast=1.3), and runOcrMultiPsm (runs each PSM, e.g.
-     @[6,11], merging unique words deduped by (text, bbox≈±6px)). analyzeVideo
-     now OCRs each keyframe via runOcrMultiPsm(@[6,11], upscale=2.0, oiAuto)
-     (exposed as ocrPsms/ocrOpts params). Auto-invert luma threshold = 110.0
-     (mean grayscale via image_math.decodeGray; below → invert). Upscale default
-     2.0 in the pipeline (tests use 3.0 for the tiny-font case).
-     KEY DESIGN / FINDING: modern tesseract (5.5.2) has a built-in polarity
-     heuristic (tessedit_do_invert, ON by default) that silently re-inverts
-     light-on-dark text, so a naive oiNever "worked" anyway and the option was
-     neither testable nor authoritative. runOcrEx now sets tessedit_do_invert=0
-     so OcrOptions.invert is the single deterministic source of truth; runOcr
-     keeps tesseract's auto-invert ON and is left byte-identical (the
-     white-on-black fibonacci OCR test in tgui_assert stays green).
-     Tests: tests/tocr_vision.nim (real ffmpeg + real tesseract, no mocks; both
-     failing and passing directions asserted): e2e_ocr_dark_mode (oiNever reads
-     garbage "DL (o]0 =5 W 1))" — no DARKMODE/4242 — while oiAlways/oiAuto read
-     "DARKMODE TEXT 4242"); e2e_ocr_upscale_small_text (fontsize-9: 1x reads
-     "TowscaLe a1", 3x reads "TINYSCALE 7731"); test_bbox_rescale (upscale=3
-     bboxes land within the original 480x120 bounds, not ~3x); regression
-     runOcr dark-on-light; runOcrMultiPsm dedup (3 words, no doubling). All 5
-     pass; tvideo_analysis 11/11, tvision_windows 3/3, tvision_cli 5/5,
-     tgui_assert OCR OK. REAL VIDEO: on the 49.72s linux-session.mp4 the base
-     analyzeVideo now surfaces Browser + Replay + CodeTracer (containsText true
-     for each) that the VU7 single-psm-6 pass dropped — "Browser Replay" as an
-     exact adjacent phrase is still false because the client title wraps to
-     separate reading-order lines ("browser-"/"replay"), but the tokens are now
-     in the index/digest without the verifier-side workaround. ~68s for the 49s
-     clip (9 states x 2 PSMs x 2x upscale). Per-region PSM selection wired to a
-     window/region detector (VU4/VU10) and confidence-in-index are left as
-     follow-ups; the multi-PSM merge is the shipped VU7-gap fix.
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU2
+    :status_note: Implemented in src/gui_assert/ocr.nim WITHOUT changing the
+      legacy runOcr contract (bboxes stay in original space; existing suites
+      green). Added OcrOptions{psm, upscale, invert(oiAuto|oiNever|oiAlways),
+      contrast}, initOcrOptions() (defaults psm=6, upscale=1.0, oiAuto, no
+      contrast), runOcrEx (ffmpeg preprocess: Lanczos scale=iw*U:ih*U:flags=
+      lanczos with bboxes divided back by U to ORIGINAL space; negate for
+      dark-mode; light eq=contrast=1.3), and runOcrMultiPsm (runs each PSM, e.g.
+      @[6,11], merging unique words deduped by (text, bbox≈±6px)). analyzeVideo
+      now OCRs each keyframe via runOcrMultiPsm(@[6,11], upscale=2.0, oiAuto)
+      (exposed as ocrPsms/ocrOpts params). Auto-invert luma threshold = 110.0
+      (mean grayscale via image_math.decodeGray; below → invert). Upscale default
+      2.0 in the pipeline (tests use 3.0 for the tiny-font case).
+      KEY DESIGN / FINDING: modern tesseract (5.5.2) has a built-in polarity
+      heuristic (tessedit_do_invert, ON by default) that silently re-inverts
+      light-on-dark text, so a naive oiNever "worked" anyway and the option was
+      neither testable nor authoritative. runOcrEx now sets tessedit_do_invert=0
+      so OcrOptions.invert is the single deterministic source of truth; runOcr
+      keeps tesseract's auto-invert ON and is left byte-identical (the
+      white-on-black fibonacci OCR test in tgui_assert stays green).
+      Tests: tests/tocr_vision.nim (real ffmpeg + real tesseract, no mocks; both
+      failing and passing directions asserted): e2e_ocr_dark_mode (oiNever reads
+      garbage "DL (o]0 =5 W 1))" — no DARKMODE/4242 — while oiAlways/oiAuto read
+      "DARKMODE TEXT 4242"); e2e_ocr_upscale_small_text (fontsize-9: 1x reads
+      "TowscaLe a1", 3x reads "TINYSCALE 7731"); test_bbox_rescale (upscale=3
+      bboxes land within the original 480x120 bounds, not ~3x); regression
+      runOcr dark-on-light; runOcrMultiPsm dedup (3 words, no doubling). All 5
+      pass; tvideo_analysis 11/11, tvision_windows 3/3, tvision_cli 5/5,
+      tgui_assert OCR OK. REAL VIDEO: on the 49.72s linux-session.mp4 the base
+      analyzeVideo now surfaces Browser + Replay + CodeTracer (containsText true
+      for each) that the VU7 single-psm-6 pass dropped — "Browser Replay" as an
+      exact adjacent phrase is still false because the client title wraps to
+      separate reading-order lines ("browser-"/"replay"), but the tokens are now
+      in the index/digest without the verifier-side workaround. ~68s for the 49s
+      clip (9 states x 2 PSMs x 2x upscale). Per-region PSM selection wired to a
+      window/region detector (VU4/VU10) and confidence-in-index are left as
+      follow-ups; the multi-PSM merge is the shipped VU7-gap fix.
+    :END:
 
 *** Deliverables
     - [X] 2-4x Lanczos upscaling of regions before OCR; light contrast only.
@@ -291,11 +291,11 @@
       after upscaling (assert the improvement).
 
 ** VU10: Classical layout tree (morphology + Hough/LSD + MSER + projections)
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU4
-   :status_note: Pure-CV layout primitives added to src/gui_assert/vision_windows.nim (no OS APIs): binary Mask type + morphClose/morphOpen (dilate/erode with a k×k square element) wired into detectWindowRects via an OPT-IN morphCloseK param (default 0 → VU4 path byte-for-byte unchanged); detectAxisLines (deterministic Hough-lite: RLE of strong per-row vertical / per-column horizontal gradient runs ≥ minRun, near-parallel duplicate edges merged); rowProfile/colProfile foreground projection profiles; Region tree via buildRegionTree (≥90% containment → immediate-smallest-container parent, deterministic reading-order). MSER text-region detector intentionally SKIPPED (optional/stretch; parameter-sensitive/non-deterministic, and OCR word bboxes + projections + axis lines already recover the structural value — see code note). Tests: tests/tlayout_tree.nim (6/6 green): test_hough_titlebar_synthetic, test_projection_profiles, test_morph_close_bridges_gap, test_region_tree_nesting, test_region_tree_deep_nesting, test_vu4_two_windows_unchanged (regression: default AND morphCloseK=5 both keep the two separated windows at exactly 2). Full re-run green: tlayout_tree (6), tvision_windows (3), tvideo_analysis (11), tchange_detect (5), tvision_cli (5), tocr_vision (5).
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU4
+    :status_note: Pure-CV layout primitives added to src/gui_assert/vision_windows.nim (no OS APIs): binary Mask type + morphClose/morphOpen (dilate/erode with a k×k square element) wired into detectWindowRects via an OPT-IN morphCloseK param (default 0 → VU4 path byte-for-byte unchanged); detectAxisLines (deterministic Hough-lite: RLE of strong per-row vertical / per-column horizontal gradient runs ≥ minRun, near-parallel duplicate edges merged); rowProfile/colProfile foreground projection profiles; Region tree via buildRegionTree (≥90% containment → immediate-smallest-container parent, deterministic reading-order). MSER text-region detector intentionally SKIPPED (optional/stretch; parameter-sensitive/non-deterministic, and OCR word bboxes + projections + axis lines already recover the structural value — see code note). Tests: tests/tlayout_tree.nim (6/6 green): test_hough_titlebar_synthetic, test_projection_profiles, test_morph_close_bridges_gap, test_region_tree_nesting, test_region_tree_deep_nesting, test_vu4_two_windows_unchanged (regression: default AND morphCloseK=5 both keep the two separated windows at exactly 2). Full re-run green: tlayout_tree (6), tvision_windows (3), tvideo_analysis (11), tchange_detect (5), tvision_cli (5), tocr_vision (5).
+    :END:
 
 *** Deliverables
     - [ ] Morphological close/open before CC; Hough/LSD line detection for title
@@ -310,11 +310,11 @@
       with the window as parent and two child regions.
 
 ** VU11: Optional high-accuracy backends (behind flags; not default)
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU5
-   :status_note: Implemented in ocr.nim: OcrBackend enum (obTesseract DEFAULT / obAppleVision / obRapidOcr), typed OcrBackendUnavailable, runOcrWithBackend / availableBackends / runOcrBestEffort, plus a documented OmniParser-class stub (ElementBackend {ebNone, ebOmniParser} + detectElements, which raises OcrBackendUnavailable for ebOmniParser and returns @[] for ebNone — no ML deps pulled). Tesseract stays the reproducible default and adds ZERO new runtime deps (obTesseract == the existing runOcrEx path). Apple Vision = bundled Swift helper src/gui_assert/helpers/vision_ocr.swift (VNRecognizeTextRequest, .accurate), compiled on demand by resolveAppleVisionHelper via swiftc into $TMPDIR/gui_assert_vision_helper (env overrides: SWIFTC, GUIASSERT_VISION_HELPER prebuilt, GUIASSERT_VISION_HELPER_SRC); the swiftc invocation drops nix-exported SDKROOT/DEVELOPER_DIR so the system /usr/bin/swiftc uses its matching SDK (nix's apple-sdk-14.4 otherwise fails with 'no such module SwiftShims'). RapidOCR = opt-in external runner via RAPIDOCR_CMD (or a 'rapidocr' on PATH) emitting the same pixel TSV; no ONNX weights bundled. REAL Apple Vision path WAS exercised on this macOS host: it OCR'd a generated fixture and read "APPLEVISION 5150" with an in-range pixel bbox (helper prints TEXT\tconf\tx\ty\tw\th; conf 0..1 scaled to Tesseract's 0..100). New suite tests/tocr_backends.nim 3/3 green; regression suites still green: tocr_vision 5/5, tvideo_analysis 11/11, tvision_windows 3/3, tvision_cli 5/5, tchange_detect 5/5, tlayout_tree 6/6.
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU5
+    :status_note: Implemented in ocr.nim: OcrBackend enum (obTesseract DEFAULT / obAppleVision / obRapidOcr), typed OcrBackendUnavailable, runOcrWithBackend / availableBackends / runOcrBestEffort, plus a documented OmniParser-class stub (ElementBackend {ebNone, ebOmniParser} + detectElements, which raises OcrBackendUnavailable for ebOmniParser and returns @[] for ebNone — no ML deps pulled). Tesseract stays the reproducible default and adds ZERO new runtime deps (obTesseract == the existing runOcrEx path). Apple Vision = bundled Swift helper src/gui_assert/helpers/vision_ocr.swift (VNRecognizeTextRequest, .accurate), compiled on demand by resolveAppleVisionHelper via swiftc into $TMPDIR/gui_assert_vision_helper (env overrides: SWIFTC, GUIASSERT_VISION_HELPER prebuilt, GUIASSERT_VISION_HELPER_SRC); the swiftc invocation drops nix-exported SDKROOT/DEVELOPER_DIR so the system /usr/bin/swiftc uses its matching SDK (nix's apple-sdk-14.4 otherwise fails with 'no such module SwiftShims'). RapidOCR = opt-in external runner via RAPIDOCR_CMD (or a 'rapidocr' on PATH) emitting the same pixel TSV; no ONNX weights bundled. REAL Apple Vision path WAS exercised on this macOS host: it OCR'd a generated fixture and read "APPLEVISION 5150" with an in-range pixel bbox (helper prints TEXT\tconf\tx\ty\tw\th; conf 0..1 scaled to Tesseract's 0..100). New suite tests/tocr_backends.nim 3/3 green; regression suites still green: tocr_vision 5/5, tvideo_analysis 11/11, tvision_windows 3/3, tvision_cli 5/5, tchange_detect 5/5, tlayout_tree 6/6.
+    :END:
 
 *** Deliverables
     - [X] Pluggable OCR backend interface with an optional Apple Vision (macOS)
@@ -336,11 +336,11 @@
       documented OcrBackendUnavailable; ebNone returns empty.
 
 ** VU6: Reproducibility — GuiAssert flake
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU1
-   :status_note: flake pins nim / ffmpeg (with drawtext) / tesseract (eng); vision suites tvideo_analysis (11/11), tvision_windows (3/3), tvision_cli (5/5) are green under =nix develop -c= with zero host setup (the shellHook supplies FFMPEG_BIN/FFPROBE/TESSERACT_BIN + fonts.conf + TMPDIR canonicalization). Pre-existing tparser (genuine assert fail) / teditor / tgui_assert (timing asserts) / tdiscovery / temotive (bare-import path bug) failures are unrelated to the flake and out of scope for VU6.
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU1
+    :status_note: flake pins nim / ffmpeg (with drawtext) / tesseract (eng); vision suites tvideo_analysis (11/11), tvision_windows (3/3), tvision_cli (5/5) are green under =nix develop -c= with zero host setup (the shellHook supplies FFMPEG_BIN/FFPROBE/TESSERACT_BIN + fonts.conf + TMPDIR canonicalization). Pre-existing tparser (genuine assert fail) / teditor / tgui_assert (timing asserts) / tdiscovery / temotive (bare-import path bug) failures are unrelated to the flake and out of scope for VU6.
+    :END:
 
 *** Deliverables
     - [X] =flake.nix= pinning nim + nimble + ffmpeg + tesseract; devShell exports
@@ -375,33 +375,33 @@
       so run the suites individually to see the full pass/fail picture.
 
 ** VU7: Apply to the substrate videos (campaign tie-in)
-   :PROPERTIES:
-   :status: completed
-   :depends_on: VU3
-   :status_note: Completed & verified. Implemented in codetracer-marketing (runner/vm-record):
-     verify_recording.nim (reusable verifyRecording(mp4, beats): VerifyResult
-     over a Beat type — bkMinStates / bkContainsText / bkSeenUrlOrText — built on
-     the VU3 query API distinctStateCount/containsText/seenUrl, plus a
-     PASS/FAIL CLI reporting the timestamp/state + matched OCR text per beat);
-     wired as a gate via verify-gate.sh into record-linux.sh and
-     record-{macos,windows}.sh (ON by default, SKIP_VERIFY=1 bypass; resolves
-     FFMPEG/FFPROBE/TESSERACT_BIN like the rest of the harness). Tests
-     tverify_recording.nim: e2e_verify_linux_session (real ffmpeg+tesseract; uses
-     the real gitignored linux-session.mp4 when present else a self-contained
-     synthetic 3-state drawtext stand-in) and verify_gate_fails_on_empty (black
-     video → FAIL). DEMONSTRATED on the REAL 49.72s linux-session.mp4: all 4
-     linux beats PASS — 9 distinct states; "flame" @1.50s (state 1); "CodeTracer"
-     @17.00s (state 4, docs Introduction); "Browser Replay" @30.50s (state 7,
-     OCR "CodeTracer Browser Replay"). OCR GAP FOUND (→ VU9): analyzeVideo's
-     runOcr uses tesseract --psm 6 (single uniform block); on the busy desktop
-     frame the wall of terminal build-log text swamps the smaller Browser-Replay
-     window heading, so "Browser Replay"/"Worker error" are dropped. The verifier
-     compensates with a sparse psm-11 pass over several frames per state
-     (single-midpoint keyframe sampling was also fragile — t=38.25s landed on a
-     blurred transition frame while t=36-38s read the heading cleanly). Motivates
-     VU9's per-region PSM selection so the base analyzeVideo pipeline surfaces
-     these headings without the verifier-side workaround.
-   :END:
+    :PROPERTIES:
+    :status: completed
+    :depends_on: VU3
+    :status_note: Completed & verified. Implemented in codetracer-marketing (runner/vm-record):
+      verify_recording.nim (reusable verifyRecording(mp4, beats): VerifyResult
+      over a Beat type — bkMinStates / bkContainsText / bkSeenUrlOrText — built on
+      the VU3 query API distinctStateCount/containsText/seenUrl, plus a
+      PASS/FAIL CLI reporting the timestamp/state + matched OCR text per beat);
+      wired as a gate via verify-gate.sh into record-linux.sh and
+      record-{macos,windows}.sh (ON by default, SKIP_VERIFY=1 bypass; resolves
+      FFMPEG/FFPROBE/TESSERACT_BIN like the rest of the harness). Tests
+      tverify_recording.nim: e2e_verify_linux_session (real ffmpeg+tesseract; uses
+      the real gitignored linux-session.mp4 when present else a self-contained
+      synthetic 3-state drawtext stand-in) and verify_gate_fails_on_empty (black
+      video → FAIL). DEMONSTRATED on the REAL 49.72s linux-session.mp4: all 4
+      linux beats PASS — 9 distinct states; "flame" @1.50s (state 1); "CodeTracer"
+      @17.00s (state 4, docs Introduction); "Browser Replay" @30.50s (state 7,
+      OCR "CodeTracer Browser Replay"). OCR GAP FOUND (→ VU9): analyzeVideo's
+      runOcr uses tesseract --psm 6 (single uniform block); on the busy desktop
+      frame the wall of terminal build-log text swamps the smaller Browser-Replay
+      window heading, so "Browser Replay"/"Worker error" are dropped. The verifier
+      compensates with a sparse psm-11 pass over several frames per state
+      (single-midpoint keyframe sampling was also fragile — t=38.25s landed on a
+      blurred transition frame while t=36-38s read the heading cleanly). Motivates
+      VU9's per-region PSM selection so the base analyzeVideo pipeline surfaces
+      these headings without the verifier-side workaround.
+    :END:
 
 *** Deliverables
     - [X] In codetracer-marketing =runner/vm-record=, a post-record verifier that

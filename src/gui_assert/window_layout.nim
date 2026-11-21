@@ -77,6 +77,21 @@ proc buildSetBoundsScript*(bundleIdOrName: string,
   ## id (contains a dot) and by `name` otherwise.  AppleScript uses
   ## `{x1, y1, x2, y2}` so we compute the bottom-right corner from the
   ## width/height the caller provided.
+  ##
+  ## The target must answer Apple events and implement the front-window
+  ## bounds operation. A bundleless executable without scripting support
+  ## (for example, codetracer-gpui) cannot be placed this way; packaging it
+  ## as an application alone does not guarantee support. An unresolved
+  ## application or object can produce osascript error -1728; that error
+  ## alone does not identify the cause as missing scripting support.
+  ##
+  ## A caller-managed System Events alternative addresses the process via
+  ## accessibility and requires an Accessibility grant for the controlling
+  ## code identity, separate from permission to send Apple events to the
+  ## application. This builder supplies no automatic fallback. Callers
+  ## running buildOsascriptArgv themselves must inspect the exit status and
+  ## output; launchWindow and setBounds raise WindowLayoutError on failure
+  ## and preserve the subprocess output rather than report placement success.
   let x2 = x + w
   let y2 = y + h
   if '.' in bundleIdOrName:
@@ -281,6 +296,8 @@ proc launchWindow*(spec: WindowSpec): WindowHandle =
 proc setBounds*(h: WindowHandle, x, y, w, hgt: int) =
   ## Move/resize the window via AppleScript.  Raises
   ## `WindowLayoutError` if `osascript` fails.
+  ## See `buildSetBoundsScript` for the target's scripting preconditions
+  ## and the permission boundary of a caller-managed alternative.
   let script = buildSetBoundsScript(h.bundleId, x, y, w, hgt)
   let (osOut, osCode) = runOsascript(script)
   if osCode != 0:

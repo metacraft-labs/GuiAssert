@@ -36,6 +36,13 @@
 
 import std/[osproc, strutils, os, streams]
 import ./window_layout  # applescriptEscape, buildOsascriptArgv
+import ./core/geometry
+
+# This module stays at its path. Its pure code (the AppleScript builders and
+# the macOS virtual key-code table) is specific to the macOS input path and
+# belongs with that backend rather than the platform-neutral core; the
+# `mouseMove` / `mouseClick` overloads at the end accept a core
+# `gui_assert/core/geometry.Point` in desktop coordinates.
 
 type
   KeyModifier* = enum
@@ -261,3 +268,15 @@ else:
     ## Non-macOS stub: CGEvent mouse injection is macOS-only.
     raise newException(InputError,
       "mouseClick is only implemented on macOS (CGEvent)")
+
+# ---------------------------------------------------------------------------
+# Bridges to the pure core
+# ---------------------------------------------------------------------------
+
+proc mouseMove*(p: geometry.Point) =
+  ## `mouseMove(x, y)` for a core desktop `Point`.
+  mouseMove(p.x, p.y)
+
+proc mouseClick*(p: geometry.Point) =
+  ## `mouseClick(x, y)` for a core desktop `Point`.
+  mouseClick(p.x, p.y)

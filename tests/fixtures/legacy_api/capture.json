@@ -1,0 +1,102 @@
+[
+  {
+    "name": "CaptureBackend",
+    "kind": "skType",
+    "code": "CaptureBackend = enum\n  cbAuto, cbWfRecorder, cbX11Grab, cbAvfoundation, cbDdagrab, cbGdiGrab"
+  },
+  {
+    "name": "CaptureError",
+    "kind": "skType",
+    "code": "CaptureError = object of CatchableError\n  backend*: ResolvedBackend\n  stage*: string             ## \"resolve\", \"spawn\", \"wait\", or \"validate\""
+  },
+  {
+    "name": "CaptureHandle",
+    "kind": "skType",
+    "code": "CaptureHandle = ref object"
+  },
+  {
+    "name": "CaptureOptions",
+    "kind": "skType",
+    "code": "CaptureOptions = object\n  output*: string ## Absolute path to the output `.mp4`. Parent directory must exist or\n                  ## the caller must accept the validation failure that follows.\n  durationSec*: Option[float] ## `none` => run until graceful stop. ffmpeg backends honour `-t`\n                              ## natively; `wf-recorder` ignores this and the caller drives the\n                              ## stop via `stopRecording`.\n  region*: Option[CaptureRegion]\n  backend*: CaptureBackend\n  frameRate*: int            ## Defaults to 30 when zero."
+  },
+  {
+    "name": "CaptureRegion",
+    "kind": "skType",
+    "code": "CaptureRegion = object\n  x*, y*, width*, height*: int"
+  },
+  {
+    "name": "LinuxDisplayServer",
+    "kind": "skType",
+    "code": "LinuxDisplayServer = enum\n  ldsWayland, ldsX11, ldsUnknown"
+  },
+  {
+    "name": "ResolvedBackend",
+    "kind": "skType",
+    "code": "ResolvedBackend = enum\n  rbWfRecorder, rbX11Grab, rbAvfoundation, rbDdagrab, rbGdiGrab"
+  },
+  {
+    "name": "buildArgv",
+    "kind": "skProc",
+    "code": "proc buildArgv(backend: ResolvedBackend; opts: CaptureOptions): seq[string] {.\n    raises: [], tags: [ReadEnvEffect], forbids: [].}"
+  },
+  {
+    "name": "buildAvfoundationArgv",
+    "kind": "skProc",
+    "code": "proc buildAvfoundationArgv(opts: CaptureOptions; screenDeviceIndex: int): seq[\n    string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildWfRecorderArgv",
+    "kind": "skProc",
+    "code": "proc buildWfRecorderArgv(opts: CaptureOptions; codec: string): seq[string] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildWindowsArgv",
+    "kind": "skProc",
+    "code": "proc buildWindowsArgv(opts: CaptureOptions; backend: ResolvedBackend): seq[\n    string] {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "buildX11GrabArgv",
+    "kind": "skProc",
+    "code": "proc buildX11GrabArgv(opts: CaptureOptions; display: string): seq[string] {.\n    raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "defaultCaptureOptions",
+    "kind": "skProc",
+    "code": "proc defaultCaptureOptions(): CaptureOptions {.raises: [], tags: [], forbids: [].}"
+  },
+  {
+    "name": "detectLinuxDisplayServer",
+    "kind": "skProc",
+    "code": "proc detectLinuxDisplayServer(): LinuxDisplayServer {.raises: [],\n    tags: [ReadEnvEffect], forbids: [].}"
+  },
+  {
+    "name": "detectMacosScreenDeviceIndex",
+    "kind": "skProc",
+    "code": "proc detectMacosScreenDeviceIndex(): int {.\n    raises: [OSError, CaptureError, IOError, ValueError], tags: [ReadEnvEffect,\n    ReadDirEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "parseMacosScreenDeviceIndex",
+    "kind": "skProc",
+    "code": "proc parseMacosScreenDeviceIndex(text: string): int {.raises: [CaptureError],\n    tags: [], forbids: [].}"
+  },
+  {
+    "name": "recordScreen",
+    "kind": "skProc",
+    "code": "proc recordScreen(opts: CaptureOptions): string {.discardable,\n    raises: [CaptureError, OSError, IOError, ValueError], tags: [ReadEnvEffect,\n    ReadDirEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "resolveBackend",
+    "kind": "skProc",
+    "code": "proc resolveBackend(choice: CaptureBackend): ResolvedBackend {.\n    raises: [CaptureError], tags: [], forbids: [].}"
+  },
+  {
+    "name": "startRecording",
+    "kind": "skProc",
+    "code": "proc startRecording(opts: CaptureOptions): CaptureHandle {.\n    raises: [CaptureError, OSError, IOError, ValueError], tags: [ReadEnvEffect,\n    ReadDirEffect, ReadIOEffect, ExecIOEffect, RootEffect, TimeEffect,\n    WriteIOEffect], forbids: [].}"
+  },
+  {
+    "name": "stopRecording",
+    "kind": "skProc",
+    "code": "proc stopRecording(h: CaptureHandle): string {.discardable,\n    raises: [CaptureError, OSError, ValueError, IOError],\n    tags: [WriteIOEffect, TimeEffect, ReadDirEffect, ReadIOEffect], forbids: [].}"
+  }
+]

@@ -124,10 +124,10 @@ suite "ocr vu9 e2e":
     let tmp = createTempDir("tocr_upscale_", "")
     defer: removeDir(tmp)
     let frame = tmp / "small.png"
-    # Small fontsize 9 dark-on-light text on a modest canvas.
+    # Small fontsize 8 dark-on-light text on a modest canvas.
     renderFrame(ffmpeg,
       "color=c=white:s=480x120," &
-      "drawtext=text='TINYSCALE 7731':fontcolor=black:fontsize=9:" &
+      "drawtext=text='TINYSCALE 7731':fontcolor=black:fontsize=8:" &
       "x=(w-text_w)/2:y=(h-text_h)/2",
       frame)
 
@@ -153,7 +153,7 @@ suite "ocr vu9 e2e":
     let frame = tmp / "bboxsrc.png"
     renderFrame(ffmpeg,
       "color=c=white:s=480x120," &
-      "drawtext=text='TINYSCALE 7731':fontcolor=black:fontsize=9:" &
+      "drawtext=text='TINYSCALE 7731':fontcolor=black:fontsize=8:" &
       "x=(w-text_w)/2:y=(h-text_h)/2",
       frame)
 
