@@ -493,16 +493,16 @@ proc subdivideRect*(img: GrayImage, r: array[4, int], threshold: int,
     return
   @[r]
 
-proc detectWindowRects*(img: GrayImage,
-                        threshold: int = -1,
-                        minAreaFrac: float = 0.015,
-                        maxAreaFrac: float = 0.98,
-                        maxAspect: float = 12.0,
-                        connectivity8: bool = true,
-                        morphCloseK: int = 0,
-                        subdivideFullBleed: bool = true,
-                        minSeparator: int = 3,
-                        separatorFloor: int = -1): seq[array[4, int]] =
+proc detectWindowRectsWith*(img: GrayImage,
+                            threshold: int = -1,
+                            minAreaFrac: float = 0.015,
+                            maxAreaFrac: float = 0.98,
+                            maxAspect: float = 12.0,
+                            connectivity8: bool = true,
+                            morphCloseK: int = 0,
+                            subdivideFullBleed: bool = true,
+                            minSeparator: int = 3,
+                            separatorFloor: int = -1): seq[array[4, int]] {.raises: [], tags: [], forbids: [].} =
   ## Detect top-level window rectangles from a decoded `GrayImage` using only
   ## pixels (no OS API). Returns `[x, y, w, h]` rectangles sorted top-left to
   ## bottom-right.
@@ -582,6 +582,20 @@ proc detectWindowRects*(img: GrayImage,
   result.sort(proc(a, b: array[4, int]): int =
     result = cmp(a[1], b[1])
     if result == 0: result = cmp(a[0], b[0]))
+
+
+proc detectWindowRects*(img: GrayImage; threshold: int = -1;
+                        minAreaFrac: float = 0.015; maxAreaFrac: float = 0.98;
+                        maxAspect: float = 12.0; connectivity8: bool = true;
+                        morphCloseK: int = 0): seq[array[4, int]] {.raises: [],
+    tags: [], forbids: [].} =
+  ## The pre-split API (frozen in tests/fixtures/legacy_api/vision_windows.json):
+  ## the detection with its full-bleed subdivision on by default. Callers that
+  ## tune `subdivideFullBleed`, `minSeparator` or `separatorFloor` use
+  ## `detectWindowRectsWith`, which keeps the public signature of this routine
+  ## unchanged.
+  detectWindowRectsWith(img, threshold, minAreaFrac, maxAreaFrac, maxAspect,
+                        connectivity8, morphCloseK)
 
 # ---------------------------------------------------------------------------
 # VU10: axis-aligned line detection (Hough-lite via gradient RLE)

@@ -117,7 +117,7 @@ suite "vision_windows pure":
     fillRect(img, 60, 40, 300, 200, 230)
     fillRect(img, 500, 300, 360, 240, 230)
 
-    let rects = detectWindowRects(img)
+    let rects = detectWindowRectsWith(img)
     check rects.len == 2
 
     # Sorted top-left to bottom-right: rect at y=40 first, y=300 second.
@@ -133,11 +133,11 @@ suite "vision_windows pure":
 
     # A blank (all-dark) frame has no windows.
     let blank = mkImage(1000, 700, 20)
-    check detectWindowRects(blank).len == 0
+    check detectWindowRectsWith(blank).len == 0
 
     # A pure-black frame likewise yields nothing.
     let black = mkImage(640, 480, 0)
-    check detectWindowRects(black).len == 0
+    check detectWindowRectsWith(black).len == 0
 
 # ---------------------------------------------------------------------------
 # A maximised window subdivided into panes
@@ -154,17 +154,17 @@ proc tiledWindow(): GrayImage =
 
 suite "vision_windows full-bleed":
   test "a full-bleed window subdivided into panes yields its panes":
-    let rects = detectWindowRects(tiledWindow(), threshold = 33)
+    let rects = detectWindowRectsWith(tiledWindow(), threshold = 33)
     check rects == @[[0, 0, 300, 700], [304, 0, 696, 350],
                      [304, 354, 696, 346]]
 
   test "the same window with subdivision off is dropped, as before":
-    check detectWindowRects(tiledWindow(), threshold = 33,
+    check detectWindowRectsWith(tiledWindow(), threshold = 33,
                             subdivideFullBleed = false).len == 0
 
   test "a full-bleed blob with no separator is still the background":
-    check detectWindowRects(mkImage(1000, 700, 230)).len == 0
-    check detectWindowRects(mkImage(1000, 700, 40), threshold = 33).len == 0
+    check detectWindowRectsWith(mkImage(1000, 700, 230)).len == 0
+    check detectWindowRectsWith(mkImage(1000, 700, 40), threshold = 33).len == 0
 
   test "separatorTones finds the ground and the separator tone":
     check separatorTones(tiledWindow()) == (threshold: 33, separatorTone: 27)
