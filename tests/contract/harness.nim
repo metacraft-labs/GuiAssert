@@ -487,3 +487,17 @@ proc liveChildrenNamed*(parent: int, name: string): seq[PsRow] =
         frontier.add row.pid
         if name in row.args and not row.stat.startsWith("Z"):
           result.add row
+
+proc waitForLiveChildNamed*(parent: int, name: string,
+                            timeoutMs = 10_000): seq[PsRow] =
+  ## Polls `liveChildrenNamed` until a live process named `name` is below
+  ## `parent`, or the bound expires; returns whatever the last poll saw.
+  ## A fixed sleep before one snapshot races the spawn: on a slow runner the
+  ## encoder starts after the sleep ends (seen on macOS, afd8a87). The wait is
+  ## bounded so a serve that never starts its encoder still fails the check.
+  let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+  while true:
+    result = liveChildrenNamed(parent, name)
+    if result.len > 0 or getMonoTime() >= deadline:
+      return
+    sleep(50)

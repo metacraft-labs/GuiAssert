@@ -592,7 +592,7 @@ suite "vision verbs":
     sleep(600)
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
-      let kids = liveChildrenNamed(d.p.processID, "ffmpeg")
+      let kids = waitForLiveChildNamed(d.p.processID, "ffmpeg")
       if kids.len == 0:
         # Name what is there, so a missing encoder is seen rather than guessed at.
         echo "serve pid ", d.p.processID, " has no live ffmpeg below it; its tree:"
@@ -731,7 +731,7 @@ suite "vision verbs":
     # Control: the request is still running (28 800 frames at 1024 wide take
     # far longer than 700 ms), so the cancel below is what ends it.
     when defined(posix):
-      let kids = liveChildrenNamed(d.p.processID, "ffmpeg")
+      let kids = waitForLiveChildNamed(d.p.processID, "ffmpeg")
       check kids.len > 0
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
