@@ -14,6 +14,7 @@
 ## CLI, the daemon and the serializers under test.
 
 import std/[json, os, osproc, streams, strtabs, strutils, tables, times, monotimes]
+import ../../src/gui_assert/backends/media/ffmpeg as media_ffmpeg
 
 when defined(posix):
   import std/posix
@@ -123,8 +124,10 @@ proc runCli*(args: seq[string], env: StringTableRef, workDir = "",
     # a few kilobytes, so a child whose envelope is larger blocks on its write
     # until someone reads; waiting first would wait for a child that cannot
     # exit. The exit wait is still bounded by `timeoutMs`.
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
+    # Read the pipes whole with the Windows-safe readers: Nim's readAll on a
+    # Windows child pipe returns a truncated copy (see ffmpeg.nim).
+    result.stdout = media_ffmpeg.readChildStdout(p)
+    result.stderr = media_ffmpeg.readChildStderr(p)
     result.exit = p.waitForExit(timeoutMs)
     if p.running:
       p.kill()

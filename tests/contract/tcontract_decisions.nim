@@ -28,6 +28,7 @@ when defined(posix):
   import std/posix
 
 import ./harness
+import ../../src/gui_assert/backends/media/ffmpeg as media_ffmpeg
 from ../../src/gui_assert/backends/fixture_desktop import builtinScenarioJson
 
 const
@@ -44,8 +45,8 @@ proc runCliInput(args: seq[string], env: StringTableRef, input: string): CliRun 
     p.inputStream.write(input)
     p.inputStream.close()
     result.exit = p.waitForExit(cliTimeoutMs)
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
+    result.stdout = media_ffmpeg.readChildStdout(p)
+    result.stderr = media_ffmpeg.readChildStderr(p)
   finally:
     p.close()
 
@@ -757,7 +758,7 @@ suite "contract 1.0 decisions":
       let held = startProcess(contractBin(), args = @["--timeout-ms", "400", "type", "--stdin"],
                               env = env, options = {})
       let heldExit = held.waitForExit(10_000)
-      let heldOut = held.outputStream.readAll()
+      let heldOut = media_ffmpeg.readChildStdout(held)
       held.inputStream.close()
       held.close()
       check heldExit == 7 and parseJson(heldOut.strip)["error"]["reason"].getStr == "deadline"
@@ -916,7 +917,7 @@ suite "contract 1.0 decisions":
       let m = sv.recv()
       if m["type"].getStr == "shutdown": break
     discard sv.p.waitForExit(30_000)
-    let daemonStderr = sv.p.errorStream.readAll()
+    let daemonStderr = media_ffmpeg.readChildStderr(sv.p)
     for p in planted: check p notin daemonStderr
     sv.p.close()
 
