@@ -626,8 +626,12 @@ proc resolveFfprobe(ffmpegPath: string): string =
       raise newException(VideoAnalysisError,
         "FFPROBE points at " & envBin & " but no file exists there.")
     return envBin
-  if ffmpegPath.endsWith("ffmpeg"):
-    let candidate = ffmpegPath[0 ..< ^len("ffmpeg")] & "ffprobe"
+  # The sibling keeps the executable extension: on Windows the path ends in
+  # `ffmpeg.exe`, which never matched a bare `ffmpeg` suffix, so the pinned
+  # ffprobe beside it was skipped and a different `ffprobe` on PATH was used.
+  let (dir, name, ext) = splitFile(ffmpegPath)
+  if name == "ffmpeg":
+    let candidate = dir / ("ffprobe" & ext)
     if fileExists(candidate):
       return candidate
   let p = findExe("ffprobe")

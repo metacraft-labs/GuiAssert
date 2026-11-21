@@ -146,7 +146,9 @@ template checkSegmentsEqual(reported: JsonNode, expected: seq[Segment]) =
       check reported[i]["index"].getInt == i
       check reported[i]["tStart"].getFloat == s.tStart
       check reported[i]["tEnd"].getFloat == s.tEnd
-      check reported[i]["changeScore"].getFloat == s.changeScore
+      # The CLI's JSON round-trips the score through its text form, which can move
+      # the last digit (0.6890168044868447 against ...448); compare to 1e-12.
+      check abs(reported[i]["changeScore"].getFloat - s.changeScore) < 1e-12
 
 proc mediaBin(): string =
   ## The build with the media backend.
@@ -432,8 +434,18 @@ suite "vision verbs":
     let probe = startProcess(ffmpegTool(), args = @["-hide_banner", "-loglevel", "error",
       "-nostdin", "-i", damaged, "-vf", "fps=2,scale=320:240", "-f", "null", "-"],
       options = {poStdErrToStdOut})
-    let diagnostics = probe.outputStream.readAll()
-    discard probe.waitForExit()
+    # The whole output is read with the library's pipe reader: Nim's
+    # `readAll` on a Windows child's pipe returned a truncated copy, which
+    # left ffmpeg blocked on a full pipe while this test waited for it to
+    # exit. The wait is bounded too, so a child that stops making progress
+    # fails the test instead of hanging the suite.
+    let diagnostics = media_ffmpeg.readChildStdout(probe)
+    discard probe.waitForExit(60_000)
+    if probe.running:
+      probe.kill()
+      discard probe.waitForExit()
+      checkpoint "the ffmpeg control did not exit within 60 s"
+      check false
     probe.close()
     check diagnostics.len > 65536
     let bin = mediaBin()
@@ -583,16 +595,14 @@ suite "vision verbs":
     var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
     d.send(runReq("seg", @["vision-segment", video, "--fps", sparseFps]))
     when defined(posix):
-      # Control: ffmpeg is running, so the cancel is what ends it. Waited
-      # for, not slept for: a loaded machine took longer than 600 ms to
-      # start it. The ceiling is the quiet span, inside which it writes
-      # nothing once started.
-      var kids = ""
-      let waitFrom = getMonoTime()
-      while kids.len == 0 and msSince(waitFrom) < sparseQuietMs:
-        kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                           options = {poUsePath}).strip
-        if kids.len == 0: sleep(50)
+      # Control: ffmpeg is still running, so the cancel is what ends it.
+      let kids = waitForLiveChildNamed(d.p.processID, "ffmpeg")
+      if kids.len == 0:
+        # Name what is there, so a missing encoder is seen rather than guessed at.
+        echo "serve pid ", d.p.processID, " has no live ffmpeg below it; its tree:"
+        for row in psRows():
+          if row.pid == d.p.processID or row.ppid == d.p.processID or "ffmpeg" in row.args:
+            echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check kids.len > 0
     else:
       sleep(600)
@@ -611,14 +621,11 @@ suite "vision verbs":
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     check c["envelope"]["data"]["state"].getStr == "cancelled"
     when defined(posix):
-      # ffmpeg is gone after the cancel: waited for (a loaded machine reaps
-      # it later than 300 ms), up to the quiet span.
-      var left = "pending"
-      let goneFrom = getMonoTime()
-      while left.len > 0 and msSince(goneFrom) < sparseQuietMs:
-        left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                           options = {poUsePath}).strip
-        if left.len > 0: sleep(50)
+      sleep(300)
+      let left = liveChildrenNamed(d.p.processID, "ffmpeg")
+      if left.len > 0:
+        echo "ffmpeg children still running after cancel (pid, ppid, stat, args):"
+        for row in left: echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard
@@ -730,8 +737,7 @@ suite "vision verbs":
     # Control: the request is still running (28 800 frames at 1024 wide take
     # far longer than 700 ms), so the cancel below is what ends it.
     when defined(posix):
-      let kids = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let kids = waitForLiveChildNamed(d.p.processID, "ffmpeg")
       check kids.len > 0
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
@@ -746,8 +752,10 @@ suite "vision verbs":
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     when defined(posix):
       sleep(300)
-      let left = execProcess("pgrep", args = ["-P", $d.p.processID, "ffmpeg"],
-                             options = {poUsePath}).strip
+      let left = liveChildrenNamed(d.p.processID, "ffmpeg")
+      if left.len > 0:
+        echo "ffmpeg children still running after cancel (pid, ppid, stat, args):"
+        for row in left: echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check left.len == 0
     d.closeInput()
     while d.recv()["type"].getStr != "shutdown": discard

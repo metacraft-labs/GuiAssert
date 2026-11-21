@@ -285,6 +285,29 @@ proc parseVideoProbe*(jsonText, path: string): VideoSource =
     else: discard
     if v == v and v >= 0.0 and v != Inf: result.durationS = some(v)
 
+when defined(windows):
+  # Nim's readAll on a Windows child's stdout pipe returned only part of the
+  # output (a 225-byte ffprobe report came back as 156 bytes, cut inside the
+  # last object), which made every probe look like it printed no JSON. The
+  # pipe is read directly here: ReadFile until it reports no more bytes.
+  proc readFileRaw(h: pointer, buf: pointer, n: uint32, got: pointer,
+                   ov: pointer): int32
+    {.importc: "ReadFile", stdcall, header: "<windows.h>".}
+
+  proc readChildStdout*(p: Process): string =
+    ## The whole of the child's stdout, read from its pipe.
+    var buf: array[4096, char]
+    let h = cast[pointer](p.outputHandle)
+    while true:
+      var got: uint32 = 0
+      let ok = readFileRaw(h, addr buf[0], uint32(buf.len), cast[pointer](addr got), nil)
+      if got > 0:
+        for i in 0 ..< int(got): result.add buf[i]
+      if ok == 0 or got == 0: break
+else:
+  proc readChildStdout*(p: Process): string =
+    p.outputStream.readAll()
+
 proc runCollecting(bin: string, args: seq[string]):
     tuple[output: string, code: int, diag: string] =
   ## Run `bin` with `args` to its end: its stdout whole, its exit code and
@@ -308,7 +331,7 @@ proc runCollecting(bin: string, args: seq[string]):
         bin & ": " & e.msg)
     try:
       p.inputStream.close()
-      result.output = p.outputStream.readAll()
+      result.output = readChildStdout(p)
       result.code = p.waitForExit()
       finished = true
     finally:
@@ -394,6 +417,7 @@ proc decodeGray*(path: string): GrayImage =
   let (buffer, code, diag) = runCollecting(ffmpegPath, @[
       "-hide_banner",
       "-loglevel", "error",
+      "-nostdin",
       "-i", ffmpegInputUrl(path),
       "-vframes", "1",
       "-f", "rawvideo",

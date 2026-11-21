@@ -405,8 +405,12 @@
       =[self-hosted, windows, arm64]= leg is recorded as a documented
       exception in a workflow comment (owner =later/windows=, follow-up GS11).
       (Toolchain: =ci/windows/provision-toolchain.ps1= downloads Nim 2.2.4,
-      WinLibs GCC 16.1.0 and ffmpeg 7.1.1, each SHA-256-pinned (hashes
-      measured 2026-10-20); =ci/windows/run-core-suite.ps1= runs
+      WinLibs GCC 16.1.0 and ffmpeg 8.0, each SHA-256-pinned. ffmpeg is 8.0
+      because the grey conversion in =src/gui_assert/core/image.nim= reproduces
+      ffmpeg 8.0's fixed-point range expansion; 7.1.1 differs by 150,542 pixels
+      (GuiAssert-pm issue 2026-11-11-png-gray-conversion-differs-from-windows-ffmpeg,
+      decided 2026-11-17). Hashes of the 8.0 archive measured 2026-11-17;
+      =ci/windows/run-core-suite.ps1= runs
       =tests/core_suite.txt=, the list =just test-core= runs. The contract
       suite does not exist yet; GS2 adds it to this job. Not run on Windows
       yet: both scripts parse under PowerShell 7.6, and the suite script

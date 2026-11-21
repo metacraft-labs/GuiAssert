@@ -43,7 +43,7 @@ proc contractBin*(): string =
   ## The binary under test. Fails loudly when it has not been built.
   result = getEnv("GUIASSERT_CONTRACT_BIN")
   if result.len == 0:
-    result = repoRootDir / "build" / "bin" / ("guiassert" & ExeExt)
+    result = repoRootDir / "build" / "bin" / "guiassert".addFileExt(ExeExt)
   if not fileExists(result):
     raise newException(IOError, "the guiassert binary " & result &
       " does not exist; run `just build-cli` (or set GUIASSERT_CONTRACT_BIN)")
@@ -105,7 +105,7 @@ proc siblingBin*(name: string): string =
   ## The built binary `name` (`guiassert` or `guiassert-fixture`) beside the
   ## binary under test, for the tests that need one particular build whichever
   ## build the suite runs against. Fails loudly when it has not been built.
-  result = contractBin().parentDir / (name & ExeExt)
+  result = contractBin().parentDir / name.addFileExt(ExeExt)
   if not fileExists(result):
     raise newException(IOError, "the " & name & " binary " & result &
       " does not exist; run `just build-cli`")
@@ -119,13 +119,17 @@ proc runCli*(args: seq[string], env: StringTableRef, workDir = "",
                        env = env, options = {})
   try:
     p.inputStream.close()
+    # Drain the output before waiting. An anonymous pipe on Windows holds only
+    # a few kilobytes, so a child whose envelope is larger blocks on its write
+    # until someone reads; waiting first would wait for a child that cannot
+    # exit. The exit wait is still bounded by `timeoutMs`.
+    result.stdout = p.outputStream.readAll()
+    result.stderr = p.errorStream.readAll()
     result.exit = p.waitForExit(timeoutMs)
     if p.running:
       p.kill()
       raise newException(IOError, "guiassert " & args.join(" ") & " did not exit within " &
         $timeoutMs & " ms")
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
   finally:
     p.close()
 
@@ -456,3 +460,65 @@ proc everyVerbScenario*(work: string): seq[seq[string]] =
 proc prepareWork*(work: string) =
   ## The directories `everyVerbScenario` writes into.
   createDir(work / "frames")
+
+type PsRow* = object
+  pid*, ppid*: int
+  stat*, args*: string
+
+proc psRows*(): seq[PsRow] =
+  ## Every process as `ps` reports it. `ps` is used, not `pgrep`: the macOS
+  ## runner's shell has no `pgrep` on PATH, and its "command not found" text was
+  ## then counted as a process. Zombies (stat Z) are listed too, so a caller
+  ## that means "still running" filters them out itself.
+  when defined(posix):
+    let (output, _) = execCmdEx("ps -A -o pid=,ppid=,stat=,args=")
+    for line in output.splitLines:
+      let fields = line.strip.splitWhitespace
+      if fields.len < 3: continue
+      # The macOS runner's `ps` can print an empty stat column, so the
+      # executable path lands where the stat is expected (seen on the
+      # aarch64 leg, afd8a87). A stat is a short token of state letters
+      # such as `S+`, `Ss` or `Z`; anything with a path separator is the
+      # start of the command, not a stat.
+      # A real stat starts with an uppercase state letter (S, R, Z, U, ...)
+      # and is at most four characters; a lowercase command name is not one.
+      let hasStat = fields[2].len in 1 .. 4 and fields[2][0] in {'A' .. 'Z'} and
+        fields[2].allCharsInSet({'A' .. 'Z', 'a' .. 'z', '+', '<', '>'})
+      let argStart = if hasStat: 3 else: 2
+      if fields.len <= argStart: continue
+      try:
+        result.add PsRow(pid: parseInt(fields[0]), ppid: parseInt(fields[1]),
+          stat: (if hasStat: fields[2] else: ""),
+          args: fields[argStart .. ^1].join(" "))
+      except ValueError:
+        discard
+
+proc liveChildrenNamed*(parent: int, name: string): seq[PsRow] =
+  ## Live processes below `parent` whose command names `name`. Searched through
+  ## every descendant, not only direct children: the serve worker may run the
+  ## encoder through a helper, so the encoder is a grandchild on some runners.
+  let rows = psRows()
+  var frontier = @[parent]
+  var seen: seq[int] = @[]
+  while frontier.len > 0:
+    let p = frontier.pop()
+    for row in rows:
+      if row.ppid == p and row.pid notin seen:
+        seen.add row.pid
+        frontier.add row.pid
+        if name in row.args and not row.stat.startsWith("Z"):
+          result.add row
+
+proc waitForLiveChildNamed*(parent: int, name: string,
+                            timeoutMs = 10_000): seq[PsRow] =
+  ## Polls `liveChildrenNamed` until a live process named `name` is below
+  ## `parent`, or the bound expires; returns whatever the last poll saw.
+  ## A fixed sleep before one snapshot races the spawn: on a slow runner the
+  ## encoder starts after the sleep ends (seen on macOS, afd8a87). The wait is
+  ## bounded so a serve that never starts its encoder still fails the check.
+  let deadline = getMonoTime() + initDuration(milliseconds = timeoutMs)
+  while true:
+    result = liveChildrenNamed(parent, name)
+    if result.len > 0 or getMonoTime() >= deadline:
+      return
+    sleep(50)

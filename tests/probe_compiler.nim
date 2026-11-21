@@ -42,6 +42,10 @@ proc run*(exe: string, args: seq[string], workDir = ""):
     tuple[output: string, code: int] =
   ## Run `exe args` (no shell), stdout and stderr merged, and return what it
   ## printed and its exit code. Raises `OSError` if it cannot be started.
+  ##
+  ## Each start and finish is echoed to the test's own output, so a CI log
+  ## shows which probe was running when a run stopped making progress.
+  echo "[probe] start: ", exe, " ", args.join(" ")
   let p = startProcess(exe, workingDir = workDir, args = args,
                        options = {poStdErrToStdOut})
   try:
@@ -49,6 +53,7 @@ proc run*(exe: string, args: seq[string], workDir = ""):
     result.code = p.waitForExit()
   finally:
     p.close()
+  echo "[probe] done (exit ", result.code, "): ", exe
 
 proc compileProbe*(dir, name, source: string, extra: seq[string] = @[]):
     tuple[binary, output: string, code: int] =

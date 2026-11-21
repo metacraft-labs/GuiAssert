@@ -274,11 +274,28 @@ when defined(linux):
   proc startDaemon(address: string, dir: string): Daemon =
     let exe = findExe("dbus-daemon")
     doAssert exe.len > 0, "GS7-LINUX BLOCKED: dbus-daemon is not on the PATH (run inside `nix develop`)"
+    # The Nix-built dbus-daemon looks for its session config under /etc, which a
+    # headless runner does not have, so the package's own session.conf is passed
+    # explicitly. The config is found next to the binary, not assumed.
+    let conf = parentDir(parentDir(exe)) / "share" / "dbus-1" / "session.conf"
+    doAssert fileExists(conf), "dbus session.conf not found next to dbus-daemon: " & conf
     result.dir = dir
-    result.p = startProcess(exe, args = ["--session", "--nofork", "--print-address",
-                                         "--address=" & address], options = {})
+    result.p = startProcess(exe, args = ["--config-file=" & conf, "--nofork",
+                                         "--print-address", "--address=" & address],
+                            options = {})
     var line = ""
-    doAssert result.p.outputStream.readLine(line), "dbus-daemon did not start"
+    let started = result.p.outputStream.readLine(line)
+    # A daemon that exits before printing its address writes the reason to
+    # stderr, which startProcess pipes rather than inherits. Read it here so
+    # the failure names the cause instead of only "did not start". The wait is
+    # bounded and the daemon is terminated first, so the read cannot block.
+    var why = ""
+    if not started:
+      if result.p.waitForExit(3000) < 0:
+        result.p.terminate()
+        discard result.p.waitForExit(3000)
+      why = result.p.errorStream.readAll().strip()
+    doAssert started, "dbus-daemon did not start: " & (if why.len > 0: why else: "no stderr")
 
   proc stop(d: var Daemon) =
     if d.p != nil:

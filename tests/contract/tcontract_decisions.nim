@@ -92,8 +92,8 @@ template ocrWords(vars: StringTableRef, work, name: string): JsonNode =
 proc ffprobeTool(): string =
   ## The pinned ffprobe (beside FFMPEG_BIN, else on PATH).
   let ff = getEnv("FFMPEG_BIN")
-  if ff.len > 0 and fileExists(ff.parentDir / ("ffprobe" & ExeExt)):
-    return ff.parentDir / ("ffprobe" & ExeExt)
+  if ff.len > 0 and fileExists(ff.parentDir / "ffprobe".addFileExt(ExeExt)):
+    return ff.parentDir / "ffprobe".addFileExt(ExeExt)
   result = findExe("ffprobe")
   doAssert result.len > 0, "ffprobe is needed to measure recordings independently"
 
@@ -121,18 +121,22 @@ proc pngSize(path: string): (int, int) =
     (ord(b[i]) shl 24) or (ord(b[i + 1]) shl 16) or (ord(b[i + 2]) shl 8) or ord(b[i + 3])
   (be(16), be(20))
 
-proc sessionHostsOf(stateDir: string): int =
-  ## How many session-host processes of `stateDir` are alive.
-  when defined(posix):
-    let (o, _) = execCmdEx("pgrep -f " & quoteShell("__session-host --state-dir " & stateDir))
-    for l in o.splitLines:
-      if l.strip.len > 0: inc result
-
 proc killHost(hostPid: int) =
+  ## Kill a session host and wait until it has gone, so that the verbs the
+  ## test sends next see a dead host. Windows had no branch here, so its
+  ## host was never killed and the dead-session test saw a live session.
   when defined(posix):
     discard posix.kill(Pid(hostPid), SIGKILL)
     let start = getMonoTime()
     while posix.kill(Pid(hostPid), 0) == 0 and msSince(start) < 5000: sleep(20)
+  else:
+    discard execCmdEx("taskkill /F /PID " & $hostPid)
+    let start = getMonoTime()
+    while msSince(start) < 5000:
+      # tasklist prints the pid, quoted, only while the process is listed.
+      let (listed, _) = execCmdEx("tasklist /FI \"PID eq " & $hostPid & "\" /FO CSV /NH")
+      if ("\"" & $hostPid & "\"") notin listed: break
+      sleep(20)
 
 suite "contract 1.0 decisions":
   test "test_node_bounds_are_desktop_coordinates":
@@ -363,7 +367,11 @@ suite "contract 1.0 decisions":
     var rec = parseJson(original)
     rec["backends"] = %*{"capture": "linux-x11", "tree": "fixture", "input": "fixture"}
     writeFile(recPath, $rec)
-    let plain = withoutDisplay(baseEnv())
+    let plain = baseEnv()
+    # window-capture is expected unavailable on linux-x11 below, which holds only
+    # with no X display; the private Xvfb of a headless run must not be inherited.
+    plain.del("DISPLAY")
+    plain.del("WAYLAND_DISPLAY")
     plain["GUIASSERT_STATE_DIR"] = st
     plain["GUIASSERT_TREE_BACKEND"] = "fixture"
     let sc = ok(@["--session", "caps", "capabilities"], plain)
@@ -386,6 +394,15 @@ suite "contract 1.0 decisions":
     let deadEnv = fixtureEnv(deadSt)
     let dead = ok(@["session-start", "--kind", "headless", "--name", "gone"], deadEnv)
     killHost(dead["session"]["hostPid"].getInt)
+    # The linux-x11 row below expects that backend to be unavailable. That holds
+    # only with no X display, and headless Linux runs of this suite start a
+    # private Xvfb (scripts/run-test-in-display.sh) that the caller's environment
+    # would hand down. Remove the display variables for that row, so it asserts
+    # the same precondition whether or not the suite runs under a display.
+    # StringTableRef is a reference: copy the entries rather than alias `env`.
+    let noDisplay = newStringTable(modeCaseSensitive)
+    for k, v in env.pairs:
+      if k notin ["DISPLAY", "WAYLAND_DISPLAY"]: noDisplay[k] = v
     let cases: seq[(seq[string], StringTableRef, int, string, string)] = @[
       (@["--capture-backend", foreignCaptureBackend, "displays"], baseEnv(), 4, "",
        "window-enumeration"),
@@ -394,7 +411,7 @@ suite "contract 1.0 decisions":
        "unsupported-option", "own-pixels-capture"),
       (@["ocr", "--image", shot, "--psm", "6"], env, 4, "unsupported-option", "ocr"),
       (@["--capture-backend", "linux-x11", "ocr", "--region", "0,0,10,10", "--out",
-         work / "b.png"], withoutDisplay(env), 4, "", "region-capture"),
+         work / "b.png"], noDisplay, 4, "", "region-capture"),
       (@["--ocr-backend", foreignOcrBackend, "ocr", "--region", "0,0,10,10", "--out",
          work / "c.png"], env, 4, "", "ocr"),
       (@["session-start", "--kind", "headless", "--vnc"], env, 4, "unsupported-option",
@@ -593,7 +610,13 @@ suite "contract 1.0 decisions":
     check not fileExists(st / "sessions" / "r4.json")
     check ok(@["session-list"], env)["sessions"].len == 1      # host only
     when defined(posix):
-      check sessionHostsOf(st) == 0
+      # The one session that session-list reports names its host's pid, and that
+      # host must be alive. Checking the pid the contract reports, not matching
+      # command lines, keeps this independent of how a runner prints argv.
+      let listed = ok(@["session-list"], env)["sessions"]
+      check listed.len == 1
+      if listed.len == 1:
+        check posix.kill(Pid(listed[0]["hostPid"].getInt), 0) == 0
     discard failure(@["session-start", "--kind", "headless"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "sometimes"}), 2, "invalid-value")
 
