@@ -270,7 +270,14 @@ proc processAlive*(pid: int): bool =
     const synchronize = 0x00100000'i32
     const queryLimited = 0x1000'i32
     let h = openProcess(synchronize or queryLimited, 0, DWORD(pid))
-    if h == 0: return false
+    if h == 0:
+      # Only "no such process" (ERROR_INVALID_PARAMETER) proves the process is
+      # gone. Any other failure to open it, such as access denied on a live
+      # process, is not evidence of a death: reporting one made serve say a
+      # live session host had exited while the CLI, reading a moment later,
+      # saw it running (the liveness mismatch in GuiAssert-pm).
+      const errInvalidParameter = 87'i32
+      return int32(osLastError()) != errInvalidParameter
     var code: int32
     let ok = getExitCodeProcess(h, code)
     discard closeHandle(h)
