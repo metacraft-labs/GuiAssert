@@ -226,9 +226,28 @@ proc readRecord*(path, schema: string): Option[JsonNode] =
   n.delete("schema")
   some(n)
 
+proc removeFileRetry(path: string) =
+  ## `removeFile`, retried like `moveFileRetry` when Windows refuses the
+  ## delete with a sharing violation (32) or access denied (5): a scanner or
+  ## an indexer holds a just-written record for a moment (seen on a Windows
+  ## host whose real-time scanning covers %TEMP%). Any other error, or a
+  ## refusal that persists, is raised unchanged.
+  var attempt = 0
+  while true:
+    try:
+      removeFile(path)
+      return
+    except OSError as e:
+      when defined(windows):
+        if e.errorCode in [32'i32, 5'i32] and attempt < 10:
+          inc attempt
+          sleep(10 * attempt)
+          continue
+      raise
+
 proc removeRecord*(path: string) =
   ## Delete a record; a missing one is not an error.
-  try: removeFile(path)
+  try: removeFileRetry(path)
   except OSError as e:
     raise newException(StoreError, "cannot remove " & path & ": " & e.msg)
 

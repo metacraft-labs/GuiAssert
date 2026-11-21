@@ -38,6 +38,29 @@ proc readUntilShutdown(d: var Daemon): seq[JsonNode] =
     result.add m
     if m["type"].getStr == "shutdown": return
 
+proc retryFs(op: proc () {.closure.}) =
+  ## Runs a file-system step of this test with a bounded retry on the one
+  ## failure that a real-time virus scanner causes on Windows: a file just
+  ## written under %TEMP% is briefly held open by the scanner, so a delete or
+  ## a rename of it fails with "being used by another process" (sharing
+  ## violation) or "Access is denied" for a moment. The retry is for that
+  ## transient error only; every other error is raised at once, and a
+  ## scanner that holds the file past the bound still fails the test with the
+  ## original error. The external cause is recorded in GuiAssert-pm.
+  var delay = 20
+  var waited = 0
+  while true:
+    try:
+      op()
+      return
+    except OSError as e:
+      let transient = e.errorCode == 32 or e.errorCode == 5
+      if not transient or waited >= 5000:
+        raise
+      sleep(delay)
+      waited += delay
+      delay = min(delay * 2, 320)
+
 proc restoreState(snap, st: string) =
   ## Put the state directory `st` back as `snap` holds it while a session
   ## host lives on it: every file replaced by a rename (a host reading its
@@ -51,7 +74,7 @@ proc restoreState(snap, st: string) =
     createDir((st / f).parentDir)
     let tmp = (st / f).parentDir / (".restore-" & (st / f).extractFilename)
     copyFile(snap / f, tmp)
-    moveFile(tmp, st / f)
+    retryFs(proc () = moveFile(tmp, st / f))
 
 proc maskHostPid(line: string): string =
   ## Spec §6.1: a session's host process is a new process each time it is
@@ -139,8 +162,8 @@ suite "serve protocol":
     let snap = freshDir("restore-snap")
     let env = fixtureEnv(st)
     check cli(@["session-start", "--kind", "headless", "--name", "s1"], env).exit == 0
-    removeDir(snap)
-    copyDir(st, snap)
+    retryFs(proc () = removeDir(snap))
+    retryFs(proc () = copyDir(st, snap))
     restoreState(snap, st)
     sleep(400)
     check cli(@["session-info", "s1"], env).line.contains("\"state\":\"running\"")
@@ -166,8 +189,8 @@ suite "serve protocol":
     cases.insert(@["--capture-backend", "linux-x11", "displays"], 1)
     var n = 0
     for argv in cases:
-      removeDir(snap)
-      copyDir(st, snap)
+      retryFs(proc () = removeDir(snap))
+      retryFs(proc () = copyDir(st, snap))
       let r = runCli(argv, env)
       let cliLine = r.stdout.strip(leading = false, chars = {'\n'})
       restoreState(snap, st)
