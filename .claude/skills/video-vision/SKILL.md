@@ -135,8 +135,11 @@ states, specific text/URL present) and **fail loudly** on an empty/black capture
   by `extract-frame` + `Read`.
 - `analyzeVideo` is thorough, not real-time (multi-PSM × upscale × N states):
   ~seconds per state. Fine for analysis; not a live loop.
-- Window detection assumes light-on-dark chrome; a full-bleed single window may
-  be treated as background (documented).
+- Window detection assumes light-on-dark chrome. A full-bleed window is split
+  along its interior separators and its panes are returned; a full-bleed window
+  with no separator is still treated as background. For a dark-themed app, pass
+  `threshold = separatorTones(img).threshold` (Otsu splits ink from ground
+  there, not panes from separators).
 
 ## Where things live
 

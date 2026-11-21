@@ -117,7 +117,7 @@ suite "vision_windows pure":
     fillRect(img, 60, 40, 300, 200, 230)
     fillRect(img, 500, 300, 360, 240, 230)
 
-    let rects = detectWindowRects(img)
+    let rects = detectWindowRectsWith(img)
     check rects.len == 2
 
     # Sorted top-left to bottom-right: rect at y=40 first, y=300 second.
@@ -133,11 +133,68 @@ suite "vision_windows pure":
 
     # A blank (all-dark) frame has no windows.
     let blank = mkImage(1000, 700, 20)
-    check detectWindowRects(blank).len == 0
+    check detectWindowRectsWith(blank).len == 0
 
     # A pure-black frame likewise yields nothing.
     let black = mkImage(640, 480, 0)
-    check detectWindowRects(black).len == 0
+    check detectWindowRectsWith(black).len == 0
+
+# ---------------------------------------------------------------------------
+# A maximised window subdivided into panes
+# ---------------------------------------------------------------------------
+
+proc tiledWindow(): GrayImage =
+  ## A dark-themed application maximised over a 1000x700 frame: ground 40,
+  ## separators 27. The vertical separator stops short of the top and bottom
+  ## edges, so the window's frame joins every pane into ONE component whose
+  ## bbox is the whole frame — the case a size rule alone calls background.
+  result = mkImage(1000, 700, 40)
+  fillRect(result, 300, 6, 4, 688, 27)     # left column | right column
+  fillRect(result, 304, 350, 696, 4, 27)   # right column split in two
+
+suite "vision_windows full-bleed":
+  test "a full-bleed window subdivided into panes yields its panes":
+    let rects = detectWindowRectsWith(tiledWindow(), threshold = 33)
+    check rects == @[[0, 0, 300, 700], [304, 0, 696, 350],
+                     [304, 354, 696, 346]]
+
+  test "the same window with subdivision off is dropped, as before":
+    check detectWindowRectsWith(tiledWindow(), threshold = 33,
+                            subdivideFullBleed = false).len == 0
+
+  test "a full-bleed blob with no separator is still the background":
+    check detectWindowRectsWith(mkImage(1000, 700, 230)).len == 0
+    check detectWindowRectsWith(mkImage(1000, 700, 40), threshold = 33).len == 0
+
+  test "separatorTones finds the ground and the separator tone":
+    check separatorTones(tiledWindow()) == (threshold: 33, separatorTone: 27)
+    # A uniform frame and a light window on a dark desktop have no darker
+    # population than their ground.
+    check separatorTones(mkImage(200, 100, 40)) == (threshold: -1,
+                                                    separatorTone: -1)
+    var desk = mkImage(1000, 700, 20)
+    fillRect(desk, 60, 40, 300, 200, 230)
+    check separatorTones(desk) == (threshold: -1, separatorTone: -1)
+
+  test "an inset rule that reaches neither side does not split a pane":
+    for thickness in 3 .. 4:
+      var img = mkImage(600, 500, 40)
+      fillRect(img, 8, 100, 584, thickness, 27)
+      check subdivideRect(img, [0, 0, 600, 500], 33).len == 1
+
+  test "one- and two-pixel rules are furniture; three are a separator":
+    for thickness in 1 .. 3:
+      var img = mkImage(600, 500, 40)
+      fillRect(img, 0, 246, 600, thickness, 27)
+      check subdivideRect(img, [0, 0, 600, 500], 33).len ==
+        (if thickness >= 3: 2 else: 1)
+
+  test "a shadow darker than the separator floor is not a separator":
+    var img = mkImage(600, 500, 40)
+    fillRect(img, 0, 246, 600, 4, 21)
+    check subdivideRect(img, [0, 0, 600, 500], 33).len == 2
+    check subdivideRect(img, [0, 0, 600, 500], 33,
+                        separatorFloor = 24).len == 1
 
 # ---------------------------------------------------------------------------
 # End-to-end: real ffmpeg-rendered frame + real tesseract OCR

@@ -1189,7 +1189,7 @@ const maxGestureSteps = 10_000
 
 proc parseGestureStep(spec: string): GestureStep =
   ## `move X,Y` | `press X,Y [BUTTON]` | `release X,Y [BUTTON]` |
-  ## `key-down COMBO` | `key-up COMBO` | `wait MS`
+  ## `key-down COMBO` | `key-up COMBO` | `wait MS` | `scroll X,Y DX DY [line|pixel]`
   let w = spec.strip.splitWhitespace
   if w.len == 0: raise badArgs("invalid-value", "--steps has an empty step")
   proc btnOf(i: int): MouseButton =
@@ -1225,6 +1225,13 @@ proc parseGestureStep(spec: string): GestureStep =
   of "wait":
     if w.len != 2: raise badArgs("invalid-value", "--steps: wait MS")
     GestureStep(kind: gsWait, ms: parseIntValue("--steps", w[1], 0, 600_000))
+  of "scroll":
+    if w.len notin 4 .. 5: raise badArgs("invalid-value", "--steps: scroll X,Y DX DY [line|pixel]")
+    let unit = (if w.len == 5: parseChoice("--steps", w[4], ["line", "pixel"]) else: "line")
+    GestureStep(kind: gsScroll, wheelAt: parsePointValue("--steps", w[1]),
+                dx: parseIntValue("--steps", w[2], -100_000, 100_000),
+                dy: parseIntValue("--steps", w[3], -100_000, 100_000),
+                unit: (if unit == "pixel": suPixel else: suLine))
   else: raise badArgs("invalid-value", "--steps: unknown step '" & w[0] & "'")
 
 proc verbGesture(e: VerbEnv): JsonNode =

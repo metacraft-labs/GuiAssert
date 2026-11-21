@@ -241,7 +241,9 @@ proc parseFixtureEnv*(env: Table[string, string]): FixtureEnv =
   ## * `GUIASSERT_FIXTURE_DENY=screen-recording|accessibility,…`;
   ## * `GUIASSERT_FIXTURE_UNAVAILABLE=<module>,…` — capture, ocr, tree,
   ##   input, session;
-  ## * `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>,…`;
+  ## * `GUIASSERT_FIXTURE_DELAY_MS=<verb>:<ms>,…` (`session-start.undo`:
+  ##   the undo of a session start that did not become ready, as a loaded
+  ##   machine slows it);
   ## * `GUIASSERT_FIXTURE_HOST=exit-before-ready|never-ready` — the session
   ##   host `session-start` waits for exits, or never reports ready;
   ## * `GUIASSERT_FIXTURE_RECORDING=unfinalized` — recordings are written

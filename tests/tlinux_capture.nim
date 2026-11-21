@@ -3,7 +3,7 @@
 ## server, so they run in the default suite (spec §9.1):
 ##
 ## * reading what a display server answers into contract objects: sway's
-##   `get_outputs` and `get_tree` replies, `x11_probe list`, GNOME Shell's
+##   `get_outputs` and `get_tree` replies, `x11_probe list` and `x11_probe cursor`, GNOME Shell's
 ##   monitor and window lists (order, content rectangles, titles, focus,
 ##   layers, what is off screen);
 ## * the `windows` filters, the one-display rule for regions, display
@@ -174,6 +174,71 @@ suite "linux-x11: reading x11_probe":
     check d.id == "0" and d.primary and d.bounds == rect(0, 0, 640, 480)
     expect ValueError: discard parseX11List("{}")
     check x11Geometry(rect(5, 6, 7, 8)) == "7x8+5+6"
+
+  test "the pointer's image: parsed, named by its name, else by its form":
+    # `x11_probe cursor` on Xvfb, over a window that set no cursor: the X
+    # server's own `X` (the core cursor font has no names)
+    let xDefault = parsePointerImage("""{"name":null,"serial":1,"width":16,"height":16,""" &
+      """"xhot":7,"yhot":7,"x":5,"y":6,"mask":["####........####","#####......#####",""" &
+      """"######....######","#######..#######",".##############.","..############..",""" &
+      """"...##########...","....########....","....########....","...##########...",""" &
+      """"..############..",".##############.","#######..#######","######....######",""" &
+      """"#####......#####","####........####"]}""")
+    check xDefault.width == 16 and xDefault.xhot == 7 and xDefault.at == Point(x: 5, y: 6)
+    check xDefault.name == "" and xDefault.mask.len == 16
+    check pointerShapeOf(xDefault) == ""
+    # a themed cursor carries the name its client asked for
+    for (name, shape) in [("left_ptr", "default"), ("hand2", "pointer"), ("pointer", "pointer"),
+                          ("xterm", "text"), ("col-resize", "col-resize"),
+                          ("sb_v_double_arrow", "row-resize"), ("grabbing", "grabbing"),
+                          ("not-allowed", "not-allowed")]:
+      var named = xDefault
+      named.name = name
+      check pointerShapeOf(named) == shape
+    # unnamed images, by their form: a beam, an arrow, a cross
+    proc img(mask: seq[string]; hx, hy: int): PointerImage =
+      PointerImage(width: mask[0].len, height: mask.len, xhot: hx, yhot: hy, mask: mask)
+    check pointerShapeOf(img(@["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#..",
+                               "..#..", "..#..", "..#..", "..#..", "#####"], 2, 6)) == "text"
+    check pointerShapeOf(img(@["#.......", "##......", "###.....", "####....", "#####...",
+                               "######..", "#######.", "########", "###.....", "#.......",
+                               "........"], 0, 0)) == "default"
+    check pointerShapeOf(img(@["....#....", "....#....", "....#....", "....#....",
+                               "#########", "....#....", "....#....", "....#....",
+                               "....#...."], 4, 4)) == "crosshair"
+    expect ValueError: discard parsePointerImage("{}")
+
+  test "the pointer's image matched against its theme's cursor files":
+    # A theme draws its own shapes: this one's `col-resize` is a square with
+    # its hot spot in the middle, which no rule about forms calls a resize.
+    # The live image equal to the theme's file (mask and hot spot) is that
+    # cursor; a theme with no such file leaves the form rules to answer.
+    proc le(v: int): string =
+      for i in 0 .. 3: result.add char((v shr (8 * i)) and 255)
+    proc xcursor(mask: seq[string]; hx, hy: int): string =
+      # the Xcursor file format: header, one table-of-contents entry, one
+      # image chunk of ARGB pixels (https://www.x.org/releases/current/doc/man/man3/Xcursor.3.xhtml)
+      let w = mask[0].len
+      let h = mask.len
+      result = "Xcur" & le(16) & le(0x10000) & le(1)
+      result.add le(0xfffd0002) & le(w) & le(28)
+      result.add le(36) & le(0xfffd0002) & le(w) & le(1) & le(w) & le(h) & le(hx) & le(hy) & le(0)
+      for row in mask:
+        for c in row: result.add le(if c == '#': int(0xff000000'u32) else: 0)
+    let square = @["######", "######", "######", "######", "######", "######"]
+    let theme = getTempDir() / ("tlinux-cursors-" & $getCurrentProcessId())
+    createDir(theme)
+    writeFile(theme / "col-resize", xcursor(square, 3, 3))
+    let read = xcursorImage(theme / "col-resize", 24)
+    check read.isSome and read.get.mask == square and read.get.xhot == 3
+    check xcursorImage(theme / "missing", 24).isNone
+    let live = PointerImage(width: 6, height: 6, xhot: 3, yhot: 3, mask: square)
+    check pointerShapeOf(live, theme) == "col-resize"
+    check pointerShapeOf(live) != "col-resize"
+    var moved = live
+    moved.xhot = 2                     # another hot spot: another cursor
+    check pointerShapeOf(moved, theme) == pointerShapeOf(moved)
+    removeDir(theme)
 
 suite "linux-gnome: reading GNOME Shell's answers":
 

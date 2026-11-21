@@ -91,6 +91,7 @@
             wlr-protocols
             xorg.libX11
             xorg.libXres
+            xorg.libXfixes
             xorg.libXtst
             xorg.libXi
             libxkbcommon
@@ -716,6 +717,7 @@
             xorg.xvfb
             xorg.libX11
             xorg.libXres
+            xorg.libXfixes
             pipewire
             wireplumber
             xdg-desktop-portal-wlr

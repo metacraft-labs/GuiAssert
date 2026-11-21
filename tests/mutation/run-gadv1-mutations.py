@@ -28,6 +28,8 @@ ARMS = [
         "  let steps = max(1, steps)",
         "a drag's modifiers never held"),
     Arm("G4", P, "    of gsMove: result.add move(st.to)", "    of gsMove: discard", "a gesture's move dropped"),
+    Arm("G5", P, "    of gsScroll: result.add planScroll(st.wheelAt, st.dx, st.dy, st.unit)",
+        "    of gsScroll: discard", "a gesture's wheel dropped"),
 ]
 
 if __name__ == "__main__":

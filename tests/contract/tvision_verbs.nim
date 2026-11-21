@@ -575,7 +575,7 @@ suite "vision verbs":
       $stillDecoding & ", its output held " & $quietBytes & " bytes"
     check stillDecoding
     check quietBytes == 0
-    # The one-shot CLI: a 400 ms deadline answers exit 7 within ~1 s.
+    # The one-shot CLI: a 400 ms deadline answers exit 7 before any frame.
     let start = getMonoTime()
     let r = runCli(@["--timeout-ms", "400", "vision-segment", video, "--fps", sparseFps],
                    baseEnv(), timeoutMs = 60_000, bin = bin)
@@ -585,11 +585,15 @@ suite "vision verbs":
     if r.exit == 7:
       let e = envelopeOf(r)
       check e.errorKind == "timeout" and e.errorReason == "deadline"
-    check elapsed < 1400
-    # Over serve: a cancel sent while ffmpeg is busy is answered within 1 s.
+    # The bound that tells "honoured promptly" from "honoured at the next
+    # frame" is the quiet span the control measured: no frame comes before
+    # it, so an answer inside it was not waiting for one. A tighter bound
+    # (it was 1.4 s) measures the machine: process start-up alone took
+    # longer than that at load 120.
+    check elapsed < sparseQuietMs
+    # Over serve: a cancel sent while ffmpeg is busy is answered before any frame.
     var d = startServe(@["serve"], fixtureEnv(freshDir("vslow-st")), bin)
     d.send(runReq("seg", @["vision-segment", video, "--fps", sparseFps]))
-    sleep(600)
     when defined(posix):
       # Control: ffmpeg is still running, so the cancel is what ends it.
       let kids = waitForLiveChildNamed(d.p.processID, "ffmpeg")
@@ -600,6 +604,8 @@ suite "vision verbs":
           if row.pid == d.p.processID or row.ppid == d.p.processID or "ffmpeg" in row.args:
             echo row.pid, " ", row.ppid, " ", row.stat, " ", row.args
       check kids.len > 0
+    else:
+      sleep(600)
     let cancelAt = getMonoTime()
     d.send(%*{"v": 1, "id": "c", "op": "cancel", "target": "seg"})
     var seg, c: JsonNode
@@ -610,7 +616,7 @@ suite "vision verbs":
         elif m["id"].getStr == "c": c = m
     let cancelMs = msSince(cancelAt)
     checkpoint "the cancel was answered in " & $cancelMs & " ms"
-    check cancelMs < 1000
+    check cancelMs < sparseQuietMs     # the same bound, for the same reason
     check seg["exit"].getInt == 8
     check seg["envelope"]["error"]["kind"].getStr == "cancelled"
     check c["envelope"]["data"]["state"].getStr == "cancelled"
@@ -633,7 +639,7 @@ suite "vision verbs":
         if getMonoTime() >= libDeadline: raise newException(ValueError, "deadline"))
     let libMs = msSince(libStart)
     checkpoint "segmentVideo stopped after " & $libMs & " ms"
-    check libMs < 1300
+    check libMs < sparseQuietMs     # before any frame, as above
 
   test "test_vision_windows_two_window_frame":
     let st = freshDir("vw")

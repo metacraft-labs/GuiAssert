@@ -94,6 +94,7 @@ proc newFixtureInput*(cfg: FixtureConfig): InputBackend =
       case st.kind
       of gsMove: last = some(st.to)
       of gsPress, gsRelease: last = some(st.at)
+      of gsScroll: last = some(st.wheelAt)
       of gsWait: cfg.token.sleepCancellable(st.ms)
       else: discard
     if last.isSome:

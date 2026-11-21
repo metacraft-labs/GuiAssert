@@ -294,19 +294,30 @@ when defined(windows):
                    ov: pointer): int32
     {.importc: "ReadFile", stdcall, header: "<windows.h>".}
 
-  proc readChildStdout*(p: Process): string =
-    ## The whole of the child's stdout, read from its pipe.
+  proc readPipeWhole(h: pointer): string =
+    ## Every byte a pipe holds until its writer closes it.
     var buf: array[4096, char]
-    let h = cast[pointer](p.outputHandle)
     while true:
       var got: uint32 = 0
       let ok = readFileRaw(h, addr buf[0], uint32(buf.len), cast[pointer](addr got), nil)
       if got > 0:
         for i in 0 ..< int(got): result.add buf[i]
       if ok == 0 or got == 0: break
+
+  proc readChildStdout*(p: Process): string =
+    ## The whole of the child's stdout, read from its pipe.
+    readPipeWhole(cast[pointer](p.outputHandle))
+
+  proc readChildStderr*(p: Process): string =
+    ## The whole of the child's stderr, read from its pipe. Same defect and
+    ## same direct read as stdout (see above).
+    readPipeWhole(cast[pointer](p.errorHandle))
 else:
   proc readChildStdout*(p: Process): string =
     p.outputStream.readAll()
+
+  proc readChildStderr*(p: Process): string =
+    p.errorStream.readAll()
 
 proc runCollecting(bin: string, args: seq[string]):
     tuple[output: string, code: int, diag: string] =

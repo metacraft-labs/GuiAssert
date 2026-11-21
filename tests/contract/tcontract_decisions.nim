@@ -28,6 +28,7 @@ when defined(posix):
   import std/posix
 
 import ./harness
+import ../../src/gui_assert/backends/media/ffmpeg as media_ffmpeg
 from ../../src/gui_assert/backends/fixture_desktop import builtinScenarioJson
 
 const
@@ -44,8 +45,8 @@ proc runCliInput(args: seq[string], env: StringTableRef, input: string): CliRun 
     p.inputStream.write(input)
     p.inputStream.close()
     result.exit = p.waitForExit(cliTimeoutMs)
-    result.stdout = p.outputStream.readAll()
-    result.stderr = p.errorStream.readAll()
+    result.stdout = media_ffmpeg.readChildStdout(p)
+    result.stderr = media_ffmpeg.readChildStderr(p)
   finally:
     p.close()
 
@@ -587,15 +588,27 @@ suite "contract 1.0 decisions":
                     "session-failed")
     check msSince(t0) < 5000
     check not fileExists(st / "sessions" / "r2.json")
-    # A host that never reports ready: exit 5 (not 7) within --timeout-ms.
+    # A host that never reports ready: exit 5 (not 7), the wait bounded by
+    # --timeout-ms (less its margin), not by the 10 s readiness bound. The
+    # wait itself ends 250 ms before the deadline, so it cannot end before
+    # 1000 ms; the ceiling is generous because starting the binary and
+    # undoing the start take what the machine's load makes them take.
     let t1 = getMonoTime()
     discard failure(@["--timeout-ms", "1500", "session-start", "--kind", "headless",
                       "--name", "r3"],
                     fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "never-ready"}), 5,
                     "session-failed")
     let took = msSince(t1)
-    check took >= 1000 and took < 1500
+    check took >= 1000 and took < 8000
     check not fileExists(st / "sessions" / "r3.json")
+    # An undo slower than that margin, as a loaded machine makes it (here a
+    # deterministic 600 ms): still the readiness failure, not a timeout.
+    discard failure(@["--timeout-ms", "1500", "session-start", "--kind", "headless",
+                      "--name", "r4"],
+                    fixtureEnv(st, {"GUIASSERT_FIXTURE_HOST": "never-ready",
+                                    "GUIASSERT_FIXTURE_DELAY_MS": "session-start.undo:600"}),
+                    5, "session-failed")
+    check not fileExists(st / "sessions" / "r4.json")
     check ok(@["session-list"], env)["sessions"].len == 1      # host only
     when defined(posix):
       # The one session that session-list reports names its host's pid, and that
@@ -745,7 +758,7 @@ suite "contract 1.0 decisions":
       let held = startProcess(contractBin(), args = @["--timeout-ms", "400", "type", "--stdin"],
                               env = env, options = {})
       let heldExit = held.waitForExit(10_000)
-      let heldOut = held.outputStream.readAll()
+      let heldOut = media_ffmpeg.readChildStdout(held)
       held.inputStream.close()
       held.close()
       check heldExit == 7 and parseJson(heldOut.strip)["error"]["reason"].getStr == "deadline"
@@ -904,7 +917,7 @@ suite "contract 1.0 decisions":
       let m = sv.recv()
       if m["type"].getStr == "shutdown": break
     discard sv.p.waitForExit(30_000)
-    let daemonStderr = sv.p.errorStream.readAll()
+    let daemonStderr = media_ffmpeg.readChildStderr(sv.p)
     for p in planted: check p notin daemonStderr
     sv.p.close()
 

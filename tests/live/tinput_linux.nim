@@ -525,8 +525,22 @@ template checkGestureAndModifiedDrag(env: StringTableRef, f: Lab) =
     check d["keys"].getStr == "shift"
     lines = pointerLines(before)
     check lines == @["press 1 1 " & local(a) & " s", "release 1 " & local(b)]
+    # the wheel turned while a key is held reaches the application with it
+    # (Shift+wheel), and a wheel outside the held key without it
+    before = logLines(f.log).len
+    let w = mustRun(@["gesture", "--steps", "key-down shift; scroll " & at(a) & " 0 2; key-up shift; " &
+                      "wait 50; scroll " & at(b) & " 0 1"], env)["input"]
+    check w["path"] == %*[[a[0], a[1]], [b[0], b[1]]]
+    lines = settle(f.log)[before .. ^1].filterIt(it.startsWith("scroll"))
+    checkpoint "held key and wheel: " & $lines
+    check lines.len == 3
+    if lines.len == 3:
+      check lines[0].endsWith(" s") and lines[1].endsWith(" s")
+      check lines[2].endsWith(" -")
+      check lines.allIt(it.startsWith("scroll 0.00 ") and parseFloat(it.split(' ')[2]) > 0)
     discard failsWith(@["gesture", "--steps", "press " & at(a) & " thumb"], env, 2, "invalid-value")
     discard failsWith(@["gesture", "--steps", "hover " & at(a)], env, 2, "invalid-value")
+    discard failsWith(@["gesture", "--steps", "scroll " & at(a) & " 0"], env, 2, "invalid-value")
     discard failsWith(@["drag", "--from", at(a), "--to", at(b), "--modifiers", "hyper"], env, 2,
                       "invalid-value")
 
@@ -570,7 +584,7 @@ template checkScrollDirections(env: StringTableRef, f: Lab, pixel: bool) =
     checkpoint $lines
     let downs = lines.filterIt(it.startsWith("scroll 0.00 ") and
                                parseFloat(it.split(' ')[2]) > 0)
-    let lefts = lines.filterIt(it.startsWith("scroll -") and it.endsWith(" 0.00"))
+    let lefts = lines.filterIt(it.startsWith("scroll -") and it.split(' ')[2] == "0.00")
     check downs.len == 2
     check lefts.len == 1
     check lines.len == 3

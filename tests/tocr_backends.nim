@@ -25,6 +25,7 @@
 import std/[unittest, os, osproc, streams, strtabs, strutils, tempfiles]
 
 import ../src/gui_assert/ocr
+import ../src/gui_assert/backends/ocr/tesseract as tesseract_backend
 import ../src/gui_assert/image_math
 
 # ---------------------------------------------------------------------------
@@ -188,3 +189,17 @@ suite "ocr vu11 backends":
       check e.msg.contains("ONNX")
       check e.msg.toUpperAscii.contains("OMNIPARSER")
     check raised
+
+  test "test_tesseract_runs_one_openmp_thread_unless_told":
+    # A read is one small image; on a loaded machine tesseract's OpenMP
+    # threads spin against each other, so the engine runs with one thread
+    # unless the caller's environment chose a number.
+    let saved = getEnv("OMP_THREAD_LIMIT")
+    let had = existsEnv("OMP_THREAD_LIMIT")
+    try:
+      delEnv("OMP_THREAD_LIMIT")
+      check tesseract_backend.engineEnv("/usr/bin/tesseract")["OMP_THREAD_LIMIT"] == "1"
+      putEnv("OMP_THREAD_LIMIT", "4")
+      check tesseract_backend.engineEnv("/usr/bin/tesseract")["OMP_THREAD_LIMIT"] == "4"
+    finally:
+      if had: putEnv("OMP_THREAD_LIMIT", saved) else: delEnv("OMP_THREAD_LIMIT")

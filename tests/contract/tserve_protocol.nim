@@ -38,6 +38,44 @@ proc readUntilShutdown(d: var Daemon): seq[JsonNode] =
     result.add m
     if m["type"].getStr == "shutdown": return
 
+proc retryFs(op: proc () {.closure.}) =
+  ## Runs a file-system step of this test with a bounded retry on the one
+  ## failure that a real-time virus scanner causes on Windows: a file just
+  ## written under %TEMP% is briefly held open by the scanner, so a delete or
+  ## a rename of it fails with "being used by another process" (sharing
+  ## violation) or "Access is denied" for a moment. The retry is for that
+  ## transient error only; every other error is raised at once, and a
+  ## scanner that holds the file past the bound still fails the test with the
+  ## original error. The external cause is recorded in GuiAssert-pm.
+  var delay = 20
+  var waited = 0
+  while true:
+    try:
+      op()
+      return
+    except OSError as e:
+      let transient = e.errorCode == 32 or e.errorCode == 5
+      if not transient or waited >= 5000:
+        raise
+      sleep(delay)
+      waited += delay
+      delay = min(delay * 2, 320)
+
+proc restoreState(snap, st: string) =
+  ## Put the state directory `st` back as `snap` holds it while a session
+  ## host lives on it: every file replaced by a rename (a host reading its
+  ## record never sees it missing or half-written; a record missing for a
+  ## moment is a stopped session, and the host exits), and the files `snap`
+  ## does not have removed. Removing `st` and copying `snap` back did both,
+  ## and on a loaded machine the host saw the gap and exited.
+  for f in walkDirRec(st, relative = true):
+    if not fileExists(snap / f): removeFile(st / f)
+  for f in walkDirRec(snap, relative = true):
+    createDir((st / f).parentDir)
+    let tmp = (st / f).parentDir / (".restore-" & (st / f).extractFilename)
+    copyFile(snap / f, tmp)
+    retryFs(proc () = moveFile(tmp, st / f))
+
 proc maskHostPid(line: string): string =
   ## Spec §6.1: a session's host process is a new process each time it is
   ## started, so its pid is the one value of `session-start` that cannot be
@@ -116,6 +154,26 @@ suite "serve protocol":
     check tail[^1]["data"]["cancelled"].getInt == 0
     check d.finish() == 0
 
+  test "the parity test's state restore keeps a live session's host":
+    # The control: a gap in the record, as removing the state directory and
+    # copying it back made, ends a session's host (it reads a missing record
+    # as a stopped session). The same restore by renames does not.
+    let st = freshDir("restore")
+    let snap = freshDir("restore-snap")
+    let env = fixtureEnv(st)
+    check cli(@["session-start", "--kind", "headless", "--name", "s1"], env).exit == 0
+    retryFs(proc () = removeDir(snap))
+    retryFs(proc () = copyDir(st, snap))
+    restoreState(snap, st)
+    sleep(400)
+    check cli(@["session-info", "s1"], env).line.contains("\"state\":\"running\"")
+    removeDir(st)
+    sleep(400)                       # a loaded machine's copy, slowed on purpose
+    copyDir(snap, st)
+    sleep(400)
+    check cli(@["session-info", "s1"], env).line.contains("host-exited")
+    discard cli(@["session-stop", "s1", "--force"], env)
+
   test "test_serve_cli_byte_parity_for_every_verb":
     let st = freshDir("parity")
     let snap = freshDir("parity-snap")
@@ -131,12 +189,11 @@ suite "serve protocol":
     cases.insert(@["--capture-backend", "linux-x11", "displays"], 1)
     var n = 0
     for argv in cases:
-      removeDir(snap)
-      copyDir(st, snap)
+      retryFs(proc () = removeDir(snap))
+      retryFs(proc () = copyDir(st, snap))
       let r = runCli(argv, env)
       let cliLine = r.stdout.strip(leading = false, chars = {'\n'})
-      removeDir(st)
-      copyDir(snap, st)
+      restoreState(snap, st)
       inc n
       let id = "p" & $n
       d.send(runReq(id, argv))
@@ -282,7 +339,6 @@ suite "serve protocol":
     while n < 2:
       if d.recv()["type"].getStr == "result": inc n
     let parallel = msUntil(start)
-    check parallel < 1150
     # ... and the same session does not (the control).
     start = getMonoTime()
     d.send(runReq("d3", @["--session", "sa", "displays"]))
@@ -292,6 +348,11 @@ suite "serve protocol":
       if d.recv()["type"].getStr == "result": inc n
     let serial = msUntil(start)
     check serial >= 1200
+    # Overlapped, the two 600 ms verbs end at least most of one delay sooner
+    # than the same pair in series: compared with the series measured here,
+    # on the same machine at the same moment, not with a fixed 1150 ms that
+    # a loaded machine's start-up alone can pass.
+    check parallel + 400 < serial
     checkpoint "parallel " & $parallel & " ms, serial " & $serial & " ms"
     d.closeInput()
     discard d.readUntilShutdown()
