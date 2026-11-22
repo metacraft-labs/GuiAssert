@@ -315,7 +315,7 @@ suite "serve protocol":
 
   test "test_serve_same_session_requests_run_in_order":
     let st = freshDir("order")
-    let env = fixtureEnv(st, {"GUIASSERT_FIXTURE_DELAY_MS": "displays:600"})
+    let env = fixtureEnv(st, {"GUIASSERT_FIXTURE_DELAY_MS": "displays:1500"})
     for s in ["sa", "sb"]:
       check cli(@["session-start", "--kind", "headless", "--name", s], env).exit == 0
     var d = startServe(@["serve"], env)
@@ -348,10 +348,12 @@ suite "serve protocol":
       if d.recv()["type"].getStr == "result": inc n
     let serial = msUntil(start)
     check serial >= 1200
-    # Overlapped, the two 600 ms verbs end at least most of one delay sooner
-    # than the same pair in series: compared with the series measured here,
-    # on the same machine at the same moment, not with a fixed 1150 ms that
-    # a loaded machine's start-up alone can pass.
+    # Overlapped, the two 1500 ms verbs end about one delay sooner than the
+    # same pair in series. The delay is long enough that a 400 ms margin is
+    # well below the saving: at 600 ms a loaded machine's start-up noise
+    # (measured 1449 vs 1371 ms on macOS, 2026-11-22) could consume the margin.
+    # Compared with the series measured here, on the same machine at the same
+    # moment, not with a fixed number.
     check parallel + 400 < serial
     checkpoint "parallel " & $parallel & " ms, serial " & $serial & " ms"
     d.closeInput()
