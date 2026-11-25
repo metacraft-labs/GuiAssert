@@ -688,21 +688,35 @@ static int record(Display *d, int argc, char **argv) {
       failed = 1;
       break;
     }
-    size_t done = 0;
-    while (done < frame_bytes) {
-      ssize_t n = write(pipefd[1], px + done, frame_bytes - done);
-      if (n < 0 && errno == EINTR)
-        continue;
-      if (n <= 0) {
-        failed = 2;
-        break;
+    /* The encoder reads frames at --fps, so a frame's place in the video is
+     * its index. When grabbing fell behind the clock (a loaded host: a grab
+     * and its write took longer than a frame's slot), the frame just grabbed
+     * is written once for every slot it missed too, so the video stays on
+     * the monotonic clock; otherwise a 2832 s session became a 1374 s video
+     * and everything placed on the session's times landed early. */
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double grabbed_at = (now.tv_sec - start.tv_sec) + (now.tv_nsec - start.tv_nsec) / 1e9;
+    long copies = (long)(grabbed_at * fps) + 1 - frames;
+    if (copies < 1)
+      copies = 1;
+    for (long c = 0; c < copies && !failed; c++) {
+      size_t done = 0;
+      while (done < frame_bytes) {
+        ssize_t n = write(pipefd[1], px + done, frame_bytes - done);
+        if (n < 0 && errno == EINTR)
+          continue;
+        if (n <= 0) {
+          failed = 2;
+          break;
+        }
+        done += (size_t)n;
       }
-      done += (size_t)n;
+      if (!failed)
+        frames++;
     }
     if (failed)
       break;
-    frames++;
-    if (frames % 10 == 0)
+    if (frames % 10 == 0 || copies > 1)
       write_report("recording", child, frames, 0, "");
     /* Sleep until the next frame's time on the monotonic clock. */
     double next = frames / fps;
@@ -714,6 +728,29 @@ static int record(Display *d, int argc, char **argv) {
       double left = next - elapsed;
       struct timespec ts = {(time_t)left, (long)((left - (time_t)left) * 1e9)};
       nanosleep(&ts, NULL);
+    }
+  }
+  /* Stopped: the slots between the last frame written and now are the last
+   * frame too, so the video is as long as the recording was. Behind the
+   * clock, the last frames were still being written when the stop came: a
+   * 1067 s session's video ended at 1034 s without this. */
+  if (!failed) {
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double stopped_at = (now.tv_sec - start.tv_sec) + (now.tv_nsec - start.tv_nsec) / 1e9;
+    while (frames < (long)(stopped_at * fps) && !failed) {
+      size_t done = 0;
+      while (done < frame_bytes) {
+        ssize_t n = write(pipefd[1], px + done, frame_bytes - done);
+        if (n < 0 && errno == EINTR)
+          continue;
+        if (n <= 0) {
+          failed = 2;
+          break;
+        }
+        done += (size_t)n;
+      }
+      if (!failed)
+        frames++;
     }
   }
   close(pipefd[1]);

@@ -49,8 +49,10 @@ const
     ## Bound on one still capture or enumeration by a tool.
   recorderStartMs* = 20_000
     ## How long `record-start` waits for a recorder to start.
-  recorderStopMs* = 30_000
-    ## How long `record-stop` waits for a recorder to finalize.
+  recorderStopMs* = 180_000
+    ## How long `record-stop` waits for a recorder to finalize: on a loaded
+    ## host the encoder may be a minute behind, and the recorder writes the
+    ## slots up to the stop before it closes the encoder's input.
 
 type
   LinuxCaptureConfig* = object
@@ -464,6 +466,10 @@ proc rawRgbEncoder*(ffmpeg, width, height: string, fps: float, outPath: string):
     "-r", fpsText(fps), "-i", "-",
     # H.264 in 4:2:0 needs even dimensions; an odd edge is padded.
     "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-c:v", "libx264",
+    # The fastest preset: a recorder writes a frame per slot and is only on
+    # the clock while the encoder keeps up. With the default preset a 931 s
+    # scenario run on a loaded host left a 789 s video.
+    "-preset", "ultrafast",
     # No B-frames: the track then needs no presentation delay, so its
     # duration and its edit list agree (what core/mp4 and ffprobe read).
     "-bf", "0", "-pix_fmt", "yuv420p",
