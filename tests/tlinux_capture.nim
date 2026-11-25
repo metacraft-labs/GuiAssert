@@ -156,7 +156,7 @@ suite "linux-wlr: reading sway's answers":
     # and takes the frame size the helper substitutes.
     let enc = rawRgbEncoder("ffmpeg", "%W%", "%H%", 10, "/o/x.mp4")
     check enc[0] == "ffmpeg" and enc[^1] == "/o/x.mp4"
-    check "%W%x%H%" in enc and "-" in enc and "libx264" in enc
+    check "%W%x%H%" in enc and "-" in enc and "libx264rgb" in enc
 
 suite "linux-x11: reading x11_probe":
 
@@ -381,6 +381,28 @@ suite "linux_common: finalizing a recording (C12)":
 
   test "ffmpeg and ffprobe are on PATH (the suite measures real files)":
     check ffmpeg.len > 0 and ffprobe.len > 0
+
+  test "the recorders' encoder keeps every pixel: lossless RGB, an odd size unpadded":
+    # 7x5 frames of distinct colours, through the argv the helpers feed,
+    # decoded back to RGB: byte for byte what went in
+    var frame = newString(7 * 5 * 3)
+    for i in 0 ..< frame.len: frame[i] = char((i * 37 + 11) mod 256)
+    let raw = work / "frames.rgb"
+    writeFile(raw, frame & frame & frame)
+    let outp = work / "lossless.mp4"
+    let argv = rawRgbEncoder(ffmpeg, "7", "5", 10, outp)
+    let (o, code) = execCmdEx(quoteShellCommand(argv) & " < " & quoteShell(raw))
+    check code == 0
+    if code != 0: echo o
+    # decoded to a file: execCmdEx reads its output by lines, which would
+    # rewrite the frames' CR and LF bytes
+    let backPath = work / "lossless.rgb"
+    let (dout, dcode) = execCmdEx(ffmpeg & " -v error -y -i " & quoteShell(outp) &
+      " -f rawvideo -pix_fmt rgb24 " & quoteShell(backPath))
+    check dcode == 0
+    if dcode != 0: echo dout
+    check readFile(backPath) == frame & frame & frame
+    check counted(outp) == 3
 
   test "a finalized MP4 is measured from its container and renamed into place":
     let tmp = work / ".out.mp4.partial-wlr-1.mp4"
