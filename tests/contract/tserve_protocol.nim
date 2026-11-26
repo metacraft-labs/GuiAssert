@@ -206,6 +206,16 @@ suite "serve protocol":
         check served == cliLine
         if served != cliLine:
           checkpoint argv.join(" ") & "\n  cli:   " & cliLine & "\n  serve: " & served
+          # Diagnostic (macOS liveness flake): when the two views disagree, print
+          # the wall-clock time and the session record both views read, so the
+          # failing CI log shows the host pid and the record state at that moment.
+          let recPath = st / "sessions" / "s1.json"
+          let recText = if fileExists(recPath): readFile(recPath) else: "<missing>"
+          let pidAt = recText.find("\"hostPid\"")
+          let pidText = if pidAt >= 0: recText[pidAt ..< min(recText.len, pidAt + 40)] else: "<no hostPid>"
+          echo "DIAG parity mismatch at ", epochTime(), " ", argv.join(" "),
+               " record-hostPid=", pidText
+          echo "DIAG record: ", recText[0 ..< min(recText.len, 600)]
     d.closeInput()
     discard d.readUntilShutdown()
     check d.finish() == 0
