@@ -37,8 +37,12 @@ default: test
 
 # Run the complete counted population through the same strict runner used by
 # `nimble test`.
-test:
+test: test-dev-shell-ffmpeg
     bash scripts/run-default-tests.sh
+
+# The dev shell's ffmpeg can record an X display (x11grab), on Linux.
+test-dev-shell-ffmpeg:
+    bash tests/test_dev_shell_ffmpeg_x11grab.sh
 
 # The pure core: unit tests plus the purity rule of the desktop-substrate
 # spec (§3.2). Runs on every host; no TCC grant, display or network needed.

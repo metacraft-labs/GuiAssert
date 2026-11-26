@@ -666,6 +666,8 @@
         system:
         let
           pkgs = pkgsFor system;
+          # the dev shell's ffmpeg: with x11grab on Linux (see its use below)
+          devFfmpeg = if pkgs.stdenv.isLinux then pkgs.ffmpeg-full else pkgs.ffmpeg;
           nimbleFor = pkgs.nimble.overrideAttrs (_: {
             version = "0.24.1";
             src = nimble-src;
@@ -762,11 +764,13 @@
                 nixfmt-rfc-style
                 opentofu
                 prettier
-                # Plain `ffmpeg` (NOT ffmpeg-full): the default nixpkgs build ships
+                # On Linux `ffmpeg-full`: the default build has no x11grab, and a
+                # binding that records an X window with ffmpeg needs it
+                # (flame-tps, 2026-11-26). Plain `ffmpeg` elsewhere: it ships
                 # libx264 + freetype/fontconfig (so `drawtext` works) which the
                 # vision tests require, while avoiding the ffmpeg-full/kvazaar
                 # ctest failure that breaks `nix develop` on aarch64-darwin.
-                ffmpeg
+                devFfmpeg
                 # tesseract 5.x with the default (English-included) traineddata.
                 tesseract
                 # libpcre for Nim's std/re module, should any suite pull it in.
@@ -800,13 +804,13 @@
               # Export the PINNED binaries so gui_assert/{media,ocr,video_analysis}
               # resolve them (they honor FFMPEG_BIN/FFMPEG/FFPROBE/TESSERACT_BIN
               # before falling back to $PATH) with no host toolchain needed.
-              export FFMPEG_BIN="${pkgs.ffmpeg}/bin/ffmpeg"
+              export FFMPEG_BIN="${devFfmpeg}/bin/ffmpeg"
               export FFMPEG="$FFMPEG_BIN"
-              export FFPROBE="${pkgs.ffmpeg}/bin/ffprobe"
+              export FFPROBE="${devFfmpeg}/bin/ffprobe"
               export TESSERACT_BIN="${pkgs.tesseract}/bin/tesseract"
               # Let ffmpeg's drawtext find a font via fontconfig.
               export FONTCONFIG_FILE="${fontsConf}"
-              export PATH="${pkgs.ffmpeg}/bin:${pkgs.tesseract}/bin:$PATH"
+              export PATH="${devFfmpeg}/bin:${pkgs.tesseract}/bin:$PATH"
             ''
             + lib.optionalString pkgs.stdenv.isLinux ''
               # Where the desktop-environment targets find what they start.
